@@ -45,8 +45,8 @@ var SEED_PROVIDERS = [{
     "errorText": "",
     "plans": [{
         "planName": "余额",
-        "usedPercent": 88,
-        "usedPercentLabel": "88%",
+        "usedPercent": 12,
+        "usedPercentLabel": "12%",
         "barClass": "bar-yellow",
         "resetText": "",
         "usedText": "12.5 / 100",

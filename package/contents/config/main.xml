@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0/"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0/
+                          http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+    <group name="providers">
+        <entry name="providerCount" type="int">
+            <default>0</default>
+        </entry>
+    </group>
+    <group name="ui">
+        <entry name="opacityPercent" type="int">
+            <default>80</default>
+            <min>20</min>
+            <max>100</max>
+        </entry>
+        <entry name="alwaysOnTop" type="bool">
+            <default>true</default>
+        </entry>
+    </group>
+</kcfg>

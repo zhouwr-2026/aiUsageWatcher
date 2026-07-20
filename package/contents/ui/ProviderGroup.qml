@@ -19,7 +19,6 @@ Rectangle {
     implicitHeight: column.implicitHeight + 2 * PlasmaCore.Units.smallSpacing
     radius: PlasmaCore.Units.smallSpacing
     color: Qt.rgba(0.04, 0.05, 0.1, 0.55)
-    border.color: Qt.rgba(1, 1, 1, 0.08)
     border.width: 1
     // 整体边框颜色随状态切换
     border.color: {
@@ -103,7 +102,7 @@ Rectangle {
 
         // 错误信息行
         PlasmaComponents.Label {
-            visible: groupRoot.errorText.length > 0 && groupRoot.plans.length === 0
+            visible: groupRoot.errorText.length > 0
             text: groupRoot.errorText
             color: "#fca5a5"
             Layout.fillWidth: true

@@ -3,69 +3,13 @@ import QtQuick.Layouts
 import org.kde.plasma.components as PlasmaComponents
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
+import "js/mockData.js" as MockData
 
 PlasmoidItem {
     id: root
 
     // 示例数据；接 KWallet / 用量查询后由 backend 替换
-    property var providers: [{
-        "providerName": "云之声Token Hub",
-        "ledClass": "led-green",
-        "sourceLabel": "自定义",
-        "statusLabel": "可用",
-        "errorText": "",
-        "plans": [{
-            "planName": "5小时",
-            "usedPercent": 65,
-            "usedPercentLabel": "65%",
-            "barClass": "bar-green",
-            "resetText": "今天 18:00",
-            "usedText": "141775516 / 180000000",
-            "unitText": "",
-            "extraText": ""
-        }, {
-            "planName": "7天",
-            "usedPercent": 22,
-            "usedPercentLabel": "22%",
-            "barClass": "bar-green",
-            "resetText": "周日 00:00",
-            "usedText": "",
-            "unitText": "",
-            "extraText": ""
-        }, {
-            "planName": "30天",
-            "usedPercent": 8,
-            "usedPercentLabel": "8%",
-            "barClass": "bar-green",
-            "resetText": "",
-            "usedText": "",
-            "unitText": "",
-            "extraText": ""
-        }]
-    }, {
-        "providerName": "MiniMax · Claude",
-        "ledClass": "led-yellow",
-        "sourceLabel": "套餐",
-        "statusLabel": "降级",
-        "errorText": "",
-        "plans": [{
-            "planName": "余额",
-            "usedPercent": 88,
-            "usedPercentLabel": "88%",
-            "barClass": "bar-yellow",
-            "resetText": "",
-            "usedText": "12.5 / 100",
-            "unitText": "$",
-            "extraText": "活动期 8 月底结束"
-        }]
-    }, {
-        "providerName": "云知声 Token Hub",
-        "ledClass": "led-red",
-        "sourceLabel": "自定义",
-        "statusLabel": "异常",
-        "errorText": "脚本解析失败：unexpected token at position 32",
-        "plans": []
-    }]
+    property var providers: MockData.SEED_PROVIDERS
 
     function tightestUsedPercent() {
         let worst = -1;
@@ -90,7 +34,15 @@ PlasmoidItem {
                 }
             }
         }
-        return name;
+        return MockData.stripProviderSuffix(name);
+    }
+
+    // 定时刷新：每 60 秒用波动数据更新 providers
+    Timer {
+        interval: 60000
+        running: true
+        repeat: true
+        onTriggered: root.providers = MockData.fluctuateProviders(root.providers)
     }
 
     // 工具栏操作

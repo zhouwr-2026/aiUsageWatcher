@@ -16,3 +16,28 @@ KDE Plasma 6 桌面小部件，实时监控各大模型厂家的模型套餐用�
 ## 构建
 
 待 KDev / kdesrc-build / craft 接入；本仓库只装源码骨架与需求文档。
+
+## 开发与验证
+
+### 前置条件
+
+- KDE Plasma 6 桌面环境
+- `plasmawindowed` 命令（通常随 `plasma-desktop` 安装）
+
+### 运行小部件
+
+```bash
+# 安装到本地 Plasma 小部件目录
+cp -r package ~/.local/share/plasma/plasmoids/org.kde.plasma.aiUsageWatcher/
+
+# 用 plasmawindowed 独立窗口运行（无需添加到面板）
+plasmawindowed aiUsageWatcher
+```
+
+### 验证清单
+
+1. 圆球显示最紧张供应商的已用百分比
+2. 点击圆球展开完整视图，所有供应商卡片正常渲染
+3. 等待 60 秒，Timer 触发数据刷新，数值波动
+4. 颜色语义：≤5% 红色、≤15% 黄色、>15% 绿色
+5. 错误状态：供应商有 errorText 时显示错误信息

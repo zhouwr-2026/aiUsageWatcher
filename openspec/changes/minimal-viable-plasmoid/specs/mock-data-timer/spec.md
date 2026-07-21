@@ -93,3 +93,36 @@ ProviderGroup SHALL use a single `border.color` assignment determined by the `le
 - **THEN** border SHALL be `rgba(0.97, 0.44, 0.44, 0.3)`
 - **WHEN** `ledClass` is `"led-gray"`
 - **THEN** border SHALL be `rgba(1, 1, 1, 0.08)`
+
+### Requirement: Compact and full representation interaction
+
+The system SHALL implement Plasma 6 standard `PlasmoidItem.compactRepresentation` + `PlasmoidItem.fullRepresentation` interaction model: clicking the compact view triggers the full view as a popup panel anchored to the widget (not a standalone dialog window).
+
+#### Scenario: Click compact opens popup panel
+- **WHEN** user clicks the compact orb
+- **THEN** `fullRepresentation` SHALL be shown as a popup panel anchored to the widget
+- **THEN** the panel SHALL NOT be a standalone dialog window
+- **THEN** clicking outside the panel SHALL close it
+
+#### Scenario: Hover compact shows tooltip
+- **WHEN** user hovers the compact orb
+- **THEN** `toolTipMainText` and `toolTipSubText` SHALL be shown as a tooltip
+- **THEN** tooltip SHALL summarize each provider's tightest usage percent
+
+#### Scenario: Compact shows no text label
+- **WHEN** compact view is rendered
+- **THEN** the compact view SHALL show only the percent number and color ring
+- **THEN** no provider name text SHALL be shown below the orb (so the desktop icon label is not duplicated)
+
+### Requirement: Left-click primary interaction
+
+The primary user interaction SHALL be a left-click on the compact view opening the full popup.
+
+#### Scenario: Left click on compact
+- **WHEN** user clicks the left mouse button on the compact orb
+- **THEN** the full view SHALL open as a popup panel
+- **THEN** the panel position SHALL be anchored next to the widget
+
+#### Scenario: Right click shows context menu
+- **WHEN** user clicks the right mouse button on the compact orb
+- **THEN** a context menu SHALL be shown with: 配置… and 刷新 entries

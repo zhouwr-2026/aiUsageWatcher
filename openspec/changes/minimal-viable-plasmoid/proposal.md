@@ -12,6 +12,7 @@ aiUsageWatcher 当前只有 UI 骨架和需求文档，无法在 Plasma 6 下实
 - 移除 `configGeneral.qml` 空壳中的无效 import
 - 确保 `qmllint` 在所有 .qml 文件上无错误
 - 补充 `README.md` 开发运行说明
+- 采用 Plasma 6 标准 compactRepresentation + fullRepresentation 交互模型：点击 compact 弹出悬浮面板（非独立弹窗），桌面图标下方不显示文字标签
 
 ## Capabilities
 

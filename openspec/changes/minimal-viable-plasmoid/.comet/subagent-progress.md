@@ -12,22 +12,19 @@
 
 ### Current Task
 
-- Plan task: `Task 2: 修复根状态、compact 与包元数据`
-- OpenSpec task: `2. 修复 main/compact/PieChart/KConfig/metadata：Kirigami API、三层状态、Timer 不持久化、真实 tooltip、compact pie/bar、keepPanelOpen、统一 ID/Name/License；静态与单测 GREEN。`
+- Plan task: `Task 3: FullView 唯一组件链与响应式交互`
+- OpenSpec task: `3. 重构 full 为唯一 ProviderGroup -> PlanBar 渲染链，补状态栏、模板、响应式布局、按钮 tooltip/accessibility 与 300ms 旋转；组件测试断言 3 provider/5 PlanBar。`
 - Stage: `done`
-- Review/fix round: `1`
-- Base commit: `a682879`
-- Implementation commit: `302aebd`
-- Changed files: Task 2 scoped files
-- RED: Qt 6 component test 3 expected failures for PlasmaCore.Units and missing behavior nodes
-- GREEN: Qt 6 tests 13 passed / 0 failed; XML and QML checks exit 0
-- Quality fix commit: `8575e1a`
-- Quality finding resolved: `PieChart.data` renamed to `segments`; Qt 6 focused lint produced zero output
-- Controller verification: Qt 6 full suite 13 passed / 0 failed
+- Review/fix round: `0`
+- Base commit: `dbd0256`
+- Implementation commit: `846a986`
+- Changed files: `FullView.qml`, `ProviderGroup.qml`, `PlanBar.qml`, `tests/tst_fullView.qml`
+- RED: old Loader produced `planBarContent is not defined`, missing interfaces, 0 ProviderGroup/PlanBar
+- GREEN: Qt 6 full suite 19 passed / 0 failed; target component lint zero output; forbidden old plan UI patterns absent
 
 - [x] Task 1 — Data contract and derivation tests
 - [x] Task 2 — Root state, compact view and metadata
-- [ ] Task 3 — FullView ProviderGroup/PlanBar chain
+- [x] Task 3 — FullView ProviderGroup/PlanBar chain
 - [ ] Task 4 — Standard General KCM
 - [ ] Task 5 — Providers KCM CRUD and validation
 - [ ] Task 6 — Static/install/runtime verification

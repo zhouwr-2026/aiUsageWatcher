@@ -135,7 +135,7 @@ isolation: branch
 
 ### Task 3: FullView 唯一组件链与响应式交互
 
-- [ ] **Task 3 checkpoint: FullView 唯一组件链与响应式交互完成**
+- [x] **Task 3 checkpoint: FullView 唯一组件链与响应式交互完成**
 
 **Files:**
 - Create: `tests/tst_fullView.qml`
@@ -147,27 +147,27 @@ isolation: branch
 - Consumes: `DisplayProvider[]`；每个 plan 含独立 usedText/totalText/templateText。
 - Produces: FullView signals `refreshRequested()`、`configureRequested()`、`keepOpenChanged(bool)`；readonly `renderedPlanCount`；ProviderGroup/PlanBar 唯一渲染树。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
   传入 seed display model，断言 `renderedPlanCount === 5`、`ProviderGroup` 三个、`PlanBar` 五个；分别模拟 pie/bar 配置仍得到同一树；长名称 320px 宽不覆盖操作区。为 delegate 设置 `objectName: "providerGroup"` / `"planBar"`。
 
-- [ ] **Step 2: 运行 RED**
+- [x] **Step 2: 运行 RED**
 
   Run: `QT_QPA_PLATFORM=offscreen qmltestrunner -input tests -import package/contents/ui`
 
   Expected: FAIL，旧 FullView 的 Loader 跨作用域引用或没有 `renderedPlanCount`。
 
-- [ ] **Step 3: 实现唯一链路**
+- [x] **Step 3: 实现唯一链路**
 
   删除 FullView 内联 plan Loader/Components；ListView delegate 只创建 ProviderGroup。ProviderGroup 将 provider template/plan 字段传给 PlanBar；PlanBar 用独立 `%1..%4` 渲染。使用 Layout、elide/wrap、Kirigami Theme/Units；状态栏显示刷新时间/provider/有效 plan 数。三个按钮补 ToolTip、Accessible.name，刷新 icon 通过 Rotation 动画 300ms，pin 文案为“保持面板打开”。
 
-- [ ] **Step 4: 运行 GREEN**
+- [x] **Step 4: 运行 GREEN**
 
   Run: `QT_QPA_PLATFORM=offscreen qmltestrunner -input tests -import package/contents/ui && qmllint package/contents/ui/FullView.qml package/contents/ui/ProviderGroup.qml package/contents/ui/PlanBar.qml`
 
   Expected: PASS，且 `rg -n 'planRowPie|planRowBar|planLoader' package/contents/ui/FullView.qml` 无输出。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
   ```bash
   git add tests/tst_fullView.qml package/contents/ui/FullView.qml package/contents/ui/ProviderGroup.qml package/contents/ui/PlanBar.qml

@@ -1,6 +1,6 @@
 import QtQuick
 import org.kde.plasma.core as PlasmaCore
-import "../js/mockData.js" as MockData
+import org.kde.kirigami as Kirigami
 
 Item {
     id: root
@@ -23,21 +23,21 @@ Item {
         return worst;
     }
 
-    // 阈值色(PlasmaCore.Theme)
+    // 阈值色(Kirigami.Theme — PlasmaCore.Theme 只有 uppercase ColorRole)
     function barColor(pct) {
-        if (pct < 0) return PlasmaCore.Theme.NeutralText;
-        if (pct <= 5) return PlasmaCore.Theme.NegativeText;
-        if (pct <= 15) return PlasmaCore.Theme.HighlightColor;
-        return PlasmaCore.Theme.PositiveText;
+        if (pct < 0) return Kirigami.Theme.neutralTextColor;
+        if (pct <= 5) return Kirigami.Theme.negativeTextColor;
+        if (pct <= 15) return Kirigami.Theme.highlightColor;
+        return Kirigami.Theme.positiveTextColor;
     }
 
     // 底色圆形 + 边框(在所有样式下都显示)
     Rectangle {
         anchors.fill: parent
         radius: width / 2
-        color: Qt.rgba(PlasmaCore.Theme.backgroundColor.r,
-                       PlasmaCore.Theme.backgroundColor.g,
-                       PlasmaCore.Theme.backgroundColor.b, 0.85)
+        color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
+                       Kirigami.Theme.backgroundColor.g,
+                       Kirigami.Theme.backgroundColor.b, 0.85)
         border.width: 2
         border.color: root.barColor(root.tightestPercent())
         opacity: 0.95
@@ -49,9 +49,9 @@ Item {
         anchors.margins: 4
         visible: root.compactStyle === "pie"
         ringColor: root.barColor(root.tightestPercent())
-        remainingColor: Qt.rgba(PlasmaCore.Theme.backgroundColor.r,
-                                PlasmaCore.Theme.backgroundColor.g,
-                                PlasmaCore.Theme.backgroundColor.b, 0.4)
+        remainingColor: Qt.rgba(Kirigami.Theme.backgroundColor.r,
+                                Kirigami.Theme.backgroundColor.g,
+                                Kirigami.Theme.backgroundColor.b, 0.4)
         data: {
             const worst = root.tightestPercent();
             const used = Math.max(0, worst);
@@ -62,9 +62,9 @@ Item {
             }, {
                 "label": "剩余",
                 "value": Math.max(0, 100 - used),
-                "color": Qt.rgba(PlasmaCore.Theme.backgroundColor.r,
-                                 PlasmaCore.Theme.backgroundColor.g,
-                                 PlasmaCore.Theme.backgroundColor.b, 0.4)
+                "color": Qt.rgba(Kirigami.Theme.backgroundColor.r,
+                                 Kirigami.Theme.backgroundColor.g,
+                                 Kirigami.Theme.backgroundColor.b, 0.4)
             }];
         }
     }
@@ -82,9 +82,9 @@ Item {
         height: parent.height * 0.18
         radius: height / 2
         visible: root.compactStyle === "bar"
-        color: Qt.rgba(PlasmaCore.Theme.backgroundColor.r,
-                       PlasmaCore.Theme.backgroundColor.g,
-                       PlasmaCore.Theme.backgroundColor.b, 0.4)
+        color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
+                       Kirigami.Theme.backgroundColor.g,
+                       Kirigami.Theme.backgroundColor.b, 0.4)
 
         Rectangle {
             anchors.left: parent.left

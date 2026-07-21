@@ -7,6 +7,7 @@ Item {
 
     property var providers: []
     property string compactStyle: "pie"  // "pie" | "bar"
+    signal toggled()  // 由父组件接,执行 expanded 切换
 
     implicitWidth: PlasmaCore.Units.gridUnit * 3
     implicitHeight: PlasmaCore.Units.gridUnit * 3
@@ -116,6 +117,6 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         z: 100
-        onClicked: plasmoid.expanded = !plasmoid.expanded
+        onClicked: root.toggled()
     }
 }

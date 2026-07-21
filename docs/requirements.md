@@ -1,9 +1,9 @@
-# AI Usage Watcher — 需求汇总
+# AI 用量监控 — 需求汇总
 
 > 本文档是 aiUsageWatcher 的**核心需求基线**。
 > 数据来源：
 > 1. 上一轮 `ai-desktop-pet` 项目的需求文档（docs/requirements.md + docs/superpowers/specs/2026-07-19-usage-monitor-handoff.md）
-> 2. 本轮 KDE Plasma 6 重写期间用户累积的所有要求
+> 2. 本轮 KDE Plasma 6 重写期间用户累积的所有要求（2026-07-20 ~ 2026-07-21）
 > 3. KDE 开发者站（develop.kde.org）Plasma 6 小部件规范
 >
 > 任何冲突以此文档为准。
@@ -22,241 +22,240 @@ KDE Plasma 6 桌面小部件，**实时监控各大模型厂家的模型套餐�
 - 卸载：`kpackagetool6 --remove aiUsageWatcher`
 - Plasma API 版本：`X-Plasma-API-Minimum-Version: "6.0"`
 - 包结构：`KPackageStructure: "Plasma/Applet"`
+- **必须严格按 KDE 6 原生技术栈开发**（2026-07-21 硬约束）
+  - KCM 用 `org.kde.kcmutils` + `KCM.SimpleKCM` / `KCM.GridView`
+  - 表单用 `org.kde.kirigami` 控件 + `QtQuick.Controls` 原生
+  - 不引入自定义按钮/标签/分隔符，凡 KDE/Kirigami 提供的都优先用
+  - 图标全部走 Breeze 图标主题（`icon.name: "..."`），不写自定义 SVG
+  - 颜色取自 `Kirigami.Theme`（PlasmaCore.Theme 只有 uppercase ColorRole 枚举，没有 lowercase 颜色属性）
 
-### 1.2 视觉规格（仿 KDE 磁盘使用率小部件 + KDE 顶部时间小部件）
+### 1.2 视觉规格
 
 | 状态 | 表现 |
-|---|---|
+|------|------|
 | compact（面板/小尺寸） | 圆球显示最紧张计划的"已用 %"；单击展开为悬浮面板；下方不显示文字标签 |
-| full（悬浮面板/大尺寸） | 工具栏 + **每供应商一段**的卡片组；每段内**每限额一条水平进度条** |
+| full（弹出面板） | 半透明深色背景，圆角；标题栏 + 可滚动供应商列表 + 状态栏 |
+| 标题栏 | "AI 用量监控" + 刷新按钮 + 配置按钮 + 固定按钮 |
 
-**full 视图布局**（仿 KDE `org.kde.plasma.diskusage`）：
+### 1.3 颜色语义（按已用 % 阈值，从 Kirigami.Theme 取色）
+
+| 阈值 | 语义 | Kirigami 属性 |
+|------|------|---------------|
+| ≤5% | 红（紧张） | `Kirigami.Theme.negativeTextColor` |
+| ≤15% | 黄（注意） | `Kirigami.Theme.highlightColor` |
+| >15% | 绿（正常） | `Kirigami.Theme.positiveTextColor` |
+| 无数据 | 灰 | `Kirigami.Theme.neutralTextColor` |
+
+## 2. 交互规范（2026-07-21 用户确认）
+
+### 2.1 点击与悬浮
+
+- **左键单击 compact 圆球** → 弹出悬浮面板（fullRepresentation），非弹窗对话框
+- **鼠标悬停 compact 圆球** → 显示 tooltip，内容为当前小工具显示的主模型使用率，不要所有厂商都显示
+- **悬浮面板外点击** → 面板关闭
+- **固定按钮** → 切换面板 alwaysOnTop 模式
+
+### 2.2 右键菜单
+
+- 仅有 2 项（用户硬约束：「打开系统监视器」「传感器详情」「显示样式」子菜单均与本小部件无关，已删除）
+  - **配置…** — 打开 KCM 配置页
+  - **刷新** — 立即刷新用量数据
+
+### 2.3 显示样式切换
+
+- 不在右键菜单中，**在 KCM 常规设置表单里**（2026-07-21 用户确认）
+- 选项：**饼型图** / **水平柱状图**，默认饼型图
+- 紧凑显示（compact）和全屏显示（full）的样式切换细节：
+  - 饼型图模式：compact 圆球显示 PieChart 饼图；full 面板用水平排布 PieChart 显示每个 plan
+  - 柱状图模式：compact 圆球显示水平填充矩形；full 面板用垂直堆叠 Rectangle 进度条显示每个 plan
+
+### 2.4 面板布局规则
+
+- **PlanBar 区域布局和样式和改动前完全一致**（2026-07-21 用户硬约束：不修改 PlanBar 区域布局）
+- 每个 PlanBar 始终使用 `Rectangle` 宽度动画（300ms `Easing.OutCubic`）
+- 面板右上角按钮：刷新 / 配置 / 固定（共 3 个按钮，无饼型/柱状切换按钮）
+
+### 2.5 主题跟随
+
+- 所有颜色取自 `Kirigami.Theme`，不硬编码十六进制颜色
+- 紧凑显示（compact）和全屏显示（full）均自动跟随系统 Plasma 亮/暗主题
+- 禁止使用 `PlasmaCore.Theme.xxx`（PlasmaCore 只有 `ColorRole` 枚举 + `color()` 方法，没有 lowercase 属性）
+
+## 3. 数据架构
+
+### 3.1 数据结构
+
+```typescript
+// 每个供应商对象
+{
+  "providerName": string,    // 供应商名称，如"云之声Token Hub"
+  "ledClass": string,        // "led-green" | "led-yellow" | "led-red" | "led-gray"
+  "sourceLabel": string,     // 来源标签，如"自定义"、"套餐"、"订阅"
+  "statusLabel": string,     // 状态标签，如"可用"、"降级"
+  "errorText": string,       // 错误信息，为空时不显示
+  "template": string,        // 模板字符串，默认 "%1 限额  %2/%3  重置于 %4"
+  "plans": [{
+    "planName": string,      // 计划名，如"5小时"、"7天"、"30天"
+    "usedPercent": number,   // 已用百分比 0-100
+    "usedPercentLabel": string, // 百分比标签，如"65%"
+    "barClass": string,      // "bar-green" | "bar-yellow" | "bar-red"
+    "resetText": string,     // 重置时间文本，如"今天 18:00"
+    "usedText": string,      // 已用量文本，如"141775516 / 180000000"
+    "unitText": string,      // 单位文本，如"$"
+    "extraText": string      // 额外说明文本
+  }]
+}
 ```
-┌─────────────────────────────────────────────┐
-│ 模型用量                  [配置] [固定]      │  ← RowLayout 工具栏
-├─────────────────────────────────────────────┤
-│ ┌─────────────────────────────────────────┐ │
-│ │ ● 云之声Token Hub            自定义 可用  │ │  ← ProviderGroup
-│ │   5小时   ████████░░  65%    今天 18:00重置                    │ │
-│ │   7天     ████░░░░░░  22%    周日 00:00重置                    │ │
-│ │   30天    █░░░░░░░░░   8%    2026-08-20重置                   │ │
-│ └─────────────────────────────────────────┘ │
-│ ┌─────────────────────────────────────────┐ │
-│ │ ● MiniMax                                                          │ │
-│ │   5小时   █████████░  88%   4 小时 30 分钟后重置                │ │ 
-│ └─────────────────────────────────────────┘ │
-│ ┌─────────────────────────────────────────┐ │
-│ │ ● Codex                                                            │ │
-│ │   7天    █████████░  88%    7月26日 重置                       │ │ 
-│ └─────────────────────────────────────────┘ │
-└───────────────────────────────────────────┘ │
-└─────────────────────────────────────────────┘
+
+### 3.2 模板字符串机制（2026-07-21 用户要求）
+
+- 每个 plan 的显示文本由 **模板字符串** 控制
+- 默认模板：`"%1 限额  %2/%3  重置于 %4"`
+- 占位符含义：
+  - `%1` = planName（限额名，如"5小时"）
+  - `%2` = used（已用，如 "141775516"）
+  - `%3` = total（总量，如 "180000000"，当前 mock 数据中暂缺，传空字符串）
+  - `%4` = resetIn 或 resetAt（重置时间）
+- KCM 编辑页提供模板字符串字段可编辑 + 实时预览
+- 渲染使用 `i18n()`（非 `i18np()`，`i18np` 是复数形式，需要整型 count 参数）
+
+### 3.3 种子供应商
+
+| 供应商 | 维度 | 状态 | 颜色 | 特点 |
+|--------|------|------|------|------|
+| 云之声Token Hub | 5h(65%) / 7d(22%) / 30d(8%) | 可用 | 🟢 | 多 PlanBar、多重置时间 |
+| MiniMax | 余额(12%) | 降级 | 🟡 | 黄色阈值、extraText |
+| Codex | 周限额(67%) 503/750次 | 可用 | 🟢 | 次/周单位、usedText |
+
+### 3.4 数据持久化
+
+- 非敏感配置：KConfig（通过 `plasmoid.configuration` 访问）
+- 供应商列表（复杂对象数组）用 JSON 字符串存到 `plasmoid.configuration.providers`
+- 启动时 fallback 到 `MockData.SEED_PROVIDERS`
+- 任何修改（增/删/改/refresh）后调用 `plasmoid.configuration.providers = JSON.stringify(providers)`
+
+## 4. KCM 配置页（2026-07-21 用户确认：全量实现增删改）
+
+### 4.1 KCM 架构
+
+- 顶层：`KCM.SimpleKCM`（自动获得标准底部按钮：默认值/重置/应用/确定/取消）
+- 左侧导航：`Kirigami.NavigationTabBar`，2 个 Tab
+  - **常规** — 常规设置表单
+  - **供应商** — 供应商列表 + 增删改入口
+
+### 4.2 常规设置表单（5 个表单项）
+
+| 字段 | 控件 | 值绑定 | 默认值 |
+|------|------|--------|--------|
+| 图标样式 | ComboBox | `plasmoid.configuration.compactStyle` | 饼型图（"pie"） |
+| 刷新间隔(秒) | SpinBox | `plasmoid.configuration.refreshIntervalSec` | 60 |
+| 背景透明度 | Slider | `plasmoid.configuration.opacityPercent` | 80% |
+| 窗口置顶 | CheckBox | `plasmoid.configuration.alwaysOnTop` | true |
+| 默认分组 | ComboBox | `plasmoid.configuration.groupBy` | 按供应商 |
+| 主题 | ComboBox | `plasmoid.configuration.colorScheme` | 跟随系统 |
+
+### 4.3 供应商列表（ProvidersConfig）
+
+- 列表行 = **供应商标题** + **展开的计划区**
+- 标题行：LED 灯 + 名称 + [✏️ 编辑] [🗑 删除] 两个图标按钮
+- 计划区：缩进 16px，垂直堆叠，每行 PlanBar 显示"限额名 + 进度条 + 百分比 + 重置时间"
+- 添加按钮 → 弹出编辑对话框（空白表单）
+- 编辑按钮 → 同对话框（预填当前供应商）
+- 删除按钮 → 二次确认弹窗（Yes/No）→ 从数组移除并 persist
+
+### 4.4 供应商编辑对话框（ProviderEditConfig）
+
+| 字段 | 控件 | 说明 |
+|------|------|------|
+| 名称 | TextField | 供应商名称 |
+| 来源 | ComboBox | 自定义 / 套餐 / 订阅 |
+| 信任模式 | ComboBox | Strict / Lan / Custom |
+| 计划 | 多行列表（可增删） | 每行：名称、限额文本、重置时间 |
+| 模板字符串 | TextField | 默认 `"%1 限额  %2/%3  重置于 %4"` |
+| 用量查询脚本 | 只读显示 | 提示"脚本编辑将在后续版本实现" |
+
+### 4.5 config/main.xml 字段
+
+```xml
+<group name="ui">
+    <entry name="refreshIntervalSec" type="int"> <default>60</default> <min>10</min> <max>3600</max> </entry>
+    <entry name="opacityPercent" type="int"> <default>80</default> <min>20</min> <max>100</max> </entry>
+    <entry name="alwaysOnTop" type="bool"> <default>true</default> </entry>
+    <entry name="compactStyle" type="string"> <default>pie</default> </entry>
+    <entry name="groupBy" type="string"> <default>provider</default> </entry>
+    <entry name="colorScheme" type="string"> <default>default</default> </entry>
+</group>
+<group name="providers">
+    <entry name="providerCount" type="int"> <default>0</default> </entry>
+    <entry name="providers" type="string"> <default></default> </entry>
+</group>
 ```
 
+## 5. 文件结构
+
 ```
-extractor 返回格式（所有字段均为可选）：
-• isValid: 布尔值，套餐是否有效
-• invalidMessage: 字符串，失效原因说明（当 isValid 为 false 时显示）
-• remaining: 数字，剩余额度
-• unit: 字符串，单位（如 "USD"）
-• planName: 字符串，套餐名称
-• total: 数字，总额度
-• used: 数字，已用额度
-• extra: 字符串，扩展字段，可自由补充需要展示的文本
+package/contents/
+├── config/main.xml                    # KConfig XT 配置文件
+├── js/mockData.js                     # 种子数据 + 波动函数
+└── ui/
+    ├── main.qml                       # PlasmoidItem 根组件
+    ├── CompactView.qml                # 小工具图标视图（pie/bar 切换）
+    ├── FullView.qml                   # 悬浮面板（3 个标题栏按钮 + 供应商列表）
+    ├── PieChart.qml                   # 自研 Canvas 饼图组件
+    ├── PlanBar.qml                    # 进度条组件（不动）
+    ├── ProviderGroup.qml              # 供应商卡片组件（不动）
+    └── config/
+        ├── configConfig.qml           # KCM 顶层
+        ├── GeneralConfig.qml          # 常规设置表单
+        ├── ProvidersConfig.qml        # 供应商列表 + 增删改入口
+        └── ProviderEditConfig.qml     # 单供应商编辑页（对话框）
 ```
 
+## 6. 技术选型与约束
 
-**进度条配色语义**（按已用 %）：
-- `usedPercent ≤ 5%` → 红 `#f87171`
-- `5% < usedPercent ≤ 15%` → 黄 `#fbbf24`
-- `usedPercent > 15%` → 绿 `#34d399`
-- 无数据 / 无 total → 灰 `#6b7280`，显"—"
+### 6.1 KDE 6 原生技术栈
 
-**卡片外壳着色**（边框 + LED 灯）：与最紧张计划同色
-- 整体供应商外壳颜色也按最紧的 plan 走
-- 没有任何 plan 时（如脚本解析失败）走 LED 红色 + 错误文本
+- QML（Qt 6 / Plasma 6），无 C++ 编译
+- `Kirigami.Theme` 取色（非 `PlasmaCore.Theme`）
+- `KCM.SimpleKCM` + `Kirigami.NavigationTabBar`
+- `QtQuick.Controls` 原生控件（SpinBox/Slider/ComboBox/CheckBox）
+- Breeze 图标主题（`icon.name: "..."`）
 
-**每条 PlanBar** 的标准字段（从 DisplayPlan 取）：
-- `planName` 计划名（如 "5小时"、"7天"、"余额"）
-- `usedPercent` 0–100
-- `usedPercentLabel` "29%"
-- `barClass` bar-green / bar-yellow / bar-red / bar-gray
-- `resetText` "今天 18:00"（无 reset_at 时整行隐藏）
-- `usedText` "141775516 / 180000000"（脚本返回 used+total 时显示）
-- `unitText` "$" / "tokens" / "%"
-- `extraText` 自由补充文本（活动期等）
+### 6.2 图表组件
 
-**通用 UI 要求**：
-- 悬浮面板窗口：透明背景、圆角、半透明深色 (`rgba(10,14,26,0.80)`)
-- 进度条圆角、过渡动画 300ms（easeOutCubic）
-- 不要系统任务栏图标（小部件本身就是桌面常驻，不重复登记任务栏）
+- **不依赖 `org.kde.quickcharts`**（2026-07-21 实测：Manjaro 当前包命名 bug，`qmldir` 引用 `plugin QuickChartsControlsplugin`，磁盘只有 `libQuickChartsControlsplugin.so`，QML loader 找不到，且部分场景触发 SIGSEGV）
+- 改用**自研纯 QML Canvas 组件**：
+  - `PieChart.qml` — 饼图/环形图，取色自 `Kirigami.Theme`
+  - `LineChart.qml` — 折线图（当前未使用，文件可直接删除）
+- 性能：Canvas 重绘 < 1ms/组件
 
-## 2. 数据来源（多供应商）
+### 6.3 供应商数据持久化
 
-### 2.1 通用 JavaScript 用量脚本
-- 自定义 HTTP 请求 + extractor 函数
-- 见 [docs/usage-script-spec.md](usage-script-spec.md) 完整规范
-- 必须实现：URL/方法/请求头/Body 构造；响应解析；占位符替换（`{{baseUrl}}` `{{apiKey}}` `{{accessToken}}` `{{userId}}`）
+- KConfig XT 不支持复杂对象数组 → JSON 字符串存到 `plasmoid.configuration.providers`
+- 启动时 fallback 到 `MockData.SEED_PROVIDERS`
+- 任何修改后调用 `persistProviders()`
 
-### 2.2 余额型（balance）
+## 7. 验收清单
 
-参考 `cc-switch-main` 中已支持：
-- DeepSeek
-- StepFun（阶跃星辰）
-- SiliconFlow（国内/国际）
-- OpenRouter
-- Novita AI
+- [ ] `plasmawindowed aiUsageWatcher` 启动正常，圆球显示饼图
+- [ ] 点击圆球弹出面板，标题栏右侧看到 3 个按钮（刷新 / 配置 / 固定）
+- [ ] 刷新按钮 → 图标转圈 300ms + 数据重新波动
+- [ ] 配置按钮 → 打开 KCM，左侧 2 个 Tab（常规/供应商）
+- [ ] 常规 Tab 修改字段 → 应用 → 重启后字段保持
+- [ ] 供应商 Tab 添加/编辑/删除供应商 → 重启后保持
+- [ ] 右键菜单只有 2 项：配置…、刷新
+- [ ] KCM 常规设置"图标样式"下拉框切换饼型/柱状 → 应用 → 圆球按所选渲染
+- [ ] KCM 常规设置"主题"下拉框切换跟随系统/亮色/暗色 → 应用 → 全局 KDE 主题色切换生效
+- [ ] `qmllint` 在所有 .qml 文件上 0 错误
+- [ ] PlanBar 区域布局和样式和改动前完全一致
+- [ ] 颜色随 Plasma 主题（亮/暗）切换而变化
+- [ ] 供应商列表展开显示多条计划（5小时/7天/月限额）
+- [ ] 计划区使用模板字符串渲染（`%1 限额  %2/%3  重置于 %4`）
 
-### 2.3 套餐型（token_plan / coding_plan）
-- Kimi（api.kimi.com）
-- 智谱 / 智谱团队版
-- MiniMax
-- ZenMux
-- 火山方舟
+## 8. 不在本次范围
 
-### 2.4 官方订阅（official_subscription）
-- Claude（本机 OAuth 登录）
-- Codex
-- Gemini
-
-### 2.5 GitHub Copilot（可选）
-- 仅在用户启用 GitHub Copilot 配置时启用
-- 复用官方 Copilot API
-
-### 2.6 用户自定义扩展
-- 用户可通过"配置"页添加/编辑/删除供应商
-- 每个供应商：名称、URL、API Key/Token、用法脚本、信任模式（Strict / Lan / Custom）
-
-## 3. extractor 返回字段（extractor return shape）
-
-> 权威规范见 [docs/usage-script-spec.md](usage-script-spec.md) 第二节。
-> 所有字段**均为可选**。
-
-| 字段 | 类型 | 含义 |
-|---|---|---|
-| `planName` | string | 套餐名（如 "5小时窗口" / "7天窗口" / "余额"） |
-| `remaining` | number | 剩余额度 |
-| `used` | number | 已用额度 |
-| `total` | number | 总额度 |
-| `unit` | string | 单位（短字符串：≤8 字符且不含空白） |
-| `isValid` | boolean | 套餐是否有效 |
-| `invalidMessage` | string | 失效原因 |
-| `resetAt` | string | 重置时间点 |
-| `extra` | string | **自由补充要展示的文本**（活动期、计费说明等） |
-
-## 4. 安全要求（继承自 ai-desktop-pet）
-
-### 4.1 脚本沙箱
-- QuickJS 沙箱执行
-- 内存限制 16 MB，超时 400 ms
-
-### 4.2 SSRF 防护
-- 禁止：链路本地（169.254/16、fe80::/10）、多播、未指定、云元数据地址（169.254.169.254 等）
-- Strict 模式：仅 https + 回环（域名解析后）
-- Lan 模式：仅私网/回环（需用户显式加入批准列表）
-- Custom 模式：可访问任意公网
-
-### 4.3 凭据隔离
-- 密钥仅存储于 **KDE Wallet**（替代原 libsecret/system keyring）
-- 预览/测试快照/日志/IPC 永远不返回真实密钥
-- 占位符替换使用**哨兵值**：JS 解析前用 `__usage_api_<32hex>__` 替换，HTTP 实际请求前才替换为真值
-- 占位符仅允许在单/双引号字符串内、查询参数值、请求头值、请求体内
-
-### 4.4 响应安全
-- 响应解析前过滤掉回显密钥（避免回声攻击）
-- 响应大小限制 256 KiB
-- 转义码检查（含 `\uXXXX` 解码后比较）
-
-## 5. 渲染层（核心架构要求）
-
-### 5.1 单一展示对象
-- **所有**来源 → 归一化为同一 `DisplayQuota` 对象
-- QML / UI 只读这个对象
-- 转换函数：`toDisplayQuota(provider)`，内部完成：百分比计算、状态色阈值映射、单位是否自由文本识别、姓名后缀剥除、重置时间点收集
-
-### 5.2 关键字段
-- `providerName`：自动剥 ` · Claude/Codex/OpenCode` 后缀（seed 误拼的）
-- `unit`：超 8 字符或含空白 → 改放 `unitOverflow` 单独展示
-- `usedPercent` / `usedPercentLabel`：主圆球指标
-- `percent` / `percentLabel`：备用（剩余 %）
-- `resetTimes: ResetEntry[]`：只保留 `reset_at` 存在的计划
-
-## 6. 数据后端
-
-### 6.1 配置存储
-- 非敏感配置：KConfig（`~/.config/aiusagewatcherrc` 或 KConfig XT）
-- 密钥：KDE Wallet（`kwallet6`）
-- 数据库：本地 SQLite 缓存历史用量（可选）
-
-### 6.2 并发与缓存
-- 有界并发（同时最多 4 个请求）
-- 24h 缓存回退：瞬时错误（5xx / 网络）用最近成功数据降级显示
-- 永久错误（4xx 鉴权 / 解析错误）清缓存，显示错误
-
-## 7. 交互
-
-| 入口 | 行为 |
-|---|---|
-| 桌面 compact 视图单击 | 切换 `plasmoid.expanded` |
-| 弹出框外点击 / 失焦 | 关闭弹出框（**默认 200ms 延迟**，便于鼠标移入） |
-| **配置** 按钮 | 打开 KCM 配置窗口（`aiusagewatcher` KCM module） |
-| **固定** 按钮 | 切换 popup 的 `alwaysOnTop` + 取消自动关闭逻辑 |
-| 弹框内"重置时间点"分组 | 只展示有 `reset_at` 的计划 |
-
-## 8. 性能与限制
-
-- 默认刷新间隔：60 s（可在 KCM 配置）
-- 默认并发上限：4
-- 默认缓存 TTL：24 h
-- 默认响应体上限：256 KiB
-- 默认 JS 超时：400 ms
-- 默认 HTTP 超时：10 s
-
-## 9. 验收清单
-
-### 9.1 功能
-
-- [ ] `plasmawindowed aiUsageWatcher` 能启动并在桌面显示 compact 圆球
-- [ ] 单击 compact → 展开 full 视图
-- [ ] full 视图显示每个供应商的：套餐名、已用 %、剩余/总量、重置时间点、extra 文本
-- [ ] full 视图右上角两个按钮（配置 / 固定）功能可用
-- [ ] KCM 配置窗口可添加/编辑/删除供应商
-- [ ] 至少 1 个 `cc-switch` 内置 provider（token_plan/balance/subscription）跑通
-- [ ] 至少 1 个自定义 JavaScript 脚本跑通
-
-### 9.2 安全
-
-- [ ] 真实密钥不出现在任何日志/快照/IPC/前端状态/截图
-- [ ] SSRF 防护：所有 dangerous IP / metadata 地址被拒绝
-- [ ] 占位符仅允许出现在合法位置
-- [ ] 响应解析时剔除回显密钥
-- [ ] JS 沙箱超时与内存限制生效
-
-### 9.3 UI / 可用性
-
-- [ ] compact 圆球颜色随最紧张 plan 的已用 % 阈值切换（绿/黄/红/灰）
-- [ ] full 视图按"每供应商一段、每限额一条 bar"渲染
-- [ ] PlanBar 颜色随该计划的已用 % 阈值切换
-- [ ] ProviderGroup 边框 / LED 灯颜色按该供应商最紧张 plan 走
-- [ ] 没有 7 天 reset 的供应商不显示空行
-- [ ] `unit` 长文本不撑爆数字，单独行展示
-- [ ] 供应商名自动剥 ` · <App>` 后缀
-- [ ] 80% 半透明深色背景，圆角
-- [ ] 进度条填充动画 ≥ 300ms（easeOutCubic）
-- [ ] QML 通过 `qmllint` 无错误
-
-## 10. 非目标（不在本期范围）
-
-- 语音对话
-- 移动端（Plasma Mobile 暂不在范围）
-- 多用户/团队协作
-- 云端同步
-- 账号管理（仅本地 KDE Wallet）
-- 第三方同步 UI（用户明确否决：不要 cc-switch 同步/导入向导 UI）
-
-## 11. 开放问题（待开始实现时确认）
-
-1. Plasma 6 在 Wayland 下小部件是否仍受 alwaysOnTop / skipTaskbar hint 影响，还是 Containment 自动处理？
-2. KWallet 在 Plasma 6 的标准调用模式是 `org.kde.KWallet` D-Bus 接口 vs `KWallet` C++ 类？
-3. QuickJS 在 QML 上下文的执行：plasmoid 内 JS 还是 separate C++ backend？
-4. 实时刷新的 Timer 由 QML 提供还是 C++ backend 提供？
+- 真实的 HTTP 用量查询（本次继续用 mock 数据）
+- KCM 编辑页的脚本编辑/凭据管理（只读显示）
+- 历史 buffer / 时间序列图
+- 系统监视器集成
+- 供应商导入/导出

@@ -87,7 +87,7 @@ isolation: branch
 
 ### Task 2: 修复根状态、compact 与包元数据
 
-- [ ] **Task 2 checkpoint: 根状态、compact 与包元数据完成**
+- [x] **Task 2 checkpoint: 根状态、compact 与包元数据完成**
 
 **Files:**
 - Create: `tests/tst_compactView.qml`
@@ -101,17 +101,17 @@ isolation: branch
 - Consumes: Task 1 纯函数。
 - Produces: `main.qml` 的 `providerDefinitions`、`runtimeSnapshots`、`providers`；`refresh()` 只更新内存；CompactView `tightestUsage` 属性；KConfig 四项 UI 设置和 definitions JSON。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
   `tst_compactView.qml` 实例化 CompactView，传入 22/88/67，断言显示 88；空数组显示 `—`；pie/bar 都可见且不抛异常。给百分比 Text 设置 `objectName: "compactPercent"` 供测试定位。
 
-- [ ] **Step 2: 运行 RED**
+- [x] **Step 2: 运行 RED**
 
   Run: `QT_QPA_PLATFORM=offscreen qmltestrunner -input tests -import package/contents/ui`
 
   Expected: FAIL，旧组件仍使用错误 Units/阈值或找不到 `compactPercent`。
 
-- [ ] **Step 3: 实现根状态与 compact**
+- [x] **Step 3: 实现根状态与 compact**
 
   - `main.qml` 规范化 `configuration.providers` 为 definitions，创建 snapshots 并派生 providers；`refresh()` 只替换 snapshots/providers。
   - tooltip 副标题使用 tightest provider、plan 和百分比。
@@ -120,13 +120,13 @@ isolation: branch
   - main.xml 只保留 `providers`、`refreshIntervalSec`、`opacityPercent`、`compactStyle`、`keepPanelOpen`。
   - metadata Name=`AI Usage Watcher`、License=`GPL-2.0-or-later`，移除外部配置模块声明。
 
-- [ ] **Step 4: 验证 GREEN**
+- [x] **Step 4: 验证 GREEN**
 
   Run: `QT_QPA_PLATFORM=offscreen qmltestrunner -input tests -import package/contents/ui && xmllint --noout package/contents/config/main.xml && qmllint package/contents/ui/main.qml package/contents/ui/CompactView.qml package/contents/ui/PieChart.qml`
 
   Expected: 全部 exit 0。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
   ```bash
   git add tests/tst_compactView.qml package/contents/ui/main.qml package/contents/ui/CompactView.qml package/contents/ui/PieChart.qml package/contents/config/main.xml package/metadata.json

@@ -12,18 +12,21 @@
 
 ### Current Task
 
-- Plan task: `Task 1: 锁定数据契约与派生逻辑`
-- OpenSpec task: `1. 建立 qmltestrunner 测试骨架；用 RED 测试锁定 ProviderDefinition/RuntimeSnapshot 规范化、阈值、最大值、MiniMax 88 和刷新派生同步，再实现纯函数至 GREEN。`
+- Plan task: `Task 2: 修复根状态、compact 与包元数据`
+- OpenSpec task: `2. 修复 main/compact/PieChart/KConfig/metadata：Kirigami API、三层状态、Timer 不持久化、真实 tooltip、compact pie/bar、keepPanelOpen、统一 ID/Name/License；静态与单测 GREEN。`
 - Stage: `done`
-- Review/fix round: `0`
-- Base commit: `b365693`
-- Implementation commit: `c9965c2`
-- Changed files: `package/contents/js/mockData.js`, `tests/tst_mockData.qml`
-- RED: qmltestrunner 2 passed / 6 expected failures for missing new contract
-- GREEN: qmltestrunner 8 passed / 0 failed; controller rerun 8 passed / 0 failed
+- Review/fix round: `1`
+- Base commit: `a682879`
+- Implementation commit: `302aebd`
+- Changed files: Task 2 scoped files
+- RED: Qt 6 component test 3 expected failures for PlasmaCore.Units and missing behavior nodes
+- GREEN: Qt 6 tests 13 passed / 0 failed; XML and QML checks exit 0
+- Quality fix commit: `8575e1a`
+- Quality finding resolved: `PieChart.data` renamed to `segments`; Qt 6 focused lint produced zero output
+- Controller verification: Qt 6 full suite 13 passed / 0 failed
 
 - [x] Task 1 — Data contract and derivation tests
-- [ ] Task 2 — Root state, compact view and metadata
+- [x] Task 2 — Root state, compact view and metadata
 - [ ] Task 3 — FullView ProviderGroup/PlanBar chain
 - [ ] Task 4 — Standard General KCM
 - [ ] Task 5 — Providers KCM CRUD and validation

@@ -17,5 +17,8 @@
         <entry name="alwaysOnTop" type="bool">
             <default>true</default>
         </entry>
+        <entry name="displayStyle" type="string">
+            <default>pie</default>
+        </entry>
     </group>
 </kcfg>

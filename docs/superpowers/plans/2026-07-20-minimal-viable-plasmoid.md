@@ -524,6 +524,102 @@ git tag -a v0.1.0-mvp -m "MVP verified: mock data + timer + bug fixes"
 
 如有失败项，记录失败原因并回到对应 Task 修复。
 
+### Task 7: 主题化图表 + 右键菜单样式切换
+
+**背景**：设计文档新增"图表与图标样式规范（主题跟随）"节和"右键菜单样式切换"节。本任务把这 2 条规范落地为代码。
+
+**变更范围**：
+
+| 文件 | 操作 | 说明 |
+| ------ | ------ | ------ |
+| `package/contents/config/main.xml` | 修改 | `ui` 组新增 `displayStyle`（默认 `"pie"`） |
+| `package/contents/ui/main.qml` | 修改 | import `org.kde.quickcharts`，`compactRepresentation` 用 `PieChartControl`，`fullRepresentation` 的 PlanBar 用 `BarChartControl`，颜色全部改 `PlasmaCore.Theme.*`，`contextualActions` 加"打开系统监视器"+"显示样式"子菜单 |
+| `package/contents/ui/PlanBar.qml` | 修改 | 改用 `BarChartControl` 替换 Rectangle 宽度动画 |
+
+**步骤**：
+
+- [ ] **Step 1: 在 config/main.xml 加 `displayStyle`**
+
+```xml
+<entry name="displayStyle" type="string">
+    <default>pie</default>
+</entry>
+```
+
+- [ ] **Step 2: main.qml 顶部加 import**
+
+```qml
+import org.kde.quickcharts 1.0
+```
+
+- [ ] **Step 3: main.qml 所有硬编码颜色替换为 `PlasmaCore.Theme` 取色**
+
+  - `#34d399` → `PlasmaCore.Theme.PositiveText`
+  - `#fbbf24` → `PlasmaCore.Theme.NeutralText`（黄用 Highlight 或自定义）
+  - `#f87171` → `PlasmaCore.Theme.NegativeText`
+  - `#6b7280` / `#9ca3af` → `PlasmaCore.Theme.NeutralText`
+  - 背景 `Qt.rgba(0.04, 0.05, 0.1, 0.85)` 等深色硬编码 → 改用 `PlasmaCore.Theme.backgroundColor` 加透明度
+
+- [ ] **Step 4: compact 圆球嵌入 PieChartControl**
+
+```qml
+PieChartControl {
+    anchors.fill: parent
+    chartData: [{ "label": i18n("已用"), "value": worst }, { "label": i18n("剩余"), "value": 100 - worst }]
+}
+```
+
+- [ ] **Step 5: full 面板 PlanBar 用 BarChartControl 替换 Rectangle**
+
+  - 拆 PlanBar.qml 或直接在 main.qml 内联,推荐拆出独立 `PlanBarChart.qml` 复用
+
+- [ ] **Step 6: contextualActions 加"显示样式"子菜单**
+
+```qml
+Plasmoid.contextualActions: [
+    PlasmaCore.Action { text: i18n("打开系统监视器…"); icon.name: "utilities-system-monitor"; onTriggered: Qt.openUrlExternally("plasma-systemmonitor") },
+    PlasmaCore.Action { text: i18n("配置…"); icon.name: "configure"; onTriggered: plasmoid.action("configure").trigger() },
+    PlasmaCore.Action {
+        text: i18n("显示样式")
+        icon.name: "preferences-desktop-display"
+        PlasmaCore.Action {
+            text: i18n("饼状图"); icon.name: "office-chart-pie"
+            checkable: true; autoExclusive: true
+            checked: plasmoid.configuration.displayStyle === "pie"
+            onTriggered: plasmoid.configuration.displayStyle = "pie"
+        }
+        // 柱状图 / 传感器详情 同模式
+    },
+    PlasmaCore.Action { text: i18n("刷新"); icon.name: "view-refresh"; onTriggered: root.providers = MockData.fluctuateProviders(root.providers) }
+]
+```
+
+- [ ] **Step 7: 同步到本地 plasmoid 目录,plasmawindowed 启动验证三种样式都能切换**
+
+```bash
+rsync -a package/contents/ ~/.local/share/plasma/plasmoids/aiUsageWatcher/contents/
+pkill -f "plasmawindowed aiUsageWatcher"
+nohup plasmawindowed aiUsageWatcher >/tmp/pw.out 2>&1 &
+```
+
+- [ ] **Step 8: 验证 qmllint + 视觉检查**
+
+```bash
+qmllint package/contents/ui/*.qml
+```
+
+- [ ] **Step 9: 提交**
+
+```bash
+git add docs/superpowers package/contents
+git commit -m "feat: theme-aware charts (PieChartControl/BarChartControl) + right-click display style menu"
+```
+
+**风险**：
+
+- `org.kde.quickcharts` 可能未在所有发行版自带 — Manjaro 上 `/usr/lib/qt6/qml/org/kde/quickcharts/controls/PieChartControl.qml` 真实存在,Plasma 6 默认带
+- 切样式时圆球/PlanBar 重绘可能闪一下,用 `Behavior` 缓 200ms 改善
+
 ---
 
 ## Self-Review

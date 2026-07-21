@@ -3,6 +3,33 @@
 
 .pragma library
 
+// 历史 buffer 长度（用于「传感器详情」LineChartControl 显示时间序列）
+var HISTORY_SIZE = 30;
+
+// 全局历史 buffer: [{ timestamp: ms, worstPercent: 0..100 }, ...]
+var HISTORY_BUFFER = [];
+
+// 往 HISTORY_BUFFER 推一条（保持长度上限）
+function pushHistory(timestamp, worstPercent) {
+    HISTORY_BUFFER.push({ "timestamp": timestamp, "worstPercent": worstPercent });
+    if (HISTORY_BUFFER.length > HISTORY_SIZE) {
+        HISTORY_BUFFER = HISTORY_BUFFER.slice(HISTORY_BUFFER.length - HISTORY_SIZE);
+    }
+    return HISTORY_BUFFER;
+}
+
+// 返回当前最紧张供应商的 usedPercent（用于历史记录）
+function tightestPercent(providers) {
+    let worst = -1;
+    for (const p of providers) {
+        for (const plan of p.plans) {
+            if (typeof plan.usedPercent === "number" && plan.usedPercent > worst)
+                worst = plan.usedPercent;
+        }
+    }
+    return worst < 0 ? 0 : worst;
+}
+
 var SEED_PROVIDERS = [{
     "providerName": "云之声Token Hub",
     "ledClass": "led-green",
@@ -101,7 +128,7 @@ function _ledClass(plans) {
 
 // 对 providers 数组做不可变波动
 function fluctuateProviders(providers) {
-    return providers.map(function (p) {
+    const out = providers.map(function (p) {
         const newPlans = p.plans.map(function (plan) {
             const delta = Math.random() * 10 - 5;
             const newPct = Math.max(0, Math.min(100, Math.round(plan.usedPercent + delta)));
@@ -116,4 +143,7 @@ function fluctuateProviders(providers) {
             "ledClass": _ledClass(newPlans)
         });
     });
+    // 同步推一条历史
+    pushHistory(Date.now(), tightestPercent(out));
+    return out;
 }

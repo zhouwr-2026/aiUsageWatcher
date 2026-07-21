@@ -38,7 +38,37 @@ TestCase {
         compare(tightest.planName, "high")
     }
 
-    function test_seed_minimax_is_88() {
+    function test_provider_rotation_keeps_provider_and_plan_in_sync() {
+        var providers = [{
+            providerName: "MiniMax",
+            plans: [
+                { planName: "5 小时", usedPercent: 12 },
+                { planName: "每周", usedPercent: 28 }
+            ]
+        }, {
+            providerName: "Codex",
+            plans: [{ planName: "每周", usedPercent: 67 }]
+        }, {
+            providerName: "未配置",
+            plans: []
+        }]
+
+        var first = MockData.providerUsageAt(providers, 0)
+        var second = MockData.providerUsageAt(providers, 1)
+        var wrapped = MockData.providerUsageAt(providers, 4)
+        var empty = MockData.providerUsageAt(providers, 2)
+
+        compare(first.providerName, "MiniMax")
+        compare(first.planName, "每周")
+        compare(first.usedPercent, 28)
+        compare(second.providerName, "Codex")
+        compare(second.usedPercent, 67)
+        compare(wrapped.providerName, "Codex")
+        compare(empty.providerName, "未配置")
+        compare(empty.usedPercent, -1)
+    }
+
+    function test_seed_minimax_waits_for_real_backend() {
         var snapshots = MockData.createSeedSnapshots(MockData.SEED_PROVIDER_DEFINITIONS)
         var minimax = null
         for (var i = 0; i < snapshots.length; ++i) {
@@ -47,8 +77,53 @@ TestCase {
         }
 
         verify(minimax !== null)
-        compare(minimax.plans[0].used, 88)
-        compare(minimax.plans[0].total, 100)
+        compare(minimax.statusLabel, "未配置")
+        compare(minimax.plans.length, 0)
+    }
+
+    function test_replace_snapshot_is_immutable() {
+        var before = [{
+            providerId: "minimax",
+            statusLabel: "未配置",
+            errorText: "",
+            plans: []
+        }, {
+            providerId: "codex",
+            statusLabel: "可用",
+            errorText: "",
+            plans: []
+        }]
+        var live = {
+            providerId: "minimax",
+            statusLabel: "可用",
+            errorText: "",
+            plans: [{ planId: "general-weekly", used: 28, total: 100 }]
+        }
+
+        var after = MockData.replaceSnapshot(before, live)
+
+        compare(before[0].statusLabel, "未配置")
+        verify(after !== before)
+        verify(after[0] !== live)
+        compare(after[0].statusLabel, "可用")
+        compare(after[0].plans[0].used, 28)
+        compare(after[1].providerId, "codex")
+    }
+
+    function test_minimax_not_fluctuated() {
+        var before = [{
+            providerId: "minimax",
+            statusLabel: "可用",
+            errorText: "",
+            plans: [{ planId: "general-weekly", used: 28, total: 100 }]
+        }]
+
+        var after = MockData.fluctuateSnapshots(before, function() { return 1 })
+
+        compare(after[0].plans[0].used, 28)
+        verify(after !== before)
+        verify(after[0] !== before[0])
+        verify(after[0].plans[0] !== before[0].plans[0])
     }
 
     function test_invalid_definitions_fall_back_to_seed() {

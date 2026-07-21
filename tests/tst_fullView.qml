@@ -12,7 +12,36 @@ Item {
     property string configuredCompactStyle: "pie"
     property var testProviders: MockData.buildDisplayProviders(
                                     MockData.SEED_PROVIDER_DEFINITIONS,
-                                    MockData.SEED_RUNTIME_SNAPSHOTS)
+                                    liveSnapshots())
+
+    function liveSnapshots() {
+        return MockData.replaceSnapshot(MockData.SEED_RUNTIME_SNAPSHOTS, {
+            providerId: "minimax",
+            statusLabel: "可用",
+            errorText: "",
+            plans: [{
+                planId: "general-interval",
+                planName: "通用模型 · 5 小时",
+                used: 0,
+                total: 100,
+                unit: "%",
+                resetText: "07-21 21:20",
+                extraText: "",
+                isValid: true,
+                invalidReason: ""
+            }, {
+                planId: "general-weekly",
+                planName: "通用模型 · 每周",
+                used: 28,
+                total: 100,
+                unit: "%",
+                resetText: "07-26 16:00",
+                extraText: "",
+                isValid: true,
+                invalidReason: ""
+            }]
+        })
+    }
 
     FullView {
         id: fullView
@@ -63,7 +92,7 @@ Item {
             host.configuredCompactStyle = "pie"
             host.testProviders = MockData.buildDisplayProviders(
                                     MockData.SEED_PROVIDER_DEFINITIONS,
-                                    MockData.SEED_RUNTIME_SNAPSHOTS)
+                                    host.liveSnapshots())
             refreshSpy.clear()
             configureSpy.clear()
             keepOpenSpy.clear()
@@ -75,14 +104,14 @@ Item {
             verify(fullView.hasOwnProperty("keepPanelOpen"))
             verify(fullView.hasOwnProperty("configureRequested"))
             verify(fullView.hasOwnProperty("keepOpenChanged"))
-            tryCompare(fullView, "renderedPlanCount", 5)
+            tryCompare(fullView, "renderedPlanCount", 6)
             compare(descendantsNamed(fullView, "providerGroup").length, 3)
-            compare(descendantsNamed(fullView, "planBar").length, 5)
+            compare(descendantsNamed(fullView, "planBar").length, 6)
 
             host.configuredCompactStyle = "bar"
             wait(0)
             compare(descendantsNamed(fullView, "providerGroup").length, 3)
-            compare(descendantsNamed(fullView, "planBar").length, 5)
+            compare(descendantsNamed(fullView, "planBar").length, 6)
         }
 
         function test_actions_emit_expected_signals() {
@@ -105,9 +134,9 @@ Item {
 
         function test_template_uses_independent_values() {
             const bars = descendantsNamed(fullView, "planBar")
-            compare(bars.length, 5)
+            compare(bars.length, 6)
 
-            const detail = findChild(bars[4], "templateTextLabel")
+            const detail = findChild(bars[5], "templateTextLabel")
             verify(detail !== null)
             compare(detail.text, "周限额 限额  503/750  重置于 周日 00:00")
         }

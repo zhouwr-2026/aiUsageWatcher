@@ -1,18 +1,67 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.20)
 
-project(aiUsageWatcher LANGUAGES CXX)
+project(aiUsageWatcher VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
+set(BUILD_SHARED_LIBS ON)
 
-# aiUsageWatcher 主体是 Plasma 6 小部件（QML-only）
-# Plasma 6 加载小部件时不需要编译此 CMakeLists——kpackagetool6 直接读取 metadata.json + contents/
-# 但 kdesrc-build / distro 包需要 CMake 入口，所以保留这个最小工程文件以便包管理器识别。
-# 真正构建流程：plasmawindowed aiUsageWatcher （开发期）或 kpackagetool6 --install aiUsageWatcher （打包）
+include(GNUInstallDirs)
 
-# 仅添加一个非构建目标，让 cmake configure 阶段不报错
-add_custom_target(aiUsageWatcher-help
-    COMMAND ${CMAKE_COMMAND} -E echo "Plasma 6 小部件，无需 C++ 编译。请直接用 plasmawindowed aiUsageWatcher 运行。"
+# This project only needs the standard Plasma package and Qt plugin locations.
+# Defining them directly keeps local builds independent of extra-cmake-modules.
+set(KDE_INSTALL_DATADIR "${CMAKE_INSTALL_DATAROOTDIR}")
+set(KDE_INSTALL_METAINFODIR "${CMAKE_INSTALL_DATAROOTDIR}/metainfo")
+set(KDE_INSTALL_PLUGINDIR "${CMAKE_INSTALL_LIBDIR}/qt6/plugins")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Network Test)
+find_package(KF6CoreAddons 6.0 REQUIRED)
+find_package(KF6Config 6.0 REQUIRED)
+find_package(Plasma 6.0 REQUIRED)
+
+plasma_install_package(package aiUsageWatcher)
+
+kcoreaddons_add_plugin(aiUsageWatcher
+    SOURCES
+        src/aiusagewatcherapplet.cpp
+        src/aiusagewatcherapplet.h
+        src/minimaxclient.cpp
+        src/minimaxclient.h
+        src/minimaxresponseparser.cpp
+        src/minimaxresponseparser.h
+    INSTALL_NAMESPACE "plasma/applets"
 )
+target_link_libraries(aiUsageWatcher
+    PRIVATE
+        Qt6::Core
+        Qt6::Network
+        KF6::CoreAddons
+        Plasma::Plasma
+)
+set_target_properties(aiUsageWatcher PROPERTIES PREFIX "")
+
+include(CTest)
+
+if(BUILD_TESTING)
+    add_executable(tst_minimaxresponseparser
+        tests/cpp/tst_minimaxresponseparser.cpp
+        src/minimaxresponseparser.cpp
+        src/minimaxresponseparser.h
+    )
+    target_include_directories(tst_minimaxresponseparser PRIVATE src)
+    target_link_libraries(tst_minimaxresponseparser PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME minimax-response-parser COMMAND tst_minimaxresponseparser)
+
+    add_executable(tst_minimaxclient
+        tests/cpp/tst_minimaxclient.cpp
+        src/minimaxclient.cpp
+        src/minimaxclient.h
+        src/minimaxresponseparser.cpp
+        src/minimaxresponseparser.h
+    )
+    target_include_directories(tst_minimaxclient PRIVATE src)
+    target_link_libraries(tst_minimaxclient PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+    add_test(NAME minimax-client-contract COMMAND tst_minimaxclient)
+endif()

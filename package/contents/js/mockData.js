@@ -30,9 +30,13 @@ var SEED_PROVIDER_DEFINITIONS = [{
     "trustMode": "strict",
     "template": DEFAULT_TEMPLATE,
     "plans": [{
-        "id": "balance",
-        "planName": "余额",
-        "unit": "$"
+        "id": "general-interval",
+        "planName": "通用模型 · 当前周期",
+        "unit": "%"
+    }, {
+        "id": "general-weekly",
+        "planName": "通用模型 · 每周",
+        "unit": "%"
     }]
 }, {
     "id": "codex",
@@ -84,19 +88,9 @@ var SEED_RUNTIME_SNAPSHOTS = [{
     }]
 }, {
     "providerId": "minimax",
-    "statusLabel": "降级",
-    "errorText": "",
-    "plans": [{
-        "planId": "balance",
-        "planName": "余额",
-        "used": 88,
-        "total": 100,
-        "unit": "$",
-        "resetText": "",
-        "extraText": "活动期 8 月底结束",
-        "isValid": true,
-        "invalidReason": ""
-    }]
+    "statusLabel": "未配置",
+    "errorText": "请设置 MINIMAX_API_KEY 环境变量",
+    "plans": []
 }, {
     "providerId": "codex",
     "statusLabel": "可用",
@@ -199,6 +193,13 @@ function fluctuateSnapshots(snapshots, randomFn) {
 
     return snapshots.map(function(snapshot) {
         var plans = Array.isArray(snapshot.plans) ? snapshot.plans : [];
+        if (snapshot.providerId === "minimax") {
+            return Object.assign({}, snapshot, {
+                "plans": plans.map(function(plan) {
+                    return Object.assign({}, plan);
+                })
+            });
+        }
         return Object.assign({}, snapshot, {
             "plans": plans.map(function(plan) {
                 if (!_isFiniteNumber(plan.used) || !_isFiniteNumber(plan.total)
@@ -210,6 +211,35 @@ function fluctuateSnapshots(snapshots, randomFn) {
             })
         });
     });
+}
+
+function replaceSnapshot(snapshots, replacement) {
+    snapshots = Array.isArray(snapshots) ? snapshots : [];
+    if (!replacement || typeof replacement !== "object"
+            || typeof replacement.providerId !== "string"
+            || !replacement.providerId
+            || !Array.isArray(replacement.plans))
+        return snapshots.slice();
+
+    var found = false;
+    var result = snapshots.map(function(snapshot) {
+        if (!snapshot || snapshot.providerId !== replacement.providerId)
+            return snapshot;
+        found = true;
+        return Object.assign({}, replacement, {
+            "plans": replacement.plans.map(function(plan) {
+                return Object.assign({}, plan);
+            })
+        });
+    });
+    if (!found) {
+        result.push(Object.assign({}, replacement, {
+            "plans": replacement.plans.map(function(plan) {
+                return Object.assign({}, plan);
+            })
+        }));
+    }
+    return result;
 }
 
 function usageClass(percent, prefix) {
@@ -314,6 +344,29 @@ function tightestUsage(displayProviders) {
         });
     });
     return result;
+}
+
+function providerUsageAt(displayProviders, providerIndex) {
+    var empty = {
+        "usedPercent": -1,
+        "providerName": "",
+        "planName": "",
+        "providerIndex": -1
+    };
+    if (!Array.isArray(displayProviders) || displayProviders.length === 0)
+        return empty;
+
+    var numericIndex = _isFiniteNumber(providerIndex) ? Math.floor(providerIndex) : 0;
+    var index = ((numericIndex % displayProviders.length) + displayProviders.length)
+        % displayProviders.length;
+    var provider = displayProviders[index] || {};
+    var usage = tightestUsage([provider]);
+    return {
+        "usedPercent": usage.usedPercent,
+        "providerName": usage.providerName || provider.providerName || "",
+        "planName": usage.planName,
+        "providerIndex": index
+    };
 }
 
 function stripProviderSuffix(name) {

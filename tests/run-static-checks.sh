@@ -68,5 +68,10 @@ if /usr/bin/rg -n '#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?' package/contents --glob '*.
     echo "发现硬编码十六进制主题色" >&2
     exit 1
 fi
+if /usr/bin/rg -n 'Plasmoid\.contextualActions[[:space:]]*:[[:space:]]*\[[^]]*icon\.name:[[:space:]]*"configure"' \
+    package/contents/ui/main.qml --multiline; then
+    echo "不要在右键菜单重复添加 Plasma 已提供的配置入口" >&2
+    exit 1
+fi
 
 echo "[static] PASS"

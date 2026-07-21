@@ -9,6 +9,7 @@ Item {
 
     property var testProviders: []
     property string testStyle: "pie"
+    property int testProviderIndex: 0
 
     QtObject {
         id: fakePlasmoid
@@ -20,6 +21,7 @@ Item {
         anchors.fill: parent
         providers: host.testProviders
         compactStyle: host.testStyle
+        providerIndex: host.testProviderIndex
         plasmoidItem: fakePlasmoid
     }
 
@@ -30,17 +32,18 @@ Item {
         function init() {
             host.testProviders = []
             host.testStyle = "pie"
+            host.testProviderIndex = 0
         }
 
-        function test_tightest_percent_is_rendered() {
+        function test_current_provider_tightest_percent_is_rendered() {
             host.testProviders = [{
                 providerName: "A",
-                plans: [{ planName: "low", usedPercent: 22 }]
+                plans: [
+                    { planName: "low", usedPercent: 22 },
+                    { planName: "high", usedPercent: 88 }
+                ]
             }, {
                 providerName: "B",
-                plans: [{ planName: "high", usedPercent: 88 }]
-            }, {
-                providerName: "C",
                 plans: [{ planName: "mid", usedPercent: 67 }]
             }]
 
@@ -66,6 +69,34 @@ Item {
             host.testStyle = "bar"
 
             verify(findChild(compact, "compactBar").visible)
+        }
+
+        function test_click_toggles_popup() {
+            const pointerArea = findChild(compact, "compactMouseArea")
+            verify(pointerArea !== null)
+
+            compare(fakePlasmoid.expanded, false)
+            mouseClick(pointerArea)
+            compare(fakePlasmoid.expanded, true)
+            mouseClick(pointerArea)
+            compare(fakePlasmoid.expanded, false)
+        }
+
+        function test_provider_index_rotates_displayed_usage() {
+            host.testProviders = [{
+                providerName: "MiniMax",
+                plans: [{ planName: "每周", usedPercent: 28 }]
+            }, {
+                providerName: "Codex",
+                plans: [{ planName: "每周", usedPercent: 67 }]
+            }]
+
+            compare(compact.currentUsage.providerName, "MiniMax")
+            compare(findChild(compact, "compactPercent").text, "28%")
+
+            host.testProviderIndex = 1
+            compare(compact.currentUsage.providerName, "Codex")
+            compare(findChild(compact, "compactPercent").text, "67%")
         }
     }
 }

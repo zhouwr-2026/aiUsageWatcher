@@ -8,7 +8,9 @@ Item {
     required property var plasmoidItem
     property var providers: []
     property string compactStyle: "pie"
-    readonly property var tightestUsage: MockData.tightestUsage(providers)
+    property int providerIndex: 0
+    readonly property var currentUsage: MockData.providerUsageAt(providers, providerIndex)
+    readonly property var tightestUsage: currentUsage
 
     implicitWidth: Kirigami.Units.gridUnit * 3
     implicitHeight: Kirigami.Units.gridUnit * 3
@@ -30,7 +32,7 @@ Item {
                        Kirigami.Theme.backgroundColor.g,
                        Kirigami.Theme.backgroundColor.b, 0.85)
         border.width: 2
-        border.color: root.usageColor(root.tightestUsage.usedPercent)
+        border.color: root.usageColor(root.currentUsage.usedPercent)
         opacity: 0.95
     }
 
@@ -40,12 +42,12 @@ Item {
         anchors.fill: parent
         anchors.margins: Kirigami.Units.smallSpacing
         visible: root.compactStyle === "pie"
-        ringColor: root.usageColor(root.tightestUsage.usedPercent)
+        ringColor: root.usageColor(root.currentUsage.usedPercent)
         remainingColor: Qt.rgba(Kirigami.Theme.backgroundColor.r,
                                 Kirigami.Theme.backgroundColor.g,
                                 Kirigami.Theme.backgroundColor.b, 0.4)
         segments: {
-            const percent = root.tightestUsage.usedPercent
+            const percent = root.currentUsage.usedPercent
             const used = Math.max(0, Math.min(100, percent))
             return [{
                 "label": "已用",
@@ -84,9 +86,9 @@ Item {
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             width: parent.width * (Math.max(0, Math.min(100,
-                                                       root.tightestUsage.usedPercent)) / 100)
+                                                       root.currentUsage.usedPercent)) / 100)
             radius: parent.radius
-            color: root.usageColor(root.tightestUsage.usedPercent)
+            color: root.usageColor(root.currentUsage.usedPercent)
             Behavior on width {
                 NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
             }
@@ -97,15 +99,16 @@ Item {
     Text {
         objectName: "compactPercent"
         anchors.centerIn: parent
-        text: root.tightestUsage.usedPercent >= 0
-            ? Math.round(root.tightestUsage.usedPercent) + "%" : "—"
-        color: root.usageColor(root.tightestUsage.usedPercent)
+        text: root.currentUsage.usedPercent >= 0
+            ? Math.round(root.currentUsage.usedPercent) + "%" : "—"
+        color: root.usageColor(root.currentUsage.usedPercent)
         font.pixelSize: Kirigami.Units.gridUnit * 1.2
         font.bold: true
     }
 
     // 点击切换弹窗
     MouseArea {
+        objectName: "compactMouseArea"
         anchors.fill: parent
         hoverEnabled: true
         z: 100

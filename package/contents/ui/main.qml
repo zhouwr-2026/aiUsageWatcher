@@ -69,7 +69,7 @@ PlasmoidItem {
     compactRepresentation: CompactView {
         providers: root.providers
         compactStyle: root.compactStyle
-        onToggled: plasmoid.expanded = !plasmoid.expanded
+        plasmoidItem: root
     }
 
     // ── fullRepresentation:悬浮面板 ─────────────────────────────────────────

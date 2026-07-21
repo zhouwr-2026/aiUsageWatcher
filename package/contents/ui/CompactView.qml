@@ -1,10 +1,12 @@
 import QtQuick
 import org.kde.plasma.core as PlasmaCore
+import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 
 Item {
     id: root
 
+    required property var plasmoidItem
     property var providers: []
     property string compactStyle: "pie"  // "pie" | "bar"
     signal toggled()  // 由父组件接,执行 expanded 切换
@@ -117,6 +119,8 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         z: 100
-        onClicked: root.toggled()
+        property bool wasExpanded: false
+        onPressed: wasExpanded = root.plasmoidItem.expanded
+        onClicked: root.plasmoidItem.expanded = !wasExpanded
     }
 }

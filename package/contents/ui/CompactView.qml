@@ -1,37 +1,25 @@
 import QtQuick
-import org.kde.plasma.core as PlasmaCore
-import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
+import "../js/mockData.js" as MockData
 
 Item {
     id: root
 
     required property var plasmoidItem
     property var providers: []
-    property string compactStyle: "pie"  // "pie" | "bar"
-    signal toggled()  // 由父组件接,执行 expanded 切换
+    property string compactStyle: "pie"
+    readonly property var tightestUsage: MockData.tightestUsage(providers)
 
-    implicitWidth: PlasmaCore.Units.gridUnit * 3
-    implicitHeight: PlasmaCore.Units.gridUnit * 3
+    implicitWidth: Kirigami.Units.gridUnit * 3
+    implicitHeight: Kirigami.Units.gridUnit * 3
 
-    // 取最紧张供应商的 usedPercent,无数据返回 -1
-    function tightestPercent() {
-        let worst = -1;
-        for (const p of providers) {
-            for (const plan of p.plans) {
-                if (typeof plan.usedPercent === "number" && plan.usedPercent > worst)
-                    worst = plan.usedPercent;
-            }
+    function usageColor(percent) {
+        switch (MockData.usageClass(percent, "bar")) {
+        case "bar-green": return Kirigami.Theme.positiveTextColor
+        case "bar-yellow": return Kirigami.Theme.neutralTextColor
+        case "bar-red": return Kirigami.Theme.negativeTextColor
+        default: return Kirigami.Theme.disabledTextColor
         }
-        return worst;
-    }
-
-    // 阈值色(Kirigami.Theme — PlasmaCore.Theme 只有 uppercase ColorRole)
-    function barColor(pct) {
-        if (pct < 0) return Kirigami.Theme.neutralTextColor;
-        if (pct <= 5) return Kirigami.Theme.negativeTextColor;
-        if (pct <= 15) return Kirigami.Theme.highlightColor;
-        return Kirigami.Theme.positiveTextColor;
     }
 
     // 底色圆形 + 边框(在所有样式下都显示)
@@ -42,26 +30,27 @@ Item {
                        Kirigami.Theme.backgroundColor.g,
                        Kirigami.Theme.backgroundColor.b, 0.85)
         border.width: 2
-        border.color: root.barColor(root.tightestPercent())
+        border.color: root.usageColor(root.tightestUsage.usedPercent)
         opacity: 0.95
     }
 
     // pie 模式:内嵌 PieChart
     PieChart {
+        objectName: "compactPie"
         anchors.fill: parent
-        anchors.margins: 4
+        anchors.margins: Kirigami.Units.smallSpacing
         visible: root.compactStyle === "pie"
-        ringColor: root.barColor(root.tightestPercent())
+        ringColor: root.usageColor(root.tightestUsage.usedPercent)
         remainingColor: Qt.rgba(Kirigami.Theme.backgroundColor.r,
                                 Kirigami.Theme.backgroundColor.g,
                                 Kirigami.Theme.backgroundColor.b, 0.4)
         data: {
-            const worst = root.tightestPercent();
-            const used = Math.max(0, worst);
+            const percent = root.tightestUsage.usedPercent
+            const used = Math.max(0, Math.min(100, percent))
             return [{
                 "label": "已用",
                 "value": used,
-                "color": root.barColor(worst)
+                "color": root.usageColor(percent)
             }, {
                 "label": "剩余",
                 "value": Math.max(0, 100 - used),
@@ -75,13 +64,14 @@ Item {
     // bar 模式:水平填充矩形(用作柱状图)
     Rectangle {
         id: barRect
+        objectName: "compactBar"
         anchors {
             left: parent.left
             right: parent.right
             verticalCenter: parent.verticalCenter
         }
-        anchors.leftMargin: 6
-        anchors.rightMargin: 6
+        anchors.leftMargin: Kirigami.Units.smallSpacing
+        anchors.rightMargin: Kirigami.Units.smallSpacing
         height: parent.height * 0.18
         radius: height / 2
         visible: root.compactStyle === "bar"
@@ -93,9 +83,10 @@ Item {
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            width: parent.width * (Math.max(0, root.tightestPercent()) / 100)
+            width: parent.width * (Math.max(0, Math.min(100,
+                                                       root.tightestUsage.usedPercent)) / 100)
             radius: parent.radius
-            color: root.barColor(root.tightestPercent())
+            color: root.usageColor(root.tightestUsage.usedPercent)
             Behavior on width {
                 NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
             }
@@ -104,13 +95,12 @@ Item {
 
     // 中心整数百分比文字
     Text {
+        objectName: "compactPercent"
         anchors.centerIn: parent
-        text: {
-            const p = root.tightestPercent();
-            return p >= 0 ? Math.round(p) + "%" : "—";
-        }
-        color: root.barColor(root.tightestPercent())
-        font.pixelSize: PlasmaCore.Units.gridUnit * 1.2
+        text: root.tightestUsage.usedPercent >= 0
+            ? Math.round(root.tightestUsage.usedPercent) + "%" : "—"
+        color: root.usageColor(root.tightestUsage.usedPercent)
+        font.pixelSize: Kirigami.Units.gridUnit * 1.2
         font.bold: true
     }
 

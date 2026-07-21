@@ -1,54 +1,56 @@
 import QtQuick
-import QtQuick.Layouts
-import org.kde.plasma.components as PlasmaComponents
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
-import org.kde.kirigami as Kirigami
 import "../js/mockData.js" as MockData
 
 PlasmoidItem {
     id: root
 
-    // ── 状态 ─────────────────────────────────────────
-    property var providers: {
-        const persisted = plasmoid.configuration.providers
-        if (persisted && persisted.length > 0) {
-            try {
-                return JSON.parse(persisted)
-            } catch (e) {
-                console.warn("aiUsageWatcher: failed to parse persisted providers, falling back to SEED")
-            }
-        }
-        return MockData.SEED_PROVIDERS
-    }
-    readonly property string compactStyle: plasmoid.configuration.compactStyle || "pie"
-    readonly property string groupBy: plasmoid.configuration.groupBy || "provider"
-    readonly property int refreshIntervalSec: plasmoid.configuration.refreshIntervalSec || 60
+    property var providerDefinitions: MockData.normalizeDefinitions(Plasmoid.configuration.providers)
+    property var runtimeSnapshots: MockData.createSeedSnapshots(providerDefinitions)
+    property var providers: MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
+    readonly property var tightestUsage: MockData.tightestUsage(providers)
+    readonly property string compactStyle: Plasmoid.configuration.compactStyle || "pie"
+    readonly property int refreshIntervalSec: Math.max(10,
+                                                        Plasmoid.configuration.refreshIntervalSec || 60)
+    readonly property int opacityPercent: Math.max(20, Math.min(100,
+                                                       Plasmoid.configuration.opacityPercent || 80))
+    readonly property bool keepPanelOpen: Boolean(Plasmoid.configuration.keepPanelOpen)
 
-    // ── 持久化:把 providers 数组写回 KConfig(任何修改后调用) ─────────
-    function persistProviders() {
-        plasmoid.configuration.providers = JSON.stringify(providers)
+    hideOnWindowDeactivate: !keepPanelOpen
+
+    onProviderDefinitionsChanged: {
+        runtimeSnapshots = MockData.createSeedSnapshots(providerDefinitions)
+        providers = MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
     }
 
-    // ── 刷新 ─────────────────────────────────────────
     function refresh() {
-        providers = MockData.fluctuateProviders(providers)
-        persistProviders()
+        runtimeSnapshots = MockData.fluctuateSnapshots(runtimeSnapshots)
+        providers = MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
+    }
+
+    function openConfiguration() {
+        const action = Plasmoid.internalAction("configure")
+        if (action)
+            action.trigger()
     }
 
     Plasmoid.title: ""
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
 
-    // ── 工具提示 ─────────────────────────────────────────
     toolTipMainText: i18n("AI 用量监控")
-    toolTipSubText: i18n("点击查看详情")
+    toolTipSubText: tightestUsage.usedPercent < 0
+        ? i18n("暂无可用数据")
+        : i18n("%1 · %2 · 已用 %3",
+               MockData.stripProviderSuffix(tightestUsage.providerName),
+               tightestUsage.planName,
+               tightestUsage.usedPercent + "%")
 
-    // ── 右键菜单:2 项(用户硬约束:只保留 配置 + 刷新) ─────────
     Plasmoid.contextualActions: [
         PlasmaCore.Action {
             text: i18n("配置…")
             icon.name: "configure"
-            onTriggered: plasmoid.action("configure").trigger()
+            onTriggered: root.openConfiguration()
         },
         PlasmaCore.Action {
             text: i18n("刷新")
@@ -57,7 +59,6 @@ PlasmoidItem {
         }
     ]
 
-    // ── Timer(刷新间隔可配置) ─────────────────────────────────────────
     Timer {
         interval: root.refreshIntervalSec * 1000
         running: true
@@ -65,18 +66,18 @@ PlasmoidItem {
         onTriggered: root.refresh()
     }
 
-    // ── compactRepresentation:小工具图标 ─────────────────────────────────────────
     compactRepresentation: CompactView {
         providers: root.providers
         compactStyle: root.compactStyle
         plasmoidItem: root
     }
 
-    // ── fullRepresentation:悬浮面板 ─────────────────────────────────────────
     fullRepresentation: FullView {
         providers: root.providers
-        groupBy: root.groupBy
-        compactStyle: root.compactStyle
+        opacityPercent: root.opacityPercent
+        keepPanelOpen: root.keepPanelOpen
         onRefreshRequested: root.refresh()
+        onConfigureRequested: root.openConfiguration()
+        onKeepOpenChanged: keepOpen => Plasmoid.configuration.keepPanelOpen = keepOpen
     }
 }

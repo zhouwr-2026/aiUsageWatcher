@@ -1,14 +1,16 @@
 import QtQuick
-import org.kde.plasma.core as PlasmaCore
+import org.kde.kirigami as Kirigami
 
-// 纯 QML 实现的饼图,使用 PlasmaCore.Theme 主题色。
+// 纯 QML 实现的饼图。
 // 数据: [{ label: string, value: number, color: color? }]
 // 当传入 [a, b] 两段时,绘制为环形(中心挖空),a 用主色,b 用弱化主色。
 Item {
     id: root
     property var data: []
-    property color ringColor: PlasmaCore.Theme.HighlightColor
-    property color remainingColor: Qt.rgba(1, 1, 1, 0.12)
+    property color ringColor: Kirigami.Theme.highlightColor
+    property color remainingColor: Qt.rgba(Kirigami.Theme.backgroundColor.r,
+                                           Kirigami.Theme.backgroundColor.g,
+                                           Kirigami.Theme.backgroundColor.b, 0.4)
     property real ringWidthRatio: 0.28  // 环宽占半径比例
 
     Canvas {
@@ -20,7 +22,7 @@ Item {
             ctx.reset();
             const cx = width / 2;
             const cy = height / 2;
-            const radius = Math.min(cx, cy) - 2;
+            const radius = Math.min(cx, cy) - Kirigami.Units.smallSpacing;
             const inner = radius * (1 - root.ringWidthRatio);
 
             let total = 0;

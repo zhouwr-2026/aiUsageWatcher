@@ -10,10 +10,10 @@
         "Description": "实时监控各大模型厂家套餐用量的 Plasma 6 桌面小部件",
         "Icon": "utilities-system-monitor",
         "Id": "aiUsageWatcher",
-        "Name": "",
+        "License": "GPL-2.0-or-later",
+        "Name": "AI Usage Watcher",
         "Version": "0.1.0"
     },
     "X-Plasma-API-Minimum-Version": "6.0",
-    "KPackageStructure": "Plasma/Applet",
-    "X-KDE-ConfigModule": "aiusagewatcher"
+    "KPackageStructure": "Plasma/Applet"
 }

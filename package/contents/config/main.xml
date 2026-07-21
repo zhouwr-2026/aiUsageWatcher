@@ -7,8 +7,16 @@
         <entry name="providerCount" type="int">
             <default>0</default>
         </entry>
+        <entry name="providers" type="string">
+            <default></default>
+        </entry>
     </group>
     <group name="ui">
+        <entry name="refreshIntervalSec" type="int">
+            <default>60</default>
+            <min>10</min>
+            <max>3600</max>
+        </entry>
         <entry name="opacityPercent" type="int">
             <default>80</default>
             <min>20</min>
@@ -17,8 +25,14 @@
         <entry name="alwaysOnTop" type="bool">
             <default>true</default>
         </entry>
-        <entry name="displayStyle" type="string">
+        <entry name="compactStyle" type="string">
             <default>pie</default>
+        </entry>
+        <entry name="groupBy" type="string">
+            <default>provider</default>
+        </entry>
+        <entry name="colorScheme" type="string">
+            <default>default</default>
         </entry>
     </group>
 </kcfg>

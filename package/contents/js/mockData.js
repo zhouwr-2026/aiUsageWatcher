@@ -75,19 +75,14 @@ var SEED_PROVIDERS = [{
 function stripProviderSuffix(name) {
     if (typeof name !== "string")
         return "";
-
     const idx = name.indexOf(" · ");
     return idx >= 0 ? name.substring(0, idx) : name;
 }
 
 // 根据 usedPercent 计算 barClass
 function _barClass(pct) {
-    if (pct <= 5)
-        return "bar-red";
-
-    if (pct <= 15)
-        return "bar-yellow";
-
+    if (pct <= 5) return "bar-red";
+    if (pct <= 15) return "bar-yellow";
     return "bar-green";
 }
 
@@ -97,26 +92,18 @@ function _ledClass(plans) {
     for (const plan of plans) {
         if (typeof plan.usedPercent === "number" && plan.usedPercent > worst)
             worst = plan.usedPercent;
-
     }
-    if (worst < 0)
-        return "led-gray";
-
-    if (worst <= 5)
-        return "led-red";
-
-    if (worst <= 15)
-        return "led-yellow";
-
+    if (worst < 0) return "led-gray";
+    if (worst <= 5) return "led-red";
+    if (worst <= 15) return "led-yellow";
     return "led-green";
 }
 
-// 对 providers 数组做不可变波动：每个 plan 的 usedPercent ± random(0-5)
-// 返回新数组以触发 QML 绑定
+// 对 providers 数组做不可变波动
 function fluctuateProviders(providers) {
     return providers.map(function (p) {
         const newPlans = p.plans.map(function (plan) {
-            const delta = Math.random() * 10 - 5; // -5 ~ +5
+            const delta = Math.random() * 10 - 5;
             const newPct = Math.max(0, Math.min(100, Math.round(plan.usedPercent + delta)));
             return Object.assign({}, plan, {
                 "usedPercent": newPct,

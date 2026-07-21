@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
@@ -104,6 +106,8 @@ Item {
                 model: root.candidate.plans || []
 
                 delegate: RowLayout {
+                    id: planRow
+
                     required property int index
                     required property var modelData
 
@@ -112,22 +116,22 @@ Item {
                     QQC2.TextField {
                         Layout.fillWidth: true
                         placeholderText: qsTr("Plan ID")
-                        text: parent.modelData.id || ""
-                        onTextEdited: root.updatePlan(parent.index, "id", text)
+                        text: planRow.modelData.id || ""
+                        onTextEdited: root.updatePlan(planRow.index, "id", text)
                     }
 
                     QQC2.TextField {
                         Layout.fillWidth: true
                         placeholderText: qsTr("Plan name")
-                        text: parent.modelData.planName || ""
-                        onTextEdited: root.updatePlan(parent.index, "planName", text)
+                        text: planRow.modelData.planName || ""
+                        onTextEdited: root.updatePlan(planRow.index, "planName", text)
                     }
 
                     QQC2.TextField {
                         Layout.preferredWidth: Kirigami.Units.gridUnit * 4
                         placeholderText: qsTr("Unit")
-                        text: parent.modelData.unit || ""
-                        onTextEdited: root.updatePlan(parent.index, "unit", text)
+                        text: planRow.modelData.unit || ""
+                        onTextEdited: root.updatePlan(planRow.index, "unit", text)
                     }
 
                     QQC2.ToolButton {
@@ -136,7 +140,7 @@ Item {
                         Accessible.name: qsTr("Delete plan")
                         QQC2.ToolTip.text: Accessible.name
                         QQC2.ToolTip.visible: hovered
-                        onClicked: root.removePlan(parent.index)
+                        onClicked: root.removePlan(planRow.index)
                     }
                 }
             }

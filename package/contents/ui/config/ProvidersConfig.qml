@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
@@ -179,6 +181,8 @@ KCM.SimpleKCM {
             model: providersModel
 
             delegate: QQC2.ItemDelegate {
+                id: providerDelegate
+
                 required property string providerId
                 required property string providerName
                 required property string planSummary
@@ -190,13 +194,13 @@ KCM.SimpleKCM {
 
                         QQC2.Label {
                             Layout.fillWidth: true
-                            text: providerName
+                            text: providerDelegate.providerName
                             elide: Text.ElideRight
                         }
 
                         QQC2.Label {
                             Layout.fillWidth: true
-                            text: planSummary
+                            text: providerDelegate.planSummary
                             color: Kirigami.Theme.disabledTextColor
                             elide: Text.ElideRight
                         }
@@ -204,18 +208,18 @@ KCM.SimpleKCM {
 
                     QQC2.ToolButton {
                         icon.name: "document-edit"
-                        Accessible.name: qsTr("Edit %1").arg(providerName)
+                        Accessible.name: qsTr("Edit %1").arg(providerDelegate.providerName)
                         QQC2.ToolTip.text: Accessible.name
                         QQC2.ToolTip.visible: hovered
-                        onClicked: root.beginEdit(providerId)
+                        onClicked: root.beginEdit(providerDelegate.providerId)
                     }
 
                     QQC2.ToolButton {
                         icon.name: "edit-delete"
-                        Accessible.name: qsTr("Delete %1").arg(providerName)
+                        Accessible.name: qsTr("Delete %1").arg(providerDelegate.providerName)
                         QQC2.ToolTip.text: Accessible.name
                         QQC2.ToolTip.visible: hovered
-                        onClicked: root.beginDelete(providerId)
+                        onClicked: root.beginDelete(providerDelegate.providerId)
                     }
                 }
             }

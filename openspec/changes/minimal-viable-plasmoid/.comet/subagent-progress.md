@@ -12,20 +12,20 @@
 
 ### Current Task
 
-- Plan task: `Task 3: FullView 唯一组件链与响应式交互`
-- OpenSpec task: `3. 重构 full 为唯一 ProviderGroup -> PlanBar 渲染链，补状态栏、模板、响应式布局、按钮 tooltip/accessibility 与 300ms 旋转；组件测试断言 3 provider/5 PlanBar。`
+- Plan task: `Task 4: 标准 applet KCM 与常规设置`
+- OpenSpec task: `4. 新增标准 contents/config/config.qml 和 General KCM，通过 cfg_ 实现四项设置的 Apply/Cancel；删除外部 KCM、colorScheme、groupBy、alwaysOnTop。`
 - Stage: `done`
 - Review/fix round: `0`
-- Base commit: `dbd0256`
-- Implementation commit: `846a986`
-- Changed files: `FullView.qml`, `ProviderGroup.qml`, `PlanBar.qml`, `tests/tst_fullView.qml`
-- RED: old Loader produced `planBarContent is not defined`, missing interfaces, 0 ProviderGroup/PlanBar
-- GREEN: Qt 6 full suite 19 passed / 0 failed; target component lint zero output; forbidden old plan UI patterns absent
+- Base commit: `64e8924`
+- Implementation commit: `d8ed105`
+- Changed files: standard config entry, GeneralConfig, config test, removed placeholder
+- RED: Qt 6 suite 21 passed / 3 expected failures for missing config pages
+- GREEN: Qt 6 suite 24 passed / 0 failed; target lint zero output; forbidden config fields absent
 
 - [x] Task 1 — Data contract and derivation tests
 - [x] Task 2 — Root state, compact view and metadata
 - [x] Task 3 — FullView ProviderGroup/PlanBar chain
-- [ ] Task 4 — Standard General KCM
+- [x] Task 4 — Standard General KCM
 - [ ] Task 5 — Providers KCM CRUD and validation
 - [ ] Task 6 — Static/install/runtime verification
 - [ ] Task 7 — Documentation and final acceptance

@@ -176,7 +176,7 @@ isolation: branch
 
 ### Task 4: 标准 applet KCM 与常规设置
 
-- [ ] **Task 4 checkpoint: 标准 applet KCM 与常规设置完成**
+- [x] **Task 4 checkpoint: 标准 applet KCM 与常规设置完成**
 
 **Files:**
 - Create: `package/contents/config/config.qml`
@@ -187,27 +187,27 @@ isolation: branch
 **Interfaces:**
 - Produces: ConfigModel categories General/Providers；General properties `cfg_compactStyle`、`cfg_refreshIntervalSec`、`cfg_opacityPercent`、`cfg_keepPanelOpen`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
   静态测试断言 config.qml 含两个 ConfigCategory；QML Test 实例化 GeneralConfig，改变控件后 cfg_ 属性变化，初始化 cfg_ 值时控件反映该值。
 
-- [ ] **Step 2: 运行 RED**
+- [x] **Step 2: 运行 RED**
 
   Run: `QT_QPA_PLATFORM=offscreen qmltestrunner -input tests -import package/contents/ui`
 
   Expected: FAIL，配置入口和 GeneralConfig 尚不存在。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
   config.qml 使用 `org.kde.plasma.configuration` 的 ConfigModel/ConfigCategory，sources 为 `config/GeneralConfig.qml`、`config/ProvidersConfig.qml`。GeneralConfig 根为 KCM.SimpleKCM，使用 ComboBox/SpinBox/Slider/CheckBox 的 alias 或受控绑定暴露四个 cfg_ 属性；不直接写 Plasmoid.configuration。
 
-- [ ] **Step 4: 运行 GREEN**
+- [x] **Step 4: 运行 GREEN**
 
   Run: `QT_QPA_PLATFORM=offscreen qmltestrunner -input tests -import package/contents/ui && qmllint package/contents/config/config.qml package/contents/ui/config/GeneralConfig.qml`
 
   Expected: PASS；`rg -n 'X-KDE-ConfigModule|colorScheme|groupBy|alwaysOnTop' package` 无输出。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
   ```bash
   git add package/contents/config/config.qml package/contents/ui/config/GeneralConfig.qml tests/tst_generalConfig.qml package/contents/ui/configGeneral.qml

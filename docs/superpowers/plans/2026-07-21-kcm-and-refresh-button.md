@@ -31,6 +31,8 @@ isolation: branch
 
 ### Task 1: 锁定数据契约与派生逻辑
 
+- [x] **Task 1 checkpoint: 数据契约与派生逻辑完成**
+
 **Files:**
 - Create: `tests/tst_mockData.qml`
 - Modify: `package/contents/js/mockData.js`
@@ -38,7 +40,7 @@ isolation: branch
 **Interfaces:**
 - Produces: `normalizeDefinitions(raw) -> Array`、`createSeedSnapshots(definitions) -> Array`、`fluctuateSnapshots(snapshots, randomFn) -> Array`、`buildDisplayProviders(definitions, snapshots) -> Array`、`tightestUsage(displayProviders) -> { usedPercent, providerName, planName }`、`usageClass(percent, prefix) -> string`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
   在 `tst_mockData.qml` 使用 `QtTest.TestCase`，至少断言：84/85/94/95 分类；22/88/67 最大值为 88；MiniMax seed 为 88；null/object/坏 plans 回退；503/750 派生 67；刷新不修改输入且 `usedText`、`totalText` 与新值一致。
 
@@ -60,23 +62,23 @@ isolation: branch
   }
   ```
 
-- [ ] **Step 2: 运行 RED**
+- [x] **Step 2: 运行 RED**
 
   Run: `QT_QPA_PLATFORM=offscreen qmltestrunner -input tests -import package/contents/ui`
 
   Expected: FAIL，报告 `usageClass is not a function` 或缺少新 seed 常量；保留输出到任务记录。
 
-- [ ] **Step 3: 最小实现**
+- [x] **Step 3: 最小实现**
 
   重组 seed 为 definitions 与 snapshots；`usageClass` 统一边界；`buildDisplayProviders` 从独立 used/total 派生所有展示字段；刷新只不可变更新 used，并允许测试注入 `randomFn`。provider template 由 definition 合并到每个 display plan 的 `templateText`。
 
-- [ ] **Step 4: 运行 GREEN**
+- [x] **Step 4: 运行 GREEN**
 
   Run: `QT_QPA_PLATFORM=offscreen qmltestrunner -input tests -import package/contents/ui`
 
   Expected: PASS，0 failed。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
   ```bash
   git add tests/tst_mockData.qml package/contents/js/mockData.js
@@ -84,6 +86,8 @@ isolation: branch
   ```
 
 ### Task 2: 修复根状态、compact 与包元数据
+
+- [ ] **Task 2 checkpoint: 根状态、compact 与包元数据完成**
 
 **Files:**
 - Create: `tests/tst_compactView.qml`
@@ -131,6 +135,8 @@ isolation: branch
 
 ### Task 3: FullView 唯一组件链与响应式交互
 
+- [ ] **Task 3 checkpoint: FullView 唯一组件链与响应式交互完成**
+
 **Files:**
 - Create: `tests/tst_fullView.qml`
 - Modify: `package/contents/ui/FullView.qml`
@@ -170,6 +176,8 @@ isolation: branch
 
 ### Task 4: 标准 applet KCM 与常规设置
 
+- [ ] **Task 4 checkpoint: 标准 applet KCM 与常规设置完成**
+
 **Files:**
 - Create: `package/contents/config/config.qml`
 - Create: `package/contents/ui/config/GeneralConfig.qml`
@@ -207,6 +215,8 @@ isolation: branch
   ```
 
 ### Task 5: Providers KCM CRUD、校验与模板预览
+
+- [ ] **Task 5 checkpoint: Providers KCM CRUD、校验与模板预览完成**
 
 **Files:**
 - Create: `package/contents/ui/config/ProvidersConfig.qml`
@@ -246,6 +256,8 @@ isolation: branch
 
 ### Task 6: 自动验证与安装级冒烟
 
+- [ ] **Task 6 checkpoint: 自动验证与安装级冒烟完成**
+
 **Files:**
 - Create: `tests/run-static-checks.sh`
 - Create: `tests/run-plasma-smoke.sh`
@@ -282,6 +294,8 @@ isolation: branch
   ```
 
 ### Task 7: 文档同步与最终验收
+
+- [ ] **Task 7 checkpoint: 文档同步与最终验收完成**
 
 **Files:**
 - Modify: `README.md`

@@ -1,6 +1,6 @@
 # Tasks
 
-- [ ] 1. 建立 qmltestrunner 测试骨架；用 RED 测试锁定 ProviderDefinition/RuntimeSnapshot 规范化、阈值、最大值、MiniMax 88 和刷新派生同步，再实现纯函数至 GREEN。
+- [x] 1. 建立 qmltestrunner 测试骨架；用 RED 测试锁定 ProviderDefinition/RuntimeSnapshot 规范化、阈值、最大值、MiniMax 88 和刷新派生同步，再实现纯函数至 GREEN。
 - [ ] 2. 修复 main/compact/PieChart/KConfig/metadata：Kirigami API、三层状态、Timer 不持久化、真实 tooltip、compact pie/bar、keepPanelOpen、统一 ID/Name/License；静态与单测 GREEN。
 - [ ] 3. 重构 full 为唯一 `ProviderGroup -> PlanBar` 渲染链，补状态栏、模板、响应式布局、按钮 tooltip/accessibility 与 300ms 旋转；组件测试断言 3 provider/5 PlanBar。
 - [ ] 4. 新增标准 `contents/config/config.qml` 和 General KCM，通过 cfg_ 实现四项设置的 Apply/Cancel；删除外部 KCM、colorScheme、groupBy、alwaysOnTop。

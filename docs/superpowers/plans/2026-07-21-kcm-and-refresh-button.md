@@ -256,7 +256,7 @@ isolation: branch
 
 ### Task 6: 自动验证与安装级冒烟
 
-- [ ] **Task 6 checkpoint: 自动验证与安装级冒烟完成**
+- [x] **Task 6 checkpoint: 自动验证与安装级冒烟完成**
 
 **Files:**
 - Create: `tests/run-static-checks.sh`
@@ -266,27 +266,27 @@ isolation: branch
 **Interfaces:**
 - Produces: 一个静态入口和一个安装/运行入口；脚本返回 0 仅当对应全部断言通过。
 
-- [ ] **Step 1: 写失败脚本**
+- [x] **Step 1: 写失败脚本**
 
   `run-static-checks.sh` 执行所有 qmltestrunner、qmllint、xmllint、metadata 非空字段和禁用模式扫描。`run-plasma-smoke.sh` 使用 `kpackagetool6 --type Plasma/Applet --upgrade package`，`diff -qr` 检查副本，启动自身记录的 plasmawindowed PID，等待固定窗口后用该 PID 正常结束并审查日志；不得用全局进程匹配命令。
 
-- [ ] **Step 2: 运行 RED**
+- [x] **Step 2: 运行 RED**
 
   Run: `bash tests/run-static-checks.sh && bash tests/run-plasma-smoke.sh`
 
   Expected: 首次至少一项失败，记录精确断言；若全绿，向脚本注入一份临时 fixture 验证错误扫描确实能失败，不改项目文件。
 
-- [ ] **Step 3: 完成验证实现**
+- [x] **Step 3: 完成验证实现**
 
   runtime 脚本必须拒绝包含 `ReferenceError`、`TypeError`、`PlasmaCore.Units`、`Error loading QML file` 的日志；结合 `tst_fullView` 的 3 provider/5 PlanBar 断言，并在 `tests/README.md` 规定人工打开 popup 截图核对五条套餐。保存进程 exit 状态与日志结果；124 只在日志和可见验证同时通过时记录为“持续运行”，脚本本身返回 0。
 
-- [ ] **Step 4: 运行 GREEN**
+- [x] **Step 4: 运行 GREEN**
 
   Run: `bash tests/run-static-checks.sh && bash tests/run-plasma-smoke.sh`
 
   Expected: exit 0；安装 diff 无输出；runtime forbidden patterns 为 0；人工证据看到三 provider/五 PlanBar。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
   ```bash
   git add tests/run-static-checks.sh tests/run-plasma-smoke.sh tests/README.md

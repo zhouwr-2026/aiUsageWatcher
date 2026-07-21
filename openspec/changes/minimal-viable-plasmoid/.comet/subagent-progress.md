@@ -12,24 +12,22 @@
 
 ### Current Task
 
-- Plan task: `Task 5: Providers KCM CRUD、校验与模板预览`
-- OpenSpec task: `5. 实现 Providers KCM 工作副本、稳定 ID CRUD、单 Dialog 编辑器、校验、删除确认和模板预览；测试 Cancel 不持久化、Apply 序列化 definitions。`
+- Plan task: `Task 6: 自动验证与安装级冒烟`
+- OpenSpec task: `6. 建立静态/XML/metadata/安装一致性/运行日志检查脚本；用官方安装命令验证运行副本，日志零 ReferenceError/TypeError，套餐行实际可见。`
 - Stage: `done`
-- Review/fix round: `1`
-- Base commit: `cc787db`
-- Implementation commit: `d221e2e`
-- RED: Qt 6 suite 24 passed / 1 expected failure for missing providerConfig.js
-- GREEN: Qt 6 suite 35 passed / 0 failed
-- Quality fix commit: `c5251ad`
-- Quality finding resolved: target Qt 6 qmllint zero output
-- Controller verification: Qt 6 full suite 35 passed / 0 failed
+- Review/fix round: `0`
+- Base commit: `49c29ae`
+- Implementation commit: `8cac366`
+- RED: real installed plasmoid differed from package and contained stale files
+- GREEN: static 35/35; installed diff clean; FullView 6/6; plasmawindowed 8s runtime forbidden patterns 0
+- Controller verification: `run-static-checks.sh` and `run-plasma-smoke.sh` both exit 0
 
 - [x] Task 1 — Data contract and derivation tests
 - [x] Task 2 — Root state, compact view and metadata
 - [x] Task 3 — FullView ProviderGroup/PlanBar chain
 - [x] Task 4 — Standard General KCM
 - [x] Task 5 — Providers KCM CRUD and validation
-- [ ] Task 6 — Static/install/runtime verification
+- [x] Task 6 — Static/install/runtime verification
 - [ ] Task 7 — Documentation and final acceptance
 
 No implementation task has been marked complete without RED/GREEN evidence.

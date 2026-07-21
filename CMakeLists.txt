@@ -19,6 +19,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Network Test)
 find_package(KF6CoreAddons 6.0 REQUIRED)
 find_package(KF6Config 6.0 REQUIRED)
+find_package(KF6Wallet 6.0 REQUIRED)
 find_package(Plasma 6.0 REQUIRED)
 
 plasma_install_package(package aiUsageWatcher)
@@ -38,6 +39,7 @@ target_link_libraries(aiUsageWatcher
         Qt6::Core
         Qt6::Network
         KF6::CoreAddons
+        KF6::Wallet
         Plasma::Plasma
 )
 set_target_properties(aiUsageWatcher PROPERTIES PREFIX "")
@@ -62,6 +64,6 @@ if(BUILD_TESTING)
         src/minimaxresponseparser.h
     )
     target_include_directories(tst_minimaxclient PRIVATE src)
-    target_link_libraries(tst_minimaxclient PRIVATE Qt6::Core Qt6::Network Qt6::Test)
+    target_link_libraries(tst_minimaxclient PRIVATE Qt6::Core Qt6::Network Qt6::Test KF6::Wallet)
     add_test(NAME minimax-client-contract COMMAND tst_minimaxclient)
 endif()

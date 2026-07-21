@@ -6,10 +6,16 @@ import org.kde.kirigami as Kirigami
 KCM.SimpleKCM {
     id: root
 
+    property string cfg_providers: ""
+    property string cfg_providersDefault: ""
     property string cfg_compactStyle: "pie"
+    property string cfg_compactStyleDefault: "pie"
     property alias cfg_refreshIntervalSec: refreshInterval.value
+    property int cfg_refreshIntervalSecDefault: 60
     property alias cfg_opacityPercent: opacity.value
+    property int cfg_opacityPercentDefault: 80
     property alias cfg_keepPanelOpen: keepPanelOpen.checked
+    property bool cfg_keepPanelOpenDefault: false
 
     Kirigami.FormLayout {
         QQC2.ComboBox {

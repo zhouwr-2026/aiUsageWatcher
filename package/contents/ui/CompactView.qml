@@ -1,5 +1,8 @@
 import QtQuick
+import QtQuick.Controls as QQC2
+import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
+import org.kde.quickcharts as Charts
 import "../js/mockData.js" as MockData
 
 Item {
@@ -11,9 +14,18 @@ Item {
     property int providerIndex: 0
     readonly property var currentUsage: MockData.providerUsageAt(providers, providerIndex)
     readonly property var tightestUsage: currentUsage
+    readonly property real boundedPercent: Math.max(0, Math.min(100,
+                                                                 currentUsage.usedPercent))
 
-    implicitWidth: Kirigami.Units.gridUnit * 3
-    implicitHeight: Kirigami.Units.gridUnit * 3
+    implicitWidth: compactStyle === "pie"
+        ? Math.max(height, Kirigami.Units.gridUnit)
+        : Kirigami.Units.gridUnit * 4
+    implicitHeight: Kirigami.Units.gridUnit
+    Layout.minimumWidth: compactStyle === "pie"
+        ? Math.max(height, Kirigami.Units.gridUnit)
+        : Kirigami.Units.gridUnit * 3
+    Layout.preferredWidth: implicitWidth
+    clip: true
 
     function usageColor(percent) {
         switch (MockData.usageClass(percent, "bar")) {
@@ -24,96 +36,92 @@ Item {
         }
     }
 
-    // 底色圆形 + 边框(在所有样式下都显示)
-    Rectangle {
-        anchors.fill: parent
-        radius: width / 2
-        color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
-                       Kirigami.Theme.backgroundColor.g,
-                       Kirigami.Theme.backgroundColor.b, 0.85)
-        border.width: 2
-        border.color: root.usageColor(root.currentUsage.usedPercent)
-        opacity: 0.95
-    }
+    Item {
+        id: pieFace
 
-    // pie 模式:内嵌 PieChart
-    PieChart {
         objectName: "compactPie"
-        anchors.fill: parent
-        anchors.margins: Kirigami.Units.smallSpacing
+        anchors.centerIn: parent
+        width: Math.min(root.width, root.height)
+        height: width
         visible: root.compactStyle === "pie"
-        ringColor: root.usageColor(root.currentUsage.usedPercent)
-        remainingColor: Qt.rgba(Kirigami.Theme.backgroundColor.r,
-                                Kirigami.Theme.backgroundColor.g,
-                                Kirigami.Theme.backgroundColor.b, 0.4)
-        segments: {
-            const percent = root.currentUsage.usedPercent
-            const used = Math.max(0, Math.min(100, percent))
-            return [{
-                "label": "已用",
-                "value": used,
-                "color": root.usageColor(percent)
-            }, {
-                "label": "剩余",
-                "value": Math.max(0, 100 - used),
-                "color": Qt.rgba(Kirigami.Theme.backgroundColor.r,
-                                 Kirigami.Theme.backgroundColor.g,
-                                 Kirigami.Theme.backgroundColor.b, 0.4)
-            }];
+
+        Charts.PieChart {
+            anchors.fill: parent
+            anchors.margins: Kirigami.Units.smallSpacing / 2
+            valueSources: Charts.SingleValueSource {
+                value: root.currentUsage.usedPercent >= 0 ? root.boundedPercent : 0
+            }
+            colorSource: Charts.SingleValueSource {
+                value: root.usageColor(root.currentUsage.usedPercent)
+            }
+            range {
+                from: 0
+                to: 100
+                automatic: false
+            }
+            thickness: Math.max(2, Kirigami.Units.smallSpacing)
+            backgroundColor: Kirigami.ColorUtils.linearInterpolation(
+                                 Kirigami.Theme.backgroundColor,
+                                 Kirigami.Theme.textColor, 0.15)
+            smoothEnds: true
+        }
+
+        QQC2.Label {
+            id: piePercent
+
+            objectName: "compactPercent"
+            anchors.centerIn: parent
+            width: Math.max(1, parent.width - Kirigami.Units.largeSpacing * 2)
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            text: root.currentUsage.usedPercent >= 0
+                ? Math.round(root.currentUsage.usedPercent) + "%" : "—"
+            color: Kirigami.Theme.textColor
+            font.bold: true
+            font.pixelSize: Math.max(Kirigami.Theme.smallFont.pixelSize,
+                                     parent.width * 0.22)
+            minimumPixelSize: Kirigami.Theme.smallFont.pixelSize
+            fontSizeMode: Text.Fit
+            elide: Text.ElideRight
         }
     }
 
-    // bar 模式:水平填充矩形(用作柱状图)
-    Rectangle {
-        id: barRect
+    RowLayout {
+        id: barFace
+
         objectName: "compactBar"
-        anchors {
-            left: parent.left
-            right: parent.right
-            verticalCenter: parent.verticalCenter
-        }
+        anchors.fill: parent
         anchors.leftMargin: Kirigami.Units.smallSpacing
         anchors.rightMargin: Kirigami.Units.smallSpacing
-        height: parent.height * 0.18
-        radius: height / 2
+        spacing: Kirigami.Units.smallSpacing
         visible: root.compactStyle === "bar"
-        color: Qt.rgba(Kirigami.Theme.backgroundColor.r,
-                       Kirigami.Theme.backgroundColor.g,
-                       Kirigami.Theme.backgroundColor.b, 0.4)
 
-        Rectangle {
-            anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            width: parent.width * (Math.max(0, Math.min(100,
-                                                       root.currentUsage.usedPercent)) / 100)
-            radius: parent.radius
-            color: root.usageColor(root.currentUsage.usedPercent)
-            Behavior on width {
-                NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
-            }
+        QQC2.Label {
+            objectName: "compactBarPercent"
+            Layout.minimumWidth: implicitWidth
+            text: root.currentUsage.usedPercent >= 0
+                ? Math.round(root.currentUsage.usedPercent) + "%" : "—"
+            color: Kirigami.Theme.textColor
+            font: Kirigami.Theme.smallFont
+        }
+
+        QQC2.ProgressBar {
+            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignVCenter
+            from: 0
+            to: 100
+            value: root.currentUsage.usedPercent >= 0 ? root.boundedPercent : 0
+            Accessible.name: root.currentUsage.providerName
+            Accessible.description: qsTr("Used %1%").arg(Math.round(value))
         }
     }
 
-    // 中心整数百分比文字
-    Text {
-        objectName: "compactPercent"
-        anchors.centerIn: parent
-        text: root.currentUsage.usedPercent >= 0
-            ? Math.round(root.currentUsage.usedPercent) + "%" : "—"
-        color: root.usageColor(root.currentUsage.usedPercent)
-        font.pixelSize: Kirigami.Units.gridUnit * 1.2
-        font.bold: true
-    }
-
-    // 点击切换弹窗
     MouseArea {
         objectName: "compactMouseArea"
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        z: 100
         onClicked: root.plasmoidItem.expanded = !root.plasmoidItem.expanded
     }
 }

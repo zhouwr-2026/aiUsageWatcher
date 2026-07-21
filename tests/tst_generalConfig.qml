@@ -9,6 +9,7 @@ Item {
 
     readonly property url configModelUrl: Qt.resolvedUrl("../package/contents/config/config.qml")
     readonly property url generalConfigUrl: Qt.resolvedUrl("../package/contents/ui/config/GeneralConfig.qml")
+    readonly property url providersConfigUrl: Qt.resolvedUrl("../package/contents/ui/config/ProvidersConfig.qml")
 
     TestCase {
         name: "GeneralConfig"
@@ -70,6 +71,28 @@ Item {
             compare(page.cfg_opacityPercent, 55)
             compare(page.cfg_keepPanelOpen, true)
             page.destroy()
+        }
+
+        function test_both_pages_accept_plasma_full_config_injection() {
+            const properties = {
+                cfg_providers: "[]",
+                cfg_providersDefault: "",
+                cfg_compactStyle: "pie",
+                cfg_compactStyleDefault: "pie",
+                cfg_refreshIntervalSec: 60,
+                cfg_refreshIntervalSecDefault: 60,
+                cfg_opacityPercent: 80,
+                cfg_opacityPercentDefault: 80,
+                cfg_keepPanelOpen: false,
+                cfg_keepPanelOpenDefault: false
+            }
+            const generalPage = createFrom(host.generalConfigUrl, properties)
+            const providersPage = createFrom(host.providersConfigUrl, properties)
+
+            compare(generalPage.cfg_providers, "[]")
+            compare(providersPage.cfg_compactStyle, "pie")
+            generalPage.destroy()
+            providersPage.destroy()
         }
     }
 }

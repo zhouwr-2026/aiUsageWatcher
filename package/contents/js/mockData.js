@@ -89,7 +89,7 @@ var SEED_RUNTIME_SNAPSHOTS = [{
 }, {
     "providerId": "minimax",
     "statusLabel": "未配置",
-    "errorText": "请设置 MINIMAX_API_KEY 环境变量",
+    "errorText": "请在供应商设置中保存 MiniMax API Key",
     "plans": []
 }, {
     "providerId": "codex",

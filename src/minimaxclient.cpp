@@ -4,6 +4,7 @@
 
 #include "minimaxresponseparser.h"
 
+#include <KWallet>
 #include <QDateTime>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -13,6 +14,8 @@
 namespace
 {
 constexpr qsizetype maximumResponseBytes = 1024 * 1024;
+const QString walletFolder = QStringLiteral("AI Usage Watcher");
+const QString miniMaxWalletEntry = QStringLiteral("MiniMax API Key");
 
 QVariantMap emptySnapshot(const QString &status, const QString &error = {})
 {
@@ -75,8 +78,22 @@ MiniMaxClient::MiniMaxClient(QObject *parent)
     : QObject(parent)
     , m_network(new QNetworkAccessManager(this))
     , m_snapshot(emptySnapshot(QStringLiteral("未配置"),
-                               QStringLiteral("请设置 MINIMAX_API_KEY 环境变量")))
+                               QStringLiteral("请在供应商设置中保存 MiniMax API Key")))
 {
+    const bool configuredByEnvironment = !qgetenv("MINIMAX_API_KEY").trimmed().isEmpty();
+    m_credentialStatus = configuredByEnvironment
+        ? QStringLiteral("已通过环境变量配置")
+        : QStringLiteral("正在读取 KDE 钱包…");
+    if (!configuredByEnvironment) {
+        m_credentialBusy = true;
+        QTimer::singleShot(0, this, &MiniMaxClient::openWallet);
+    }
+}
+
+MiniMaxClient::~MiniMaxClient()
+{
+    m_storedApiKey.fill('\0');
+    m_pendingApiKey.fill(QChar(u'\0'));
 }
 
 QVariantMap MiniMaxClient::snapshot() const
@@ -91,7 +108,22 @@ bool MiniMaxClient::loading() const
 
 bool MiniMaxClient::credentialConfigured() const
 {
-    return !qgetenv("MINIMAX_API_KEY").trimmed().isEmpty();
+    return !qgetenv("MINIMAX_API_KEY").trimmed().isEmpty() || !m_storedApiKey.isEmpty();
+}
+
+QString MiniMaxClient::credentialStatus() const
+{
+    return m_credentialStatus;
+}
+
+bool MiniMaxClient::credentialBusy() const
+{
+    return m_credentialBusy;
+}
+
+bool MiniMaxClient::credentialError() const
+{
+    return m_credentialError;
 }
 
 QNetworkRequest MiniMaxClient::createRequest(QByteArrayView apiKey)
@@ -114,8 +146,11 @@ void MiniMaxClient::refresh()
 
     QByteArray apiKey = qgetenv("MINIMAX_API_KEY").trimmed();
     if (apiKey.isEmpty()) {
+        apiKey = m_storedApiKey;
+    }
+    if (apiKey.isEmpty()) {
         setSnapshot(emptySnapshot(QStringLiteral("未配置"),
-                                  QStringLiteral("请设置 MINIMAX_API_KEY 环境变量")));
+                                  QStringLiteral("请在供应商设置中保存 MiniMax API Key")));
         return;
     }
 
@@ -163,6 +198,210 @@ void MiniMaxClient::refresh()
         setLoading(false);
         reply->deleteLater();
     });
+}
+
+void MiniMaxClient::saveCredential(const QString &apiKey)
+{
+    const QString trimmedApiKey = apiKey.trimmed();
+    if (trimmedApiKey.isEmpty()) {
+        setCredentialState(QStringLiteral("API Key 不能为空"), false, true);
+        return;
+    }
+
+    m_pendingApiKey.fill(QChar(u'\0'));
+    m_pendingApiKey = trimmedApiKey;
+    m_pendingCredentialOperation = PendingCredentialOperation::Save;
+    setCredentialState(QStringLiteral("正在保存到 KDE 钱包…"), true, false);
+    if (m_wallet && m_wallet->isOpen()) {
+        performPendingCredentialOperation();
+    } else {
+        openWallet();
+    }
+}
+
+void MiniMaxClient::clearCredential()
+{
+    m_pendingApiKey.fill(QChar(u'\0'));
+    m_pendingApiKey.clear();
+    m_pendingCredentialOperation = PendingCredentialOperation::Clear;
+    setCredentialState(QStringLiteral("正在从 KDE 钱包移除…"), true, false);
+    if (m_wallet && m_wallet->isOpen()) {
+        performPendingCredentialOperation();
+    } else {
+        openWallet();
+    }
+}
+
+void MiniMaxClient::openWallet()
+{
+    if ((m_wallet && m_wallet->isOpen()) || m_walletOpening) {
+        if (m_wallet && m_wallet->isOpen()) {
+            performPendingCredentialOperation();
+        }
+        return;
+    }
+    if (!KWallet::Wallet::isEnabled()) {
+        setCredentialState(QStringLiteral("KDE 钱包未启用，无法安全保存 API Key"), false, true);
+        return;
+    }
+
+    if (m_wallet) {
+        m_wallet->deleteLater();
+        m_wallet = nullptr;
+    }
+    m_walletOpening = true;
+    m_wallet = KWallet::Wallet::openWallet(KWallet::Wallet::LocalWallet(),
+                                           0,
+                                           KWallet::Wallet::Asynchronous);
+    if (!m_wallet) {
+        m_walletOpening = false;
+        setCredentialState(QStringLiteral("无法打开 KDE 钱包"), false, true);
+        return;
+    }
+    m_wallet->setParent(this);
+    KWallet::Wallet *openedWallet = m_wallet;
+
+    connect(openedWallet, &KWallet::Wallet::walletOpened, this, [this, openedWallet](bool success) {
+        if (m_wallet != openedWallet) {
+            return;
+        }
+        m_walletOpening = false;
+        if (!success || !prepareWalletFolder()) {
+            setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
+            return;
+        }
+        if (m_pendingCredentialOperation == PendingCredentialOperation::None) {
+            loadCredential();
+        } else {
+            performPendingCredentialOperation();
+        }
+    });
+    connect(openedWallet, &KWallet::Wallet::walletClosed, this, [this, openedWallet]() {
+        if (m_wallet != openedWallet) {
+            openedWallet->deleteLater();
+            return;
+        }
+        setStoredApiKey({});
+        m_wallet = nullptr;
+        if (qgetenv("MINIMAX_API_KEY").trimmed().isEmpty()) {
+            setCredentialState(QStringLiteral("KDE 钱包已锁定"), false, true);
+        } else {
+            setCredentialState(QStringLiteral("已通过环境变量配置"), false, false);
+        }
+        openedWallet->deleteLater();
+    });
+    connect(openedWallet,
+            &KWallet::Wallet::folderUpdated,
+            this,
+            [this, openedWallet](const QString &folder) {
+                if (m_wallet == openedWallet && folder == walletFolder
+                    && m_pendingCredentialOperation == PendingCredentialOperation::None) {
+                    loadCredential();
+                }
+            });
+}
+
+bool MiniMaxClient::prepareWalletFolder()
+{
+    if (!m_wallet || !m_wallet->isOpen()) {
+        return false;
+    }
+    if (!m_wallet->hasFolder(walletFolder) && !m_wallet->createFolder(walletFolder)) {
+        return false;
+    }
+    return m_wallet->setFolder(walletFolder);
+}
+
+void MiniMaxClient::loadCredential()
+{
+    QString apiKey;
+    const int result = m_wallet->readPassword(miniMaxWalletEntry, apiKey);
+    if (result == 0 && !apiKey.trimmed().isEmpty()) {
+        setStoredApiKey(apiKey.trimmed().toUtf8());
+        apiKey.fill(QChar(u'\0'));
+        setCredentialState(QStringLiteral("已保存在 KDE 钱包"), false, false);
+        refresh();
+        return;
+    }
+    apiKey.fill(QChar(u'\0'));
+    setStoredApiKey({});
+    setCredentialState(QStringLiteral("尚未保存 API Key"), false, false);
+}
+
+void MiniMaxClient::performPendingCredentialOperation()
+{
+    if (!prepareWalletFolder()) {
+        setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
+        return;
+    }
+
+    if (m_pendingCredentialOperation == PendingCredentialOperation::Save) {
+        QString apiKey = m_pendingApiKey;
+        const int result = m_wallet->writePassword(miniMaxWalletEntry, apiKey);
+        if (result == 0) {
+            QByteArray storedApiKey = apiKey.toUtf8();
+            setStoredApiKey(storedApiKey);
+            storedApiKey.fill('\0');
+            setCredentialState(QStringLiteral("API Key 已保存到 KDE 钱包"), false, false);
+            refresh();
+        } else {
+            setCredentialState(QStringLiteral("API Key 保存失败，请检查 KDE 钱包"), false, true);
+        }
+        apiKey.fill(QChar(u'\0'));
+    } else if (m_pendingCredentialOperation == PendingCredentialOperation::Clear) {
+        const int result = m_wallet->hasEntry(miniMaxWalletEntry)
+            ? m_wallet->removeEntry(miniMaxWalletEntry) : 0;
+        if (result == 0) {
+            setStoredApiKey({});
+            const bool environmentConfigured = !qgetenv("MINIMAX_API_KEY").trimmed().isEmpty();
+            setCredentialState(environmentConfigured
+                                   ? QStringLiteral("钱包凭据已移除；环境变量仍在生效")
+                                   : QStringLiteral("API Key 已移除"),
+                               false,
+                               false);
+            if (!environmentConfigured) {
+                setSnapshot(emptySnapshot(QStringLiteral("未配置"),
+                                          QStringLiteral("请在供应商设置中保存 MiniMax API Key")));
+            }
+        } else {
+            setCredentialState(QStringLiteral("API Key 移除失败，请检查 KDE 钱包"), false, true);
+        }
+    }
+
+    m_pendingApiKey.fill(QChar(u'\0'));
+    m_pendingApiKey.clear();
+    m_pendingCredentialOperation = PendingCredentialOperation::None;
+}
+
+void MiniMaxClient::setStoredApiKey(const QByteArray &apiKey)
+{
+    const bool wasConfigured = credentialConfigured();
+    m_storedApiKey.fill('\0');
+    m_storedApiKey = apiKey;
+    if (wasConfigured != credentialConfigured()) {
+        Q_EMIT credentialConfiguredChanged();
+    }
+}
+
+void MiniMaxClient::setCredentialState(const QString &status, bool busy, bool error)
+{
+    if (error && !busy) {
+        m_pendingApiKey.fill(QChar(u'\0'));
+        m_pendingApiKey.clear();
+        m_pendingCredentialOperation = PendingCredentialOperation::None;
+    }
+    if (m_credentialStatus != status) {
+        m_credentialStatus = status;
+        Q_EMIT credentialStatusChanged();
+    }
+    if (m_credentialBusy != busy) {
+        m_credentialBusy = busy;
+        Q_EMIT credentialBusyChanged();
+    }
+    if (m_credentialError != error) {
+        m_credentialError = error;
+        Q_EMIT credentialErrorChanged();
+    }
 }
 
 void MiniMaxClient::setLoading(bool loading)

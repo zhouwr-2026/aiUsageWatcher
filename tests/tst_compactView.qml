@@ -51,10 +51,7 @@ Item {
             compare(findChild(compact, "compactPercent").text, "88%")
             const pie = findChild(compact, "compactPie")
             verify(pie.visible)
-            verify(pie.segments !== undefined)
-            compare(pie.segments.length, 2)
-            compare(pie.segments[0].value, 88)
-            compare(pie.segments[1].value, 12)
+            compare(compact.boundedPercent, 88)
         }
 
         function test_empty_data_uses_placeholder() {
@@ -69,6 +66,7 @@ Item {
             host.testStyle = "bar"
 
             verify(findChild(compact, "compactBar").visible)
+            compare(findChild(compact, "compactBarPercent").text, "50%")
         }
 
         function test_click_toggles_popup() {

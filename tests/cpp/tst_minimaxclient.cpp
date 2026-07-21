@@ -11,6 +11,7 @@ class MiniMaxClientTest : public QObject
 
 private Q_SLOTS:
     void createsRestrictedAuthenticatedRequest();
+    void exposesCredentialManagementContract();
 };
 
 void MiniMaxClientTest::createsRestrictedAuthenticatedRequest()
@@ -23,6 +24,18 @@ void MiniMaxClientTest::createsRestrictedAuthenticatedRequest()
     QCOMPARE(request.rawHeader("Accept"), QByteArray("application/json"));
     QCOMPARE(request.attribute(QNetworkRequest::RedirectPolicyAttribute).toInt(),
              static_cast<int>(QNetworkRequest::SameOriginRedirectPolicy));
+}
+
+void MiniMaxClientTest::exposesCredentialManagementContract()
+{
+    const QMetaObject &metaObject = MiniMaxClient::staticMetaObject;
+
+    QVERIFY(metaObject.indexOfProperty("credentialConfigured") >= 0);
+    QVERIFY(metaObject.indexOfProperty("credentialStatus") >= 0);
+    QVERIFY(metaObject.indexOfProperty("credentialBusy") >= 0);
+    QVERIFY(metaObject.indexOfProperty("credentialError") >= 0);
+    QVERIFY(metaObject.indexOfMethod("saveCredential(QString)") >= 0);
+    QVERIFY(metaObject.indexOfMethod("clearCredential()") >= 0);
 }
 
 QTEST_GUILESS_MAIN(MiniMaxClientTest)

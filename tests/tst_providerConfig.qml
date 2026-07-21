@@ -107,7 +107,7 @@ Item {
             const persisted = JSON.stringify([original])
             const page = createPage([original])
 
-            verify(findChild(page, "providerDialog") !== null)
+            verify(findChild(page, "providerEditorPage") !== null)
             compare(page.workingCount, 1)
 
             verify(page.addProvider(provider("beta", "Beta")))
@@ -130,13 +130,35 @@ Item {
             const before = page.cfg_providers
 
             verify(page.beginEdit("alpha"))
+            compare(page.editorVisible, true)
             const editor = findChild(page, "providerEditor")
             editor.updateField("providerName", "Unsaved edit")
             compare(editor.currentCandidate().providerName, "Unsaved edit")
             page.cancelEditor()
 
+            compare(page.editorVisible, false)
             compare(page.cfg_providers, before)
             compare(page.workingCount, 1)
+            page.destroy()
+        }
+
+        function test_minimax_editor_has_masked_api_key_field() {
+            const page = createPage([provider("minimax", "MiniMax")])
+
+            verify(page.beginEdit("minimax"))
+            const field = findChild(page, "miniMaxApiKeyField")
+            verify(field !== null)
+            verify(field.visible)
+            compare(field.echoMode, TextInput.Password)
+            verify(findChild(page, "miniMaxCredentialMessage").text.indexOf("KDE 钱包") >= 0)
+
+            field.text = "secret-must-not-enter-config"
+            const saveButton = findChild(page, "saveMiniMaxApiKeyButton")
+            verify(saveButton.enabled)
+            saveButton.clicked()
+            compare(field.text, "")
+            verify(page.cfg_providers.indexOf("secret-must-not-enter-config") < 0)
+            page.cancelEditor()
             page.destroy()
         }
     }

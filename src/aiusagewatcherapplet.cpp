@@ -24,6 +24,18 @@ AiUsageWatcherApplet::AiUsageWatcherApplet(QObject *parent,
             &MiniMaxClient::credentialConfiguredChanged,
             this,
             &AiUsageWatcherApplet::miniMaxCredentialConfiguredChanged);
+    connect(&m_miniMaxClient,
+            &MiniMaxClient::credentialStatusChanged,
+            this,
+            &AiUsageWatcherApplet::miniMaxCredentialStatusChanged);
+    connect(&m_miniMaxClient,
+            &MiniMaxClient::credentialBusyChanged,
+            this,
+            &AiUsageWatcherApplet::miniMaxCredentialBusyChanged);
+    connect(&m_miniMaxClient,
+            &MiniMaxClient::credentialErrorChanged,
+            this,
+            &AiUsageWatcherApplet::miniMaxCredentialErrorChanged);
 }
 
 QVariantMap AiUsageWatcherApplet::miniMaxSnapshot() const
@@ -41,9 +53,34 @@ bool AiUsageWatcherApplet::miniMaxCredentialConfigured() const
     return m_miniMaxClient.credentialConfigured();
 }
 
+QString AiUsageWatcherApplet::miniMaxCredentialStatus() const
+{
+    return m_miniMaxClient.credentialStatus();
+}
+
+bool AiUsageWatcherApplet::miniMaxCredentialBusy() const
+{
+    return m_miniMaxClient.credentialBusy();
+}
+
+bool AiUsageWatcherApplet::miniMaxCredentialError() const
+{
+    return m_miniMaxClient.credentialError();
+}
+
 void AiUsageWatcherApplet::refreshMiniMax()
 {
     m_miniMaxClient.refresh();
+}
+
+void AiUsageWatcherApplet::saveMiniMaxApiKey(const QString &apiKey)
+{
+    m_miniMaxClient.saveCredential(apiKey);
+}
+
+void AiUsageWatcherApplet::clearMiniMaxApiKey()
+{
+    m_miniMaxClient.clearCredential();
 }
 
 K_PLUGIN_CLASS(AiUsageWatcherApplet)

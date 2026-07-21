@@ -44,7 +44,7 @@ Item {
         remainingColor: Qt.rgba(Kirigami.Theme.backgroundColor.r,
                                 Kirigami.Theme.backgroundColor.g,
                                 Kirigami.Theme.backgroundColor.b, 0.4)
-        data: {
+        segments: {
             const percent = root.tightestUsage.usedPercent
             const used = Math.max(0, Math.min(100, percent))
             return [{

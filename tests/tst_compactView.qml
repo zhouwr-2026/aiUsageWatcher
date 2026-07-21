@@ -46,7 +46,12 @@ Item {
 
             compare(compact.tightestUsage.usedPercent, 88)
             compare(findChild(compact, "compactPercent").text, "88%")
-            verify(findChild(compact, "compactPie").visible)
+            const pie = findChild(compact, "compactPie")
+            verify(pie.visible)
+            verify(pie.segments !== undefined)
+            compare(pie.segments.length, 2)
+            compare(pie.segments[0].value, 88)
+            compare(pie.segments[1].value, 12)
         }
 
         function test_empty_data_uses_placeholder() {

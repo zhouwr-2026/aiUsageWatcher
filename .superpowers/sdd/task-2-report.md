@@ -44,4 +44,25 @@ xmllint --noout package/contents/config/main.xml
 ## 顾虑
 
 - `main.qml` 已消费 Task 3 将提供的 FullView `opacityPercent`、`keepPanelOpen`、`configureRequested`、`keepOpenChanged` 接口；Task 3 未落地前 qmllint 会给这些接口 warning，但 exit 0。
-- `PieChart.data` 沿用既有公共属性，会触发 shadow warning；当前 FullView 仍消费该属性，待 Task 3 删除 full 内联 pie 后可独立改名。
+- Task 3 仍需删除 `FullView.qml` 的 inline pie；本修复按任务边界未修改该文件。
+
+## PieChart 属性遮蔽修复
+
+RED：
+
+```bash
+/usr/lib/qt6/bin/qmllint package/contents/ui/PieChart.qml
+/usr/bin/env QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/tst_compactView.qml -import package/contents/ui -v1
+```
+
+摘要：旧 `property var data` 触发 `property-override` 与 `duplicate-property-binding`；新增 `segments` 接口断言后，focused 测试为 `4 passed, 1 failed`。
+
+GREEN：
+
+```bash
+/usr/bin/env QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/tst_compactView.qml -import package/contents/ui -v1
+/usr/bin/env QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests -import package/contents/ui -v1
+/usr/lib/qt6/bin/qmllint package/contents/ui/PieChart.qml package/contents/ui/CompactView.qml
+```
+
+摘要：focused `5 passed, 0 failed`；full `13 passed, 0 failed`；`qmllint` exit 0 且零输出。`PieChart` 属性改名为 `segments`，同步 CompactView 绑定、repaint 信号和真实数据断言。

@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
@@ -22,6 +24,7 @@ PlasmoidItem {
     // environment compatible when the native plugin is not instantiated.
     readonly property var usageBackend: Plasmoid
 
+    activationTogglesExpanded: true
     hideOnWindowDeactivate: !keepPanelOpen
 
     onProviderDefinitionsChanged: {
@@ -62,7 +65,7 @@ PlasmoidItem {
             action.trigger()
     }
 
-    Plasmoid.title: ""
+    Plasmoid.title: i18n("AI 用量监控")
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
 
     toolTipMainText: i18n("AI 用量监控")

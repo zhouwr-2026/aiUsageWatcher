@@ -73,5 +73,13 @@ if /usr/bin/rg -n 'Plasmoid\.contextualActions[[:space:]]*:[[:space:]]*\[[^]]*ic
     echo "不要在右键菜单重复添加 Plasma 已提供的配置入口" >&2
     exit 1
 fi
+if ! /usr/bin/rg -q '^pragma ComponentBehavior: Bound$' package/contents/ui/main.qml; then
+    echo "compact/full 组件必须绑定到本小部件上下文，否则面板点击目标可能解析错误" >&2
+    exit 1
+fi
+if ! /usr/bin/rg -q 'activationTogglesExpanded:[[:space:]]*true' package/contents/ui/main.qml; then
+    echo "小部件必须允许 Plasma 激活操作切换 popup" >&2
+    exit 1
+fi
 
 echo "[static] PASS"

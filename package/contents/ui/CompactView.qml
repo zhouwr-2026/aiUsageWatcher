@@ -110,10 +110,10 @@ Item {
     MouseArea {
         objectName: "compactMouseArea"
         anchors.fill: parent
+        acceptedButtons: Qt.LeftButton
         hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
         z: 100
-        property bool wasExpanded: false
-        onPressed: wasExpanded = root.plasmoidItem.expanded
-        onClicked: root.plasmoidItem.expanded = !wasExpanded
+        onClicked: root.plasmoidItem.expanded = !root.plasmoidItem.expanded
     }
 }

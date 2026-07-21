@@ -12,21 +12,23 @@
 
 ### Current Task
 
-- Plan task: `Task 4: 标准 applet KCM 与常规设置`
-- OpenSpec task: `4. 新增标准 contents/config/config.qml 和 General KCM，通过 cfg_ 实现四项设置的 Apply/Cancel；删除外部 KCM、colorScheme、groupBy、alwaysOnTop。`
+- Plan task: `Task 5: Providers KCM CRUD、校验与模板预览`
+- OpenSpec task: `5. 实现 Providers KCM 工作副本、稳定 ID CRUD、单 Dialog 编辑器、校验、删除确认和模板预览；测试 Cancel 不持久化、Apply 序列化 definitions。`
 - Stage: `done`
-- Review/fix round: `0`
-- Base commit: `64e8924`
-- Implementation commit: `d8ed105`
-- Changed files: standard config entry, GeneralConfig, config test, removed placeholder
-- RED: Qt 6 suite 21 passed / 3 expected failures for missing config pages
-- GREEN: Qt 6 suite 24 passed / 0 failed; target lint zero output; forbidden config fields absent
+- Review/fix round: `1`
+- Base commit: `cc787db`
+- Implementation commit: `d221e2e`
+- RED: Qt 6 suite 24 passed / 1 expected failure for missing providerConfig.js
+- GREEN: Qt 6 suite 35 passed / 0 failed
+- Quality fix commit: `c5251ad`
+- Quality finding resolved: target Qt 6 qmllint zero output
+- Controller verification: Qt 6 full suite 35 passed / 0 failed
 
 - [x] Task 1 — Data contract and derivation tests
 - [x] Task 2 — Root state, compact view and metadata
 - [x] Task 3 — FullView ProviderGroup/PlanBar chain
 - [x] Task 4 — Standard General KCM
-- [ ] Task 5 — Providers KCM CRUD and validation
+- [x] Task 5 — Providers KCM CRUD and validation
 - [ ] Task 6 — Static/install/runtime verification
 - [ ] Task 7 — Documentation and final acceptance
 

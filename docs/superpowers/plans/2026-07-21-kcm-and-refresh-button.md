@@ -216,7 +216,7 @@ isolation: branch
 
 ### Task 5: Providers KCM CRUD、校验与模板预览
 
-- [ ] **Task 5 checkpoint: Providers KCM CRUD、校验与模板预览完成**
+- [x] **Task 5 checkpoint: Providers KCM CRUD、校验与模板预览完成**
 
 **Files:**
 - Create: `package/contents/ui/config/ProvidersConfig.qml`
@@ -227,27 +227,27 @@ isolation: branch
 **Interfaces:**
 - Produces: `validateProvider(candidate, siblings) -> { valid, message }`、`parseWorkingDefinitions(json) -> Array`、`serializeDefinitions(items) -> string`；ProvidersConfig `property string cfg_providers`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
   覆盖空名称、重复 provider ID、零 plan、空/重复 plan、缺模板占位符为 invalid；合法 add/edit/delete 更新工作 JSON；Cancel 场景不触碰模拟 persisted 值；模板示例输出 `5小时 限额  65/100  重置于 今天 18:00`。
 
-- [ ] **Step 2: 运行 RED**
+- [x] **Step 2: 运行 RED**
 
   Run: `QT_QPA_PLATFORM=offscreen qmltestrunner -input tests -import package/contents/ui`
 
   Expected: FAIL，providerConfig.js/ProvidersConfig 尚不存在。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
   ProvidersConfig 从 cfg_providers 建 ListModel 工作副本；单个 Controls.Dialog 承载普通 ProviderEditor Item。所有查找按稳定 ID；保存启用状态来自 validateProvider；删除使用二次确认。编辑后只序列化到 cfg_providers。按钮使用 list-add/document-edit/edit-delete Breeze icon；脚本区只读提示后续版本；模板预览实时更新。
 
-- [ ] **Step 4: 运行 GREEN**
+- [x] **Step 4: 运行 GREEN**
 
   Run: `QT_QPA_PLATFORM=offscreen qmltestrunner -input tests -import package/contents/ui && qmllint package/contents/ui/config/ProvidersConfig.qml package/contents/ui/config/ProviderEditor.qml`
 
   Expected: PASS；`rg -n 'plasmoid\.configuration|Plasmoid\.configuration' package/contents/ui/config` 无输出。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
   ```bash
   git add package/contents/ui/config/ProvidersConfig.qml package/contents/ui/config/ProviderEditor.qml package/contents/js/providerConfig.js tests/tst_providerConfig.qml

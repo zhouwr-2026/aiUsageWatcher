@@ -289,14 +289,10 @@ Item {
                                             data: [{
                                                 "label": i18n("已用"),
                                                 "value": modelData.usedPercent,
-                                                "color": {
-                                                    switch (modelData.barClass) {
-                                                    case "bar-green": return Kirigami.Theme.positiveTextColor;
-                                                    case "bar-yellow": return Kirigami.Theme.highlightColor;
-                                                    case "bar-red": return Kirigami.Theme.negativeTextColor;
-                                                    default: return Kirigami.Theme.neutralTextColor;
-                                                    }
-                                                }
+                                                "color": modelData.barClass === "bar-green" ? Kirigami.Theme.positiveTextColor
+    : modelData.barClass === "bar-yellow" ? Kirigami.Theme.highlightColor
+    : modelData.barClass === "bar-red" ? Kirigami.Theme.negativeTextColor
+    : Kirigami.Theme.neutralTextColor
                                             }, {
                                                 "label": i18n("剩余"),
                                                 "value": 100 - modelData.usedPercent,

@@ -1,61 +1,23 @@
-# AI Usage Watcher
+# AGENTS.md
 
-KDE Plasma 6 桌面小部件，实时监控各大模型厂家的模型套餐用量。
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
-## 形式
+## 项目概览
 
-- 面板图标（compact）：按配置顺序每 5 秒轮巡供应商，以饼图或水平柱状图显示当前供应商最紧张套餐的已用百分比。
-- 悬停提示：与当前轮巡项同步，显示供应商、套餐和已用百分比。
-- 左键弹出框（full）：按供应商展示全部已返回套餐，包括 5 小时、周、月等额度。
-- 右键菜单：Plasma 标准"配置…"入口 + "刷新"。
-- 弹出框标题栏：刷新、配置和保持打开。
+AI Usage Watcher — KDE Plasma 6 桌面小部件，实时监控各大模型厂家（GLM、MiniMax、Codex、Gemini 等）的套餐用量。
 
-## 需求与设计
+## 构建与运行
 
-完整需求与设计见 [docs/requirements.md](docs/requirements.md)。自定义脚本编写规范见 [docs/usage-script-spec.md](docs/usage-script-spec.md)。
-
-## 构建
-
-项目包含 QML 界面和 C++ 原生查询后端，CMake 会同时安装两部分：
+项目包含 QML 界面和 C++ 原生查询后端：
 
 ```bash
 cmake -S . -B build -DCMAKE_INSTALL_PREFIX="$HOME/.local"
 cmake --build build
 cmake --install build
-```
 
-当前 MiniMax 开发版只从启动进程的 `MINIMAX_API_KEY` 环境变量读取凭据。
-不要把 Key 写入源码、配置文件或日志；后续版本会增加配置表单和 KWallet 保存。
-
-## 开发与验证
-
-### 前置条件
-
-- KDE Plasma 6 桌面环境
-- `plasmawindowed` 命令（通常随 `plasma-desktop` 安装）
-- Qt 6、Plasma 6、KF6 CoreAddons 和 CMake 开发包
-
-### 运行小部件
-
-```bash
-# 构建并安装 QML 包与 C++ 插件
-cmake -S . -B build -DCMAKE_INSTALL_PREFIX="$HOME/.local"
-cmake --build build
-cmake --install build
-
-# 用 plasmawindowed 独立窗口运行（无需添加到面板）
 QT_PLUGIN_PATH="$HOME/.local/lib/qt6/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}" \
   plasmawindowed aiUsageWatcher
 ```
-
-### 验证清单
-
-1. compact 使用饼图或水平柱状图，每 5 秒切换一个已配置供应商。
-2. 悬停文案与当前 compact 的供应商、套餐和百分比一致。
-3. 左键展开后能看到所有供应商的全部套餐；右键只出现"配置…"和"刷新"。
-4. MiniMax 返回的剩余百分比会动态转换为已用百分比；未配置 Key 时显示明确灰色状态。
-5. 颜色语义：已用 `<85%` 绿色、`85..94%` 黄色、`>=95%` 红色，无数据灰色。
-6. 执行 `bash tests/run-static-checks.sh` 和 `bash tests/run-plasma-smoke.sh`。
 
 ## 代码架构
 
@@ -101,8 +63,8 @@ tests/
 PlasmoidItem (main.qml)
 ├── compactRepresentation: CompactView → Orb 风格圆球
 └── fullRepresentation: FullView → Flickable → Column
-    └── Repeater(providers) → ProviderGroup（标题 + 错误 + plans Repeater）
-        └── Repeater(plans) → PlanBar（计划名 + 进度条 + 百分比 + 重置信息）
+    └── Repeater(providers) → ProviderGroup
+        └── Repeater(plans) → PlanBar
 ```
 
 ### 数据流
@@ -110,7 +72,7 @@ PlasmoidItem (main.qml)
 - KConfig `providers` 只保存 `ProviderDefinition`（持久化）
 - `mockData.js` 输出 `RuntimeProviderSnapshot`（仅内存）
 - 纯函数 `buildDisplayProviders` 合并定义为展示模型
-- Timer 每 60 秒刷新，compact 每 5 秒轮巡供应商
+- compact 每 5 秒轮巡供应商，Timer 每 60 秒刷新数据
 
 ### 颜色语义
 
@@ -119,4 +81,26 @@ PlasmoidItem (main.qml)
 | `< 85` | 正常 | `Kirigami.Theme.positiveTextColor` |
 | `85..94` | 注意 | `Kirigami.Theme.neutralTextColor` |
 | `>= 95` | 紧张 | `Kirigami.Theme.negativeTextColor` |
-| 无数据 | 未知 | `Kirigami.Theme.disabledTextColor` |---
+| 无数据 | 未知 | `Kirigami.Theme.disabledTextColor` |
+
+### 关键 QML 组件属性
+
+- **CompactView.qml**：`tightestUsage`（含 usedPercent/providerName/planName）
+- **ProviderGroup.qml**：`providerId`、`providerName`、`ledClass`、`statusLabel`、`plans[]`、`errorText`
+- **PlanBar.qml**：`planName`、`usedPercent`、`usedPercentLabel`、`usedText`、`totalText`、`unitText`、`resetText`、`extraText`、`templateText`
+
+## 开发约定
+
+- 供应商名自动剥 ` · <App>` 后缀（`stripProviderSuffix` 函数）
+- `unit` 超 8 字符或含空白 → 放 `unitOverflow` 单独展示
+- 进度条动画 300ms `Easing.OutCubic`
+- 数据不可变更新（刷新函数返回新数组，不修改原对象）
+- 需求基线以 `docs/requirements.md` 为准
+- 自定义脚本规范以 `docs/usage-script-spec.md` 为准
+- 代码风格加载 `ponytail`；简化历史代码用 `code-simplifier`
+
+## 搜索提示
+
+- `rg` 优先于 grep 搜索
+- 字符串/日志搜索不用 `codegraph-usage`
+- 涉及调用链、影响面、重构定位时加载 `codegraph-usage`（需 `.codegraph/` 目录存在）

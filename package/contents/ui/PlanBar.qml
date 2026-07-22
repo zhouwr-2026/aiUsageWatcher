@@ -59,7 +59,8 @@ Item {
                 Layout.minimumWidth: 0
                 text: root.planName
                 color: Kirigami.Theme.textColor
-                elide: Text.ElideRight
+                wrapMode: Text.Wrap
+                elide: Text.ElideNone
             }
 
             Item {
@@ -68,18 +69,20 @@ Item {
                 Layout.preferredHeight: Kirigami.Units.smallSpacing * 2
 
                 Rectangle {
+                    objectName: "unusedTrack"
                     anchors.fill: parent
                     radius: height / 2
-                    color: Kirigami.Theme.backgroundColor
+                    color: Kirigami.Theme.disabledTextColor
+                    opacity: 0.28
                 }
 
                 Rectangle {
                     anchors.left: parent.left
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
-                    width: root.usedPercent < 0 ? 0 : Math.max(
+                    width: root.usedPercent <= 0 ? 0 : Math.max(
                                Kirigami.Units.smallSpacing,
-                               parent.width * Math.max(0, Math.min(100, root.usedPercent)) / 100)
+                               parent.width * Math.min(100, root.usedPercent) / 100)
                     radius: height / 2
                     color: root.usageColor(root.barClass)
 

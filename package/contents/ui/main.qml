@@ -12,8 +12,18 @@ PlasmoidItem {
     property var runtimeSnapshots: MockData.createSeedSnapshots(providerDefinitions)
     property var providers: MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
     property int compactProviderIndex: 0
+    property int restoreProviderIndex: 0
+    property bool eventHighlighted: false
+    property date lastRefreshTime: new Date()
     readonly property var compactUsage: MockData.providerUsageAt(providers, compactProviderIndex)
     readonly property string compactStyle: Plasmoid.configuration.compactStyle || "pie"
+    readonly property string panelStyle: Plasmoid.configuration.panelStyle || "bar"
+    readonly property string displayStrategy: Plasmoid.configuration.displayStrategy || "polling"
+    readonly property string eventMode: Plasmoid.configuration.eventMode || "dbus"
+    readonly property int pollingIntervalSec: Math.max(1,
+                                                        Plasmoid.configuration.pollingIntervalSec || 5)
+    readonly property int highlightDurationSec: Math.max(1,
+                                                          Plasmoid.configuration.highlightDurationSec || 30)
     readonly property int refreshIntervalSec: Math.max(10,
                                                         Plasmoid.configuration.refreshIntervalSec || 60)
     readonly property int opacityPercent: Math.max(20, Math.min(100,
@@ -31,17 +41,21 @@ PlasmoidItem {
         compactProviderIndex = 0
         runtimeSnapshots = MockData.createSeedSnapshots(providerDefinitions)
         applyMiniMaxSnapshot()
+        applyCodexSnapshot()
+        applyCustomSnapshots()
         providers = MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
+        requestCustomRefresh()
     }
 
     function applyMiniMaxSnapshot() {
         const snapshot = usageBackend["miniMaxSnapshot"]
         if (!snapshot || snapshot.providerId !== "minimax"
-                || !Array.isArray(snapshot.plans))
+                || !snapshot.plans || typeof snapshot.plans.length !== "number")
             return false
 
         runtimeSnapshots = MockData.replaceSnapshot(runtimeSnapshots, snapshot)
         providers = MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
+        lastRefreshTime = new Date()
         return true
     }
 
@@ -53,10 +67,78 @@ PlasmoidItem {
         return true
     }
 
-    function refresh() {
-        runtimeSnapshots = MockData.fluctuateSnapshots(runtimeSnapshots)
+    function applyCodexSnapshot() {
+        const snapshot = usageBackend["codexSnapshot"]
+        if (!snapshot || snapshot.providerId !== "codex"
+                || !snapshot.plans || typeof snapshot.plans.length !== "number")
+            return false
+
+        runtimeSnapshots = MockData.replaceSnapshot(runtimeSnapshots, snapshot)
         providers = MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
+        lastRefreshTime = new Date()
+        return true
+    }
+
+    function requestCodexRefresh() {
+        const refreshFunction = usageBackend["refreshCodexUsage"]
+        if (typeof refreshFunction !== "function")
+            return false
+        refreshFunction.call(usageBackend)
+        return true
+    }
+
+    function applyCustomSnapshots() {
+        const snapshots = usageBackend["customUsageSnapshots"]
+        if (!snapshots || typeof snapshots.length !== "number")
+            return false
+
+        let nextSnapshots = runtimeSnapshots
+        for (let i = 0; i < snapshots.length; ++i)
+            nextSnapshots = MockData.replaceSnapshot(nextSnapshots, snapshots[i])
+        runtimeSnapshots = nextSnapshots
+        providers = MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
+        lastRefreshTime = new Date()
+        return true
+    }
+
+    function requestCustomRefresh() {
+        const refreshFunction = usageBackend["refreshCustomProviders"]
+        if (typeof refreshFunction !== "function")
+            return false
+        refreshFunction.call(usageBackend, providerDefinitions)
+        return true
+    }
+
+    function refresh() {
+        runtimeSnapshots = MockData.createSeedSnapshots(providerDefinitions)
+        applyMiniMaxSnapshot()
+        applyCodexSnapshot()
+        applyCustomSnapshots()
+        providers = MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
+        lastRefreshTime = new Date()
         requestMiniMaxRefresh()
+        requestCodexRefresh()
+        requestCustomRefresh()
+    }
+
+    function activateModel(modelName) {
+        if (typeof modelName !== "string" || modelName.trim().length === 0)
+            return false
+        const normalizedName = modelName.trim()
+        for (let i = 0; i < providers.length; ++i) {
+            const provider = providers[i]
+            if (provider.id === normalizedName || provider.providerName === normalizedName
+                    || MockData.stripProviderSuffix(provider.providerName) === normalizedName) {
+                if (!eventHighlighted)
+                    restoreProviderIndex = compactProviderIndex
+                compactProviderIndex = i
+                eventHighlighted = true
+                highlightTimer.restart()
+                return true
+            }
+        }
+        console.warn("QuotaPilot: ignored unknown model event:", normalizedName)
+        return false
     }
 
     function openConfiguration() {
@@ -65,23 +147,27 @@ PlasmoidItem {
             action.trigger()
     }
 
-    Plasmoid.title: i18n("AI 用量监控")
+    Plasmoid.title: qsTr("额度领航员")
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
 
-    toolTipMainText: i18n("AI 用量监控")
+    toolTipMainText: qsTr("额度领航员")
     toolTipSubText: compactUsage.usedPercent < 0
         ? (compactUsage.providerName
-           ? i18n("%1 · 暂无可用数据",
+           ? qsTr("%1 · 暂无可用数据").arg(
                   MockData.stripProviderSuffix(compactUsage.providerName))
-           : i18n("暂无可用数据"))
-        : i18n("%1 · %2 · 已用 %3",
-               MockData.stripProviderSuffix(compactUsage.providerName),
-               compactUsage.planName,
-               compactUsage.usedPercent + "%")
+           : qsTr("暂无可用数据"))
+        : qsTr("%1 · %2 · 已用 %3")
+            .arg(MockData.stripProviderSuffix(compactUsage.providerName))
+            .arg(compactUsage.planName)
+            .arg(compactUsage.usedPercent + "%")
+
+    toolTipItem: QuotaTooltip {
+        provider: root.compactUsage
+    }
 
     Plasmoid.contextualActions: [
         PlasmaCore.Action {
-            text: i18n("刷新")
+            text: qsTr("刷新")
             icon.name: "view-refresh"
             onTriggered: root.refresh()
         }
@@ -95,11 +181,24 @@ PlasmoidItem {
     }
 
     Timer {
-        interval: 5000
-        running: root.providers.length > 1
+        interval: root.pollingIntervalSec * 1000
+        running: root.providers.length > 1 && root.displayStrategy === "polling"
         repeat: true
         onTriggered: root.compactProviderIndex = MockData.nextProviderIndexWithUsage(
                          root.providers, root.compactProviderIndex)
+    }
+
+    Timer {
+        id: highlightTimer
+
+        interval: root.highlightDurationSec * 1000
+        repeat: false
+        onTriggered: {
+            root.eventHighlighted = false
+            if (root.providers.length > 0)
+                root.compactProviderIndex = Math.min(root.restoreProviderIndex,
+                                                     root.providers.length - 1)
+        }
     }
 
     Connections {
@@ -109,17 +208,32 @@ PlasmoidItem {
         function onMiniMaxSnapshotChanged() {
             root.applyMiniMaxSnapshot()
         }
+        function onCodexSnapshotChanged() {
+            root.applyCodexSnapshot()
+        }
+        function onCustomUsageSnapshotsChanged() {
+            root.applyCustomSnapshots()
+        }
+        function onModelActivated(modelName) {
+            if (root.displayStrategy === "event" && root.eventMode === "dbus")
+                root.activateModel(modelName)
+        }
     }
 
     Component.onCompleted: {
         applyMiniMaxSnapshot()
+        applyCodexSnapshot()
+        applyCustomSnapshots()
         requestMiniMaxRefresh()
+        requestCodexRefresh()
+        requestCustomRefresh()
     }
 
     compactRepresentation: CompactView {
         providers: root.providers
         compactStyle: root.compactStyle
         providerIndex: root.compactProviderIndex
+        highlighted: root.eventHighlighted
         plasmoidItem: root
     }
 
@@ -127,7 +241,10 @@ PlasmoidItem {
         providers: root.providers
         opacityPercent: root.opacityPercent
         keepPanelOpen: root.keepPanelOpen
+        panelStyle: root.panelStyle
+        lastRefreshTime: root.lastRefreshTime
         onRefreshRequested: root.refresh()
+        onCloseRequested: root.expanded = false
         onConfigureRequested: root.openConfiguration()
         onKeepOpenChanged: keepOpen => Plasmoid.configuration.keepPanelOpen = keepOpen
     }

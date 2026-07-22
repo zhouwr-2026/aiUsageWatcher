@@ -10,8 +10,8 @@ struct MiniMaxPlan
 {
     QString planId;
     QString planName;
-    int used = 0;
-    int total = 100;
+    double used = 0;
+    double total = 100;
     qint64 resetAtMs = 0;
 };
 

@@ -12,6 +12,7 @@ Item {
     property var providers: []
     property string compactStyle: "pie"
     property int providerIndex: 0
+    property bool highlighted: false
     readonly property var currentUsage: MockData.providerUsageAt(providers, providerIndex)
     readonly property var tightestUsage: currentUsage
     readonly property real boundedPercent: Math.max(0, Math.min(100,
@@ -26,6 +27,37 @@ Item {
         : Kirigami.Units.gridUnit * 3
     Layout.preferredWidth: implicitWidth
     clip: true
+
+    onProviderIndexChanged: providerSwitch.restart()
+
+    SequentialAnimation {
+        id: providerSwitch
+
+        NumberAnimation {
+            target: root
+            property: "opacity"
+            from: 1
+            to: 0
+            duration: 90
+            easing.type: Easing.InOutQuad
+        }
+        NumberAnimation {
+            target: root
+            property: "opacity"
+            from: 0
+            to: 1
+            duration: 140
+            easing.type: Easing.OutCubic
+        }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        radius: Kirigami.Units.cornerRadius
+        color: "transparent"
+        border.width: root.highlighted ? 2 : 0
+        border.color: Qt.rgba(240 / 255, 173 / 255, 78 / 255, 1)
+    }
 
     function usageColor(percent) {
         switch (MockData.usageClass(percent, "bar")) {
@@ -123,5 +155,24 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: root.plasmoidItem.expanded = !root.plasmoidItem.expanded
+    }
+
+    Rectangle {
+        objectName: "errorBadge"
+        visible: Boolean(root.currentUsage.errorText)
+        anchors.top: parent.top
+        anchors.right: parent.right
+        width: Math.max(Kirigami.Units.iconSizes.small, errorLabel.implicitWidth + 6)
+        height: width
+        radius: width / 2
+        color: Kirigami.Theme.negativeTextColor
+
+        QQC2.Label {
+            id: errorLabel
+            anchors.centerIn: parent
+            text: "!"
+            color: Kirigami.Theme.backgroundColor
+            font.bold: true
+        }
     }
 }

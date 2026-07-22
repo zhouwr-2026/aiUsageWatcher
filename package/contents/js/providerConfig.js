@@ -2,6 +2,8 @@
 
 .pragma library
 .import "mockData.js" as MockData
+.import "providerCatalog.js" as ProviderCatalog
+.import "scriptTools.js" as ScriptTools
 
 function parseWorkingDefinitions(json) {
     return MockData.normalizeDefinitions(json)
@@ -29,45 +31,43 @@ function validateProvider(candidate, siblings) {
             return { valid: false, message: "供应商 ID 不能重复" }
     }
 
+    var catalogId = ProviderCatalog.catalogIdForLegacy(candidate)
+    if (catalogId !== ProviderCatalog.CUSTOM_ID) {
+        var preset = ProviderCatalog.definitionFor(catalogId)
+        if (!preset || JSON.stringify(candidate) !== JSON.stringify(preset))
+            return { valid: false, message: "固定厂商信息必须使用内置预设" }
+        return { valid: true, message: "" }
+    }
+
+    var website = typeof candidate.website === "string" ? candidate.website.trim() : ""
+    if (!/^https?:\/\/[^\s]+$/i.test(website))
+        return { valid: false, message: "官网链接必须是有效的 HTTP(S) 地址" }
+
     if (!Array.isArray(candidate.plans) || candidate.plans.length === 0)
         return { valid: false, message: "至少需要一个套餐" }
 
-    var planIds = []
     var planNames = []
     for (var planIndex = 0; planIndex < candidate.plans.length; ++planIndex) {
         var plan = candidate.plans[planIndex]
-        var planId = plan && typeof plan.id === "string" ? plan.id.trim() : ""
         var planName = plan && typeof plan.planName === "string"
             ? plan.planName.trim() : ""
-        if (!planId)
-            return { valid: false, message: "套餐 ID 不能为空" }
         if (!planName)
-            return { valid: false, message: "套餐名称不能为空" }
-        if (planIds.indexOf(planId) >= 0)
-            return { valid: false, message: "套餐 ID 不能重复" }
+            return { valid: false, message: "限额名称不能为空" }
         if (planNames.indexOf(planName) >= 0)
-            return { valid: false, message: "套餐名称不能重复" }
-        planIds.push(planId)
+            return { valid: false, message: "限额名称不能重复" }
+        if (!ScriptTools.variableName(plan.usedVariable))
+            return { valid: false, message: "已用量变量必须使用 ${name} 格式" }
+        if (!ScriptTools.variableName(plan.limitVariable))
+            return { valid: false, message: "限额总量变量必须使用 ${name} 格式" }
+        var resetVariable = typeof plan.resetVariable === "string"
+            ? plan.resetVariable.trim() : ""
+        if (resetVariable && !ScriptTools.variableName(resetVariable))
+            return { valid: false, message: "到期时间变量必须使用 ${name} 格式" }
         planNames.push(planName)
     }
 
-    var template = typeof candidate.template === "string" ? candidate.template : ""
-    var placeholders = ["%1", "%2", "%3", "%4"]
-    for (var placeholderIndex = 0; placeholderIndex < placeholders.length; ++placeholderIndex) {
-        if (template.indexOf(placeholders[placeholderIndex]) < 0) {
-            return {
-                valid: false,
-                message: "模板必须包含 " + placeholders[placeholderIndex]
-            }
-        }
-    }
+    var contract = ScriptTools.validateContract(candidate.script, candidate.plans)
+    if (!contract.valid)
+        return contract
     return { valid: true, message: "" }
-}
-
-function previewTemplate(template) {
-    var values = ["5小时", "65", "100", "今天 18:00"]
-    var preview = typeof template === "string" ? template : ""
-    for (var i = 0; i < values.length; ++i)
-        preview = preview.split("%" + (i + 1)).join(values[i])
-    return preview
 }

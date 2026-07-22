@@ -15,6 +15,11 @@ private Q_SLOTS:
     void rejectsApiError();
     void rejectsMalformedPayload();
     void rejectsInvalidPercentage();
+    void rejectsIntegerOutsideQint64Range();
+    void ignoresUnrelatedModelPayloads();
+    void acceptsDecimalPercentAndMissingResetTime();
+    void skipsInactiveWeeklyQuota();
+    void acceptsResponseWithoutBaseStatus();
 };
 
 void MiniMaxResponseParserTest::parsesPercentageResponse()
@@ -53,11 +58,11 @@ void MiniMaxResponseParserTest::parsesPercentageResponse()
     QCOMPARE(result.snapshot.statusLabel, QStringLiteral("可用"));
     QCOMPARE(result.snapshot.plans.size(), 2);
     QCOMPARE(result.snapshot.plans.at(0).planId, QStringLiteral("general-interval"));
-    QCOMPARE(result.snapshot.plans.at(0).planName, QStringLiteral("通用模型 · 5 小时"));
+    QCOMPARE(result.snapshot.plans.at(0).planName, QStringLiteral("5 小时"));
     QCOMPARE(result.snapshot.plans.at(0).used, 0);
     QCOMPARE(result.snapshot.plans.at(0).resetAtMs, 1784635200000LL);
     QCOMPARE(result.snapshot.plans.at(1).planId, QStringLiteral("general-weekly"));
-    QCOMPARE(result.snapshot.plans.at(1).planName, QStringLiteral("通用模型 · 每周"));
+    QCOMPARE(result.snapshot.plans.at(1).planName, QStringLiteral("每周"));
     QCOMPARE(result.snapshot.plans.at(1).used, 28);
     QCOMPARE(result.snapshot.plans.at(1).resetAtMs, 1785081600000LL);
 }
@@ -139,6 +144,83 @@ void MiniMaxResponseParserTest::rejectsInvalidPercentage()
 
     QVERIFY(!result.ok);
     QCOMPARE(result.errorCode, QStringLiteral("invalid_response"));
+}
+
+void MiniMaxResponseParserTest::rejectsIntegerOutsideQint64Range()
+{
+    const auto result = MiniMaxResponseParser::parse(R"json({
+        "model_remains": [],
+        "base_resp": {"status_code": 1e100, "status_msg": "invalid"}
+    })json");
+
+    QVERIFY(!result.ok);
+    QCOMPARE(result.errorCode, QStringLiteral("invalid_response"));
+}
+
+void MiniMaxResponseParserTest::ignoresUnrelatedModelPayloads()
+{
+    const auto result = MiniMaxResponseParser::parse(R"json({
+        "model_remains": [{
+            "model_name": "video",
+            "unexpected": "schema owned by another product"
+        }],
+        "base_resp": {"status_code": 0, "status_msg": "success"}
+    })json");
+
+    QVERIFY(result.ok);
+    QCOMPARE(result.snapshot.statusLabel, QStringLiteral("未订阅"));
+    QVERIFY(result.snapshot.plans.isEmpty());
+}
+
+void MiniMaxResponseParserTest::acceptsDecimalPercentAndMissingResetTime()
+{
+    const auto result = MiniMaxResponseParser::parse(R"json({
+        "model_remains": [{
+            "model_name": "general",
+            "current_interval_remaining_percent": 98.5,
+            "current_weekly_status": 1,
+            "current_weekly_remaining_percent": 95.25
+        }],
+        "base_resp": {"status_code": 0, "status_msg": "success"}
+    })json");
+
+    QVERIFY(result.ok);
+    QCOMPARE(result.snapshot.plans.size(), 2);
+    QCOMPARE(result.snapshot.plans.at(0).used, 1.5);
+    QCOMPARE(result.snapshot.plans.at(0).resetAtMs, 0LL);
+    QCOMPARE(result.snapshot.plans.at(1).used, 4.75);
+}
+
+void MiniMaxResponseParserTest::skipsInactiveWeeklyQuota()
+{
+    const auto result = MiniMaxResponseParser::parse(R"json({
+        "model_remains": [{
+            "model_name": "general",
+            "current_interval_remaining_percent": 80,
+            "current_weekly_status": 2,
+            "current_weekly_remaining_percent": 0
+        }],
+        "base_resp": {"status_code": 0, "status_msg": "success"}
+    })json");
+
+    QVERIFY(result.ok);
+    QCOMPARE(result.snapshot.plans.size(), 1);
+    QCOMPARE(result.snapshot.plans.first().planId, QStringLiteral("general-interval"));
+}
+
+void MiniMaxResponseParserTest::acceptsResponseWithoutBaseStatus()
+{
+    const auto result = MiniMaxResponseParser::parse(R"json({
+        "model_remains": [{
+            "model_name": "general",
+            "current_interval_remaining_percent": 80,
+            "current_weekly_status": 3
+        }]
+    })json");
+
+    QVERIFY(result.ok);
+    QCOMPARE(result.snapshot.plans.size(), 1);
+    QCOMPARE(result.snapshot.plans.first().used, 20.0);
 }
 
 QTEST_GUILESS_MAIN(MiniMaxResponseParserTest)

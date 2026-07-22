@@ -10,6 +10,7 @@ Item {
     property var providers: []
     property int opacityPercent: 80
     property bool keepPanelOpen: false
+    property string panelStyle: "bar"
     property date lastRefreshTime: new Date()
 
     readonly property int renderedPlanCount: {
@@ -54,6 +55,7 @@ Item {
     signal refreshRequested()
     signal configureRequested()
     signal keepOpenChanged(bool keepOpen)
+    signal closeRequested()
 
     Layout.minimumWidth: Kirigami.Units.gridUnit * 16
     Layout.minimumHeight: Kirigami.Units.gridUnit * 12
@@ -82,7 +84,7 @@ Item {
 
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
-                text: qsTr("AI 用量监控")
+                text: qsTr("额度领航员")
                 level: 4
                 elide: Text.ElideRight
             }
@@ -103,7 +105,6 @@ Item {
                     Accessible.name: qsTr("刷新")
                     PlasmaComponents.ToolTip.text: qsTr("刷新")
                     onClicked: {
-                        root.lastRefreshTime = new Date()
                         refreshAnimation.restart()
                         root.refreshRequested()
                     }
@@ -138,6 +139,16 @@ Item {
                     PlasmaComponents.ToolTip.text: qsTr("保持面板打开")
                     onToggled: root.keepOpenChanged(checked)
                 }
+
+                PlasmaComponents.ToolButton {
+                    objectName: "closeButton"
+
+                    focusPolicy: Qt.StrongFocus
+                    icon.name: "window-close"
+                    Accessible.name: qsTr("关闭")
+                    PlasmaComponents.ToolTip.text: qsTr("关闭")
+                    onClicked: root.closeRequested()
+                }
             }
         }
 
@@ -153,7 +164,8 @@ Item {
             Layout.fillHeight: true
             clip: true
             cacheBuffer: Kirigami.Units.gridUnit * 100
-            model: root.providers
+            visible: root.panelStyle === "bar"
+            model: visible ? root.providers : []
             spacing: Kirigami.Units.smallSpacing
 
             delegate: ProviderGroup {
@@ -171,8 +183,16 @@ Item {
             }
         }
 
+        PanelPieView {
+            objectName: "panelPieView"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: root.panelStyle === "pie"
+            providers: visible ? root.providers : []
+        }
+
         PlasmaComponents.Label {
-            visible: providerList.count === 0
+            visible: root.providers.length === 0
             Layout.fillWidth: true
             Layout.fillHeight: true
             text: qsTr("暂无供应商数据")
@@ -190,6 +210,16 @@ Item {
 
             Layout.fillWidth: true
             text: root.statusText
+            color: Kirigami.Theme.disabledTextColor
+            font: Kirigami.Theme.smallFont
+            elide: Text.ElideRight
+        }
+
+        PlasmaComponents.Label {
+            objectName: "usageLegendLabel"
+
+            Layout.fillWidth: true
+            text: qsTr("图表说明：高亮为已使用，灰色为剩余额度")
             color: Kirigami.Theme.disabledTextColor
             font: Kirigami.Theme.smallFont
             elide: Text.ElideRight

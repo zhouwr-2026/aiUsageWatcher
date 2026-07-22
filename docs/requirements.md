@@ -1,112 +1,102 @@
-# AI 用量监控 — 需求基线
+# 额度领航员（QuotaPilot）— 需求与实现基线
 
-> 本文档是 `aiUsageWatcher` 的唯一产品需求、设计与计划文档。所有实现以此为准。
+本文是 `aiUsageWatcher` 仓库的当前产品、设计和验收基线。
 
----
+## 1. 身份与兼容
 
-## 第一部分：需求
+- 用户界面名称：**额度领航员**；QuotaPilot 仅作为项目代码名使用。
+- 内部 KPlugin ID：`aiUsageWatcher`。为兼容已有安装、配置和钱包条目，本轮不改 ID。
+- 平台：KDE Plasma 6、Qt 6.6+、QML、Kirigami、C++ 原生后端。
+- Plasma 6 使用 `metadata.json`，不回退到 Plasma 5 的 `metadata.desktop`。
 
-### 1. 目标与边界
+## 2. 当前交付范围
 
-`aiUsageWatcher` 是 KDE Plasma 6 小部件，用来查看多个 AI 服务供应商的套餐已用额度。当前迭代在既有 UI/KCM 闭环上加入原生查询后端，先接通固定 MiniMax Token Plan，并保留其他供应商的模拟数据作为后续接入占位。
+### 已实现
 
-#### 本期范围
+- 多模型、多限额项展示；旧版手动用量与静态限额继续兼容读取。
+- MiniMax 原生网络查询、响应校验、地区/端点回退和 KDE Wallet 凭据保存。
+- Codex 采用与 cc-switch 一致的 OpenAI 设备码流程，直接显示结构化验证码并自动打开
+  官方浏览器授权页；支持隔离的多账号列表、添加账号、删除账号和默认账号标记。
+- Codex 默认账号通过 ChatGPT 官方用量接口读取真实限额窗口；访问令牌临近过期或接口
+  返回未授权时自动刷新一次，失败后要求用户重新登录。
+- compact 饼图/进度条两种外观，与 popup 图表类型独立。
+- 多模型可配置轮询；无数据和错误模型同样参与轮询。
+- 会话 D-Bus `ModelActivated(QString)` 事件切换、金色高亮和可配置过期时间。
+- compact Tooltip 只展示当前模型第一个限额项，以两行文字描述模型、限额名称、
+  已用/总量、单位和重置时间；不在悬浮提示中复制完整面板或图表。
+- popup 水平柱状图/环形饼图两种布局，以及关闭、刷新、配置、保持打开。
+- 模型增删、上下排序；编辑页所有字段固定为左标签、右输入框。
+- 内置 Codex、Claude Code、OpenCode Go、MiniMax、智谱 GLM、Kimi For Coding、
+  硅基流动、CodexZH 八个厂商预设，以及自定义模式。
+- 固定厂商自动填充稳定标识、名称、官网和套餐结构；只有自定义模式显示限额项与脚本。
+- 自定义限额按名称、单位、`${used}` / `${limit}` / `${resetAt}` 变量绑定；支持任意增删。
+- HTTP+JS 自定义查询使用独立 worker：提取请求、执行 C++ 网络请求、解析 JSON 响应并
+  将返回变量映射为运行时套餐快照。
+- 轻量脚本编辑器提供行号、原生语法高亮、原始变量名提示、格式化、安全契约测试、
+  自动换行开关和可拖拽高度。
+- 供应商新增/编辑通过外层 KCM 的 `saveConfig()` 统一提交当前候选项；Apply/OK 必须先把
+  编辑器状态合并到 `cfg_providers`，页面重建后仍能读取刚保存的定义。
+- 设置由 KConfig XT 持久化；旧配置自动补齐新字段，旧手动数值不会丢失。
 
-- compact 视图按配置顺序每 **5 秒**轮巡供应商，显示当前供应商最紧张套餐的已用百分比，可在饼图和水平柱状图之间切换。
-- compact 悬停内容必须对应当前轮巡到的供应商/套餐；点击展开 full 悬浮面板。
-- full 弹出面板按供应商展示全部套餐，包括 5 小时、周、月等已返回额度，始终复用 `ProviderGroup` 和 `PlanBar`。
-- 标准 Plasma applet 配置页，支持 UI 设置和供应商定义的增删改。
-- C++ 后端查询 MiniMax 官方 Token Plan remains 接口；其他模拟快照仍可定时刷新，运行时用量不写入 KConfig。
-- Plasma 6 静态检查、JS/QML 逻辑测试和真实 `plasmawindowed` 冒烟验证。
+### 尚未实现
 
-#### 本期不做
+- 编辑器中的“测试脚本”目前只做文本契约校验；真实查询在应用设置或刷新后执行。
+- 其余六个固定厂商的凭据管理与真实用量查询适配器；未接入时只显示暂无用量。
+- 本地 HTTP 事件服务器。
+- D-Bus 服务名/路径/接口的用户自定义。
+- 拖拽排序（当前使用可访问的上移/下移按钮）。
+- 独立的 `quota-pilot` 图标资产（当前使用 Breeze 系统监控图标）。
 
-- QuickJS 执行和自定义脚本真实请求。
-- MiniMax API Key 配置表单与 KWallet 保存；当前开发版仅从 `MINIMAX_API_KEY` 进程环境读取，禁止写入 KConfig、源码或日志。
-- Codex 浏览器登录与真实套餐查询；作为 MiniMax 后的下一项能力实现。
-- 基于 Agent/模型调用事件即时切换 compact；本期先实现固定间隔轮巡，事件模式见 §6.3。
-- 脚本编辑；只显示后续版本提示。
-- 历史曲线、系统监视器集成、供应商导入导出。
-- 主题选择或修改系统全局主题；所有视图只跟随当前 Plasma 主题。
-- full 面板的饼图/柱状图切换；`compactStyle` 只影响 compact。
-- 按时间窗口分组；full 本期只按供应商分组。
-- 真正的窗口管理器"总在最前"。本期只支持让 Plasma popup 在失焦时保持打开。
+这些项不得以占位控件伪装为可用能力。
 
----
+## 3. 安全与技术决策
 
-### 2. Plasma 6 包与技术约束
+- API 请求、Bearer Token 和 KWallet 访问保留在 C++，QML 只读取去敏快照。
+- 每个 Codex 账号使用独立、仅当前用户可读写的 Codex 兼容凭据目录；QuotaPilot 只把
+  `id_token` 的账号 ID/邮箱声明提供给 QML，不返回、记录或复制任何令牌。
+- 任意用户 JavaScript 不在 Plasma 主进程执行。独立 worker 只获得脚本与单次 JSON，
+  由父进程实施 CPU/墙钟超时、任务/输出/响应大小上限和 HTTPS 来源策略。
+- 本地 HTTP 回调后续使用 Qt HTTP Server 等成熟实现；不在 QML 中扩展 TCP，也不手写
+  HTTP 解析器。
+- 当前事件入口使用 D-Bus，不监听网络端口。
+- 不引入 Qt WebEngine/Monaco。编辑器使用 Qt Quick `TextArea`、C++
+  `QSyntaxHighlighter` 和纯文本工具，保持轻量且不获得执行权限。
+- MiniMax 请求失败后清空旧计划，状态为“请求失败”；不得把旧额度冒充最新数据。
+- Codex 请求失败后同样清空旧计划；生产种子数据不得包含伪造的已用量或限额。
+- JSON 整数转换前校验 `qint64` 范围，超范围响应作为无效数据拒绝。
 
-- 插件 ID、安装目录和运行命令统一为：
-  - ID：`aiUsageWatcher`
-  - 用户安装目录：`~/.local/share/plasma/plasmoids/aiUsageWatcher/`
-  - QML 包目录：`~/.local/share/plasma/plasmoids/aiUsageWatcher/`
-  - C++ Applet 插件：`lib/qt6/plugins/plasma/applets/aiUsageWatcher.so`
-  - 构建/安装：CMake 同时安装 QML 包和 C++ 插件；单独使用 `kpackagetool6` 不能完成原生后端安装。
-  - 运行：`plasmawindowed aiUsageWatcher`
-  - 卸载：`kpackagetool6 --type Plasma/Applet --remove aiUsageWatcher`
-- `metadata.json` 必须包含非空 `KPlugin.Name`、`KPlugin.License`、`KPlugin.Id: "aiUsageWatcher"`、`KPackageStructure: "Plasma/Applet"` 和最低 API 版本 6.0。
-- 根组件使用 `PlasmoidItem` 和标准 `compactRepresentation` / `fullRepresentation`。
-- 尺寸、间距和主题使用 `Kirigami.Units`、`Kirigami.Theme`；禁止使用 `PlasmaCore.Units`、`PlasmaCore.Theme` lowercase 颜色属性和硬编码十六进制主题色。
-- 控件使用 Qt Quick Controls、Plasma Components、Kirigami 和 Breeze 图标名称，不创建自定义图标资产。
-- KCM 入口必须是 `package/contents/config/config.qml` 中的 `ConfigModel` / `ConfigCategory`。配置页使用 `cfg_` 属性，由 Plasma 配置对话框管理 Apply/Cancel；不得声明或依赖外部 `X-KDE-ConfigModule`。
-- 网络请求和凭据访问必须位于 C++ 后端。QML 只接收去敏后的 `RuntimeProviderSnapshot`，不得持有 Bearer Token。
+## 4. 数据契约
 
----
-
-### 3. 唯一用量语义
-
-系统唯一百分比指标为 `usedPercent`：
-
-- 数值范围为 `0..100`。
-- 值越高表示已用越多、越紧张。
-- 最紧张套餐取所有有效套餐中最大的 `usedPercent`。
-- 无有效套餐返回 `-1`，UI 显示灰色和 `—`。
-
-#### 颜色阈值
-
-| `usedPercent` | 语义 | UI 颜色 |
-|---|---|---|
-| `< 85` | 正常 | `Kirigami.Theme.positiveTextColor` |
-| `85..94` | 注意 | `Kirigami.Theme.neutralTextColor` |
-| `>= 95` | 紧张 | `Kirigami.Theme.negativeTextColor` |
-| 无数据 | 未知 | `Kirigami.Theme.disabledTextColor` |
-
-`barClass` / `ledClass` 是 `usedPercent` 的派生展示字段，不是独立事实来源。边界值 84、85、94、95、100 必须有测试。
-
----
-
-### 4. 数据契约与数据流
-
-#### 4.1 持久化的供应商定义
-
-KConfig 的 `providers` 字段只保存供应商定义 JSON，不保存刷新后的运行时用量：
+KConfig 的 `providers` 只保存定义，不保存网络刷新快照：
 
 ```typescript
 type ProviderDefinition = {
-  id: string;                 // 稳定、唯一，不以名称定位编辑项
+  catalogId: "codex" | "claude-code" | "opencode-go" | "minimax" |
+             "zhipu-glm" | "kimi-for-coding" | "siliconflow" | "codexzh" |
+             "custom";
+  id: string;
   providerName: string;
-  sourceLabel: "自定义" | "套餐" | "订阅";
+  website: string;
+  vendor: string;
+  sourceLabel: string;
   trustMode: "strict" | "lan" | "custom";
-  template: string;           // provider 级模板
+  template: string;
+  script: string; // 自定义模式；由独立 worker 执行 request/extractor
   plans: Array<{
-    id: string;               // provider 内唯一
+    id: string;
     planName: string;
     unit: string;
+    sourceType: "native" | "manual" | "http-js";
+    usedVariable: string;  // 例如 ${used}
+    limitVariable: string; // 例如 ${limit}
+    resetVariable: string; // 可选，例如 ${resetAt}，返回可直接展示的时间文本
+    manualUsed: number;    // 仅兼容旧配置
+    limit: number;         // 仅兼容旧配置
   }>;
 };
 ```
 
-约束：
-
-- `id`、`providerName` 必填；provider ID 不得重复。
-- 同一 provider 内 plan ID 和 planName 均不得重复。
-- provider 至少有一个 plan。
-- provider 模板默认 `%1 限额  %2/%3  重置于 %4`。
-- 旧 `providers` JSON 若包含 `usedPercent`、`usedText` 等快照字段，规范化时只提取定义字段；无效 JSON 或错误顶层类型回退到种子定义，不能使 QML 崩溃。
-
-#### 4.2 非持久化运行时快照
-
-模拟数据源和原生供应商后端都输出同一种独立运行时快照：
+运行时快照只存在内存：
 
 ```typescript
 type RuntimeProviderSnapshot = {
@@ -127,310 +117,72 @@ type RuntimeProviderSnapshot = {
 };
 ```
 
-由一个纯函数把定义与快照合并为 UI 只读的 `DisplayProvider[]`。每个 display plan 的以下字段必须每次从 `used`、`total` 和原始文本派生：
-
-- `usedPercent = clamp(round(used / total * 100), 0, 100)`；`total <= 0` 或非有限数值时为 `-1`。
-- `usedPercentLabel`：有效时为整数加 `%`，否则为 `—`。
-- `usedText`：有效时为独立的 `used` 文本；不得预先拼接 `/ total`。
-- `totalText`：有效时为独立的 `total` 文本。
-- `barClass`、provider `ledClass`：由 §3 阈值派生。
-
-Timer 和手动刷新只替换内存中的 runtime snapshot / display model，不写 `plasmoid.configuration.providers`。只有 KCM Apply 写 provider definitions 和 UI settings。真实供应商快照不得再被 mock 波动函数修改。
-
-#### 4.3 种子数据
-
-- 云之声 Token Hub：3 个套餐；已用百分比分别约 65、22、8，均为绿色。
-- MiniMax：mock 种子 `used = 88, total = 100`，派生 `usedPercent = 88`，黄色。未加载后端或未配置临时密钥时显示明确灰色状态；真实响应可产生当前周期与周额度等多条计划。
-- Codex：1 个套餐，`used = 503`、`total = 750`，派生 `usedPercent = 67`，绿色。
-
-mock 波动必须不可变更新 `used`，并在同一次派生中同步 `usedPercent`、`usedPercentLabel`、`usedText`、`totalText` 和颜色，禁止显示字段漂移。MiniMax 响应中的 `remaining_percent` 必须转换为 `used = 100 - remaining`；状态 3（未订阅）不得生成绿色假进度条。
-
----
-
-### 5. 模板规则
-
-模板归属 provider，所有该 provider 的 plan 共用模板。默认值：
+唯一百分比语义为：
 
 ```text
-%1 限额  %2/%3  重置于 %4
+usedPercent = clamp(round(used / total * 100), 0, 100)
 ```
 
-占位符固定为：
-
-- `%1`：`planName`
-- `%2`：独立的 `usedText`
-- `%3`：独立的 `totalText`
-- `%4`：`resetText`
-
-模板渲染用安全的顺序替换函数或 `i18n(template, ...)`；不得把已经含 `/ total` 的组合字符串传给 `%2`。KCM 编辑器提供实时预览，缺少 reset 时保留可读文本而不是生成 `undefined`。
-
----
-
-### 6. UI 与交互
-
-#### 6.1 Compact
-
-- `compactStyle` 只有 `pie`、`bar` 两个值，默认 `pie`，只影响 compact。
-- compact 按 provider definitions/display providers 的顺序每 **5 秒**轮巡一次；配置变化时从第一项重新开始。
-- 每次只显示当前供应商最紧张有效套餐的 `usedPercent`；无数据为 `—`，但仍保留当前供应商名称供 tooltip 说明。
-- 左键切换 popup 展开状态；外部点击默认关闭。
-- 右键菜单复用 Plasma 自动提供的标准"配置…"入口；自定义 contextual action 只增加"刷新"，不得重复添加配置项。
-- tooltip 主标题为"AI 用量监控"，副标题必须与 compact 当前轮巡项一致，显示 provider / plan / 已用百分比；当前供应商无数据时显示该供应商"暂无可用数据"，不能只显示"点击查看详情"。
-- 长 provider/plan 名称采用 elide 或 wrap，不能挤压百分比。
-
-#### 6.2 Full
-
-- full 始终按 provider 分组，通过 `ProviderGroup` 展示 header/error，通过 `PlanBar` 展示每条套餐；不得依据 `compactStyle` 内联第二套套餐 UI。
-- 标题栏为"AI 用量监控"与刷新、配置、保持打开三个 Breeze `ToolButton`。
-- 刷新按钮点击后旋转 300ms 并触发一次内存刷新。
-- "保持面板打开"控制根 `PlasmoidItem.hideOnWindowDeactivate = !keepPanelOpen`。依据本机 Plasma 6 官方 `org.kde.desktopcontainment/contents/ui/FolderViewLayer.qml` 的同类实现，这是 popup 保持机制，不承诺窗口管理器层面的总在最前。
-- 每个图标按钮必须设置 ToolTip 和 `Accessible.name`；键盘可聚焦。
-- 面板底部显示状态栏：最近刷新时间、供应商数量、有效套餐数量；无数据或错误时显示明确状态。
-- 面板可滚动，窄宽度下 header 和 PlanBar 不重叠；使用 Layout、elide/wrap 和最小宽度，不使用固定减去 220px 的布局。
-- `opacityPercent` 只影响 full 背景透明度，范围 20..100。
-
-#### 6.3 Compact 调度模式
-
-当前只实现 `polling` 轮巡模式：
-
-- 轮巡对象是已配置供应商，不是所有套餐逐条轮巡；一个供应商有多条额度时，compact 选择其中最大 `usedPercent`。
-- full 始终显示所有供应商的全部有效额度，不受 compact 当前轮巡项影响。
-- 供应商无数据或请求失败时仍参与轮巡，以灰色 `—` 和明确 tooltip 暴露问题，不能静默隐藏。
-
-后续增加 `event` 事件模式：
-
-- Agent、CLI 或模型调用器通过本地 D-Bus 活跃事件显式上报 `providerId`，不得通过扫描任务正文、凭据文件或全局进程命令行推断。
-- 单个供应商活跃时立即切换 compact；多个供应商并发活跃时只在活跃集合内轮巡。
-- 活跃事件带过期时间并做去抖；事件全部过期后自动回到普通轮巡。
-- 没有安装事件发送端时必须自然降级为普通轮巡，不能影响额度刷新。
-
-#### 6.4 PlanBar
-
-- 保留"计划名 + 弹性进度条 + 百分比"和下一行详情的既有信息层级。
-- 进度条宽度动画为 300ms、`Easing.OutCubic`。
-- PlanBar 接收独立字段：`planName`、`usedPercent`、`usedPercentLabel`、`usedText`、`totalText`、`unitText`、`resetText`、`extraText`、`templateText`。
-- 颜色全部来自 `Kirigami.Theme`。
-
----
-
-### 7. KCM 配置
-
-`contents/config/config.qml` 声明两个 `ConfigCategory`：
-
-1. 常规：`source: "config/GeneralConfig.qml"`
-2. 供应商：`source: "config/ProvidersConfig.qml"`
-
-每个页面根组件为 `KCM.SimpleKCM`，通过 `cfg_` 属性参与标准 Apply/Cancel。
-
-#### 7.1 常规页
-
-| 用户字段 | KConfig 字段 | 控件 | 默认值 |
-|---|---|---|---|
-| compact 样式 | `compactStyle` | ComboBox：饼图/水平柱状图 | `pie` |
-| 刷新间隔（秒） | `refreshIntervalSec` | SpinBox 10..3600 | 60 |
-| 面板背景不透明度 | `opacityPercent` | Slider 20..100 | 80 |
-| 保持面板打开 | `keepPanelOpen` | CheckBox | false |
-
-不提供 `colorScheme`、`groupBy` 或"窗口置顶"字段。已有未发布配置中的这些字段可以删除；禁止修改系统全局主题。
-
-#### 7.2 供应商页
-
-- `cfg_providers` 是待应用的 provider definitions JSON；编辑操作只修改本页工作副本和 `cfg_providers`，不得直接写 `Plasmoid.configuration`。
-- 列表按 provider ID 编辑/删除，显示 provider 名称和计划摘要。
-- 添加、编辑使用单个 Dialog，编辑内容组件本身不是 Dialog，禁止 Dialog 套 Dialog。
-- 删除前二次确认。
-- 保存按钮仅在以下条件全部满足时启用：provider 名称非空、ID 唯一、至少一个 plan、plan 名称非空且不重复、模板含 `%1`、`%2`、`%3`、`%4`。
-- 使用 `list-add`、`document-edit`、`edit-delete` 等 Breeze 图标，不使用 emoji 作为操作按钮。
-- 模板字段下显示基于固定示例 `5小时 / 65 / 100 / 今天 18:00` 的实时预览。
-- 脚本区只读显示"脚本编辑将在后续版本实现"。
-
----
-
-### 8. 验证和发布门槛
-
-必须同时满足：
-
-1. JS/QML 逻辑测试覆盖阈值、最紧张值、错误输入回退、不可变刷新、派生字段同步、KCM Apply/Cancel 工作副本语义。
-2. `qmllint package/contents/ui/*.qml package/contents/ui/config/*.qml package/contents/config/config.qml` 无错误。
-3. `xmllint --noout package/contents/config/main.xml` 通过。
-4. CMake 构建并安装 QML 包和原生 Applet 插件；安装后验证 QML 副本一致、`aiUsageWatcher.so` 存在且运行日志出现原生后端加载证据。
-5. `plasmawindowed aiUsageWatcher` 日志中没有 `ReferenceError`、`TypeError`、`PlasmaCore.Units` 或组件加载失败。
-6. 使用给定 MiniMax 成功样本时，实际 popup 能看见三个 provider 和六条 PlanBar（MiniMax 当前周期与周额度各一条）；不能把 `timeout` 返回 124 单独当成成功证据，必须同时审查日志并完成可见行断言/截图。
-7. KCM 能打开两个分类；Apply 后保留配置，Cancel 不保存工作副本。
-8. `metadata.json` 的 AppStream 元数据包含非空名称和许可证。
-
----
-
-### 9. 验收清单
-
-- [ ] compact 饼图和柱状图按供应商轮巡，显示当前供应商最大 `usedPercent`；无数据显示灰色 `—`。
-- [ ] compact 点击展开 full；tooltip 与当前轮巡 provider/plan/percent 一致。
-- [ ] 阈值 `<85` 绿、`85..94` 黄、`>=95` 红；颜色使用已用百分比而不是剩余百分比。
-- [ ] full 在任意 compactStyle 下都使用相同的 `ProviderGroup -> PlanBar` 树。
-- [ ] popup 显示所有已配置供应商和其全部 5 小时/周/月等额度，没有大面积由零高度造成的空白。
-- [ ] MiniMax 实时 JSON 被动态解析，未订阅模型不显示假额度，错误/无密钥状态明确可见。
-- [ ] 刷新旋转 300ms，所有派生字段同步变化，Timer 不写 KConfig。
-- [ ] tooltip、三个标题栏按钮的 ToolTip/Accessible、状态栏和长文本响应式布局有效。
-- [ ] "保持面板打开"只控制 popup 失焦关闭行为。
-- [ ] KCM 通过标准两个 ConfigCategory 打开，常规设置遵循 Apply/Cancel。
-- [ ] 供应商按 ID 增删改，校验、删除确认和模板预览有效，重启后定义保持。
-- [ ] 系统亮/暗主题下颜色可读，且项目中无 `PlasmaCore.Theme` / `PlasmaCore.Units`。
-- [ ] metadata、安装路径和文档统一使用 `aiUsageWatcher`。
-- [ ] 全部自动检查与真实运行门槛通过。
-
----
-
-## 第二部分：设计
-
-### 1. 数据架构
-
-采用"单一 display model + 两种外壳"方案：
-
-- `mockData.js` 负责定义/快照规范化、派生和刷新纯函数。
-- `main.qml` 持有 `providerDefinitions`、`runtimeSnapshots`、`DisplayProvider[]` 三类状态；Timer 只更新后两者。
-- compact 从 display model 取最大 `usedPercent`，`compactStyle` 只切换 compact 的 pie/bar 外观。
-- full 永远是 `FullView -> ProviderGroup -> PlanBar`，删除内联 plan pie/bar 分支。
-- KCM 只修改 definitions JSON 和四个 UI 设置，通过 `cfg_` 交给 Apply/Cancel。
-
-未选方案：保留 full 双 UI 会继续产生重复逻辑；直接在 KCM 写 `Plasmoid.configuration` 会破坏 Cancel；把刷新快照写 KConfig 会造成字段漂移和每分钟写配置。
-
-### 2. 组件职责
-
-| 组件 | 职责 |
-|----------|----------|
-| `main.qml` | 配置读取、三层状态、刷新、tooltip、popup 保持状态和 representations 接线 |
-| `mockData.js` | `normalizeDefinitions(raw)`、`createSeedSnapshots(definitions)`、`fluctuateSnapshots(snapshots, randomFn)`、`buildDisplayProviders(definitions, snapshots)`、`tightestUsage(providers)` |
-| `CompactView.qml` | 只渲染 tightest usage 的 pie/bar，使用 `Kirigami.Units/Theme` |
-| `FullView.qml` | 标题栏、ListView、状态栏；delegate 只实例化 ProviderGroup |
-| `ProviderGroup.qml` | provider header/error 与 PlanBar repeater |
-| `PlanBar.qml` | 既有两行信息层级、模板和响应式进度条 |
-
-FullView 不接收 `compactStyle`，从接口上阻止再次分叉。
-
-### 3. Popup 保持机制
-
-本机 Plasma 6 官方 Folder View 使用：
-
-```qml
-onCheckedChanged: root.hideOnWindowDeactivate = !checked
-```
-
-因此本项目把用户文案命名为"保持面板打开"，实现为根 `PlasmoidItem.hideOnWindowDeactivate = !keepPanelOpen`。它不是窗口管理器 always-on-top。默认 false，保留 Plasma 外部点击关闭的标准行为。
-
-### 4. 图表实现
-
-采用自研 Canvas `PieChart.qml`。原因：实测 `org.kde.quickcharts` 在 Manjaro 上存在包命名 bug（`qmldir` 引用的 plugin 名称与磁盘文件不匹配），导致 QML runtime 报 `PieChartControl is not a type`。
-
-### 5. UI 规则
-
-- 所有颜色和间距来自 `Kirigami.Theme/Units`。
-- warning 用 `neutralTextColor`，无数据用 `disabledTextColor`。
-- 三个 ToolButton 有 Breeze icon、ToolTip、Accessible.name；刷新 icon 旋转 300ms。
-- full 背景不透明度来自 20..100 的 `opacityPercent`。
-- provider 名、plan 名和详情使用 Layout + elide/wrap；不使用 `parent.width - 220`。
-- 状态栏显示最近刷新时间、供应商数、有效套餐数或错误/空状态。
-
-### 6. 错误处理
-
-- 配置 parse/shape 失败：warning 一次并使用 seed definitions。
-- runtime 某 provider 错误：显示 provider error，其他 provider 正常渲染。
-- used/total 非有限或 total <= 0：plan 灰色、`usedPercent=-1`，不参与 tightest。
-- KCM 无效输入：就地错误文本，保存禁用；Cancel 丢弃工作副本。
-
-### 7. 测试策略
-
-1. `qmltestrunner`：阈值边界、最大值、规范化回退、不可变波动、派生同步、FullView PlanBar 数量、KCM 工作副本。
-2. `qmllint`、`xmllint`、metadata/AppStream 检查。
-3. 用 `kpackagetool6 --upgrade package` 安装，并 `diff -qr` 确保运行副本一致。
-4. `plasmawindowed` 日志必须无 ReferenceError/TypeError/加载错误；同时验证 3 provider/6 PlanBar 实际可见。超时 124 只能说明进程仍运行，不能替代日志和 UI 断言。
-
----
-
-## 第三部分：计划
-
-### 任务总览
-
-| # | 任务 | 状态 |
-|---|------|----------|
-| 1 | 数据契约与派生逻辑测试 | ✅ 完成 |
-| 2 | 根状态、compact 与包元数据修复 | ✅ 完成 |
-| 3 | FullView ProviderGroup/PlanBar 链重构 | ✅ 完成 |
-| 4 | 标准 General KCM 实现 | ✅ 完成 |
-| 5 | Providers KCM CRUD 与校验实现 | ✅ 完成 |
-| 6 | 静态/安装/运行验证脚本 | ✅ 完成 |
-| 7 | 文档同步与最终验收 | ⏳ 待完成 |
-
-### 任务详情
-
-#### Task 1: 锁定数据契约与派生逻辑
-
-- 创建 `tests/tst_mockData.qml`
-- 修改 `package/contents/js/mockData.js`
-- 产出：`normalizeDefinitions`、`createSeedSnapshots`、`fluctuateSnapshots`、`buildDisplayProviders`、`tightestUsage`、`usageClass` 纯函数
-
-#### Task 2: 修复根状态、compact 与包元数据
-
-- 创建 `tests/tst_compactView.qml`
-- 修改 `package/contents/ui/main.qml`、`CompactView.qml`、`PieChart.qml`
-- 修改 `package/contents/config/main.xml`、`package/metadata.json`
-- 产出：三层状态分离、Kirigami 主题、KConfig 四项设置
-
-#### Task 3: FullView 唯一组件链与响应式交互
-
-- 创建 `tests/tst_fullView.qml`
-- 修改 `package/contents/ui/FullView.qml`、`ProviderGroup.qml`、`PlanBar.qml`
-- 产出：FullView 只使用 ProviderGroup → PlanBar，删除内联 plan UI
-
-#### Task 4: 标准 applet KCM 与常规设置
-
-- 创建 `package/contents/config/config.qml`、`package/contents/ui/config/GeneralConfig.qml`
-- 创建 `tests/tst_generalConfig.qml`
-- 删除 `package/contents/ui/configGeneral.qml`
-- 产出：ConfigModel 两分类、cfg_ 属性
-
-#### Task 5: Providers KCM CRUD、校验与模板预览
-
-- 创建 `package/contents/ui/config/ProvidersConfig.qml`、`ProviderEditor.qml`
-- 创建 `package/contents/js/providerConfig.js`
-- 创建 `tests/tst_providerConfig.qml`
-- 产出：按稳定 ID 编辑、校验、删除确认、模板预览
-
-#### Task 6: 自动验证与安装级冒烟
-
-- 创建 `tests/run-static-checks.sh`、`tests/run-plasma-smoke.sh`、`tests/README.md`
-- 产出：静态入口 + 安装/运行入口
-
-#### Task 7: 文档同步与最终验收（待完成）
-
-- 修改 `README.md`、`AGENTS.md`、`docs/requirements.md`
-- 执行完整测试、diff/range 审查
-- 同步验收记录
-
----
-
-## 第四部分：后续扩展
-
-### 自定义用量查询脚本规范
-
-详见 `docs/usage-script-spec.md`。当前迭代不执行或编辑脚本，但 mock 数据和展示模型使用同一语义。
-
-### 事件驱动模式
-
-后续增加 `event` 模式，通过 D-Bus 活跃事件显式上报 `providerId`，实现即时切换 compact。
-
----
-
-## 附录
-
-### 插件 ID 和安装路径
-
-- ID：`aiUsageWatcher`
-- 用户安装目录：`~/.local/share/plasma/plasmoids/aiUsageWatcher/`
-- C++ 插件：`lib/qt6/plugins/plasma/applets/aiUsageWatcher.so`
-
-### metadata 必填字段
-
-- `KPlugin.Name`: `AI Usage Watcher`
-- `KPlugin.License`: `GPL-2.0-or-later`
-- `KPlugin.Id`: `aiUsageWatcher`
-- `KPackageStructure`: `Plasma/Applet`
+`total <= 0` 或非有限值时为 `-1`。颜色阈值：`<85` 正常、`85..94` 注意、
+`>=95` 紧张、无数据灰色。compact 取当前模型所有有效窗口中的最大值。
+
+旧定义缺少 `catalogId` 时，稳定 ID 为 `codex` / `minimax` 的记录迁移到对应预设，
+其他记录迁移为自定义；旧 `manualUsed`、`limit` 和 `sourceType` 原样保留。新建自定义
+定义使用 `http-js` 契约；刷新会执行真实请求，且不会随机改变真实用量。
+
+## 5. 调度与事件
+
+- `polling`：按配置顺序轮询所有模型，默认 5 秒，范围 1..300 秒。
+- `event`：监听会话 D-Bus 路径 `/QuotaPilot`、接口 `org.kde.quotaPilot`、信号
+  `ModelActivated(QString)`。
+- 参数可为模型稳定 ID 或显示名称。未知或空参数被忽略并记录日志。
+- 事件到达时记住原索引、立即切换并高亮；高亮期新事件会刷新计时；到期恢复原索引。
+- 默认高亮 30 秒，范围 1..600 秒。
+
+## 6. UI 规则
+
+- compact 单模型直接展示，多模型按当前策略切换；错误覆盖红色感叹号。
+- Tooltip 使用原生 `toolTipItem`，由 Plasma 管理悬停时序；内容只取当前模型第一个限额项，
+  以文字摘要显示，不绘制进度条，也不列出其余限额项。
+- popup 标题为“额度领航员”，四个操作均可键盘聚焦并有可访问名称。
+- 水平柱状图始终绘制完整浅色底轨，已用部分叠加语义色；0% 时底轨仍可见。
+- popup 底部明确标注“高亮为已使用，灰色为剩余额度”；所有百分比均保持“已使用”语义。
+- bar 模式垂直排列模型卡片；pie 模式水平排列模型，每个窗口一个环形图。
+- 无数据使用灰色占位，不显示空白；亮暗主题颜色全部来自 Kirigami。
+- “保持面板打开”只控制 Plasma popup 失焦行为，不承诺窗口管理器置顶。
+- 供应商编辑页使用统一双列布局，基本信息和限额项共享标签宽度与输入列；脚本区撑满正文。
+- 配置页只使用外层 KCM 的 OK / Apply / Cancel，不在编辑页增加第二组保存按钮。
+- 编辑器提示下拉展示并插入 `used`、`limit`、`resetAt` 等原始名称，不额外包裹 `${}`；
+  `${name}` 只用于限额项的变量绑定输入框。
+- 固定厂商只显示内置只读信息；自定义显示限额和脚本区。
+
+## 7. KConfig 字段
+
+| 字段 | 默认 | 范围/取值 |
+|---|---:|---|
+| `compactStyle` | `pie` | `pie` / `bar` |
+| `panelStyle` | `bar` | `pie` / `bar` |
+| `displayStrategy` | `polling` | `polling` / `event` |
+| `pollingIntervalSec` | 5 | 1..300 |
+| `eventMode` | `dbus` | 当前仅 `dbus` |
+| `highlightDurationSec` | 30 | 1..600 |
+| `refreshIntervalSec` | 60 | 10..3600 |
+| `opacityPercent` | 80 | 20..100 |
+| `keepPanelOpen` | false | bool |
+
+## 8. 验收门槛
+
+- `tests/run-static-checks.sh`：所有 QML/JS 测试、qmllint、XML、metadata 和禁用模式检查通过。
+- CMake 完整构建通过；C++ parser/client 测试通过。
+- `git diff --check` 无空白错误。
+- Plasma 桌面会话中运行 `tests/run-plasma-smoke.sh`，检查安装副本、原生插件和运行日志。
+- 人工确认 compact、Tooltip、两种 popup 布局、KCM Apply/Cancel、D-Bus 高亮和亮暗主题。
+- 新增供应商验收必须覆盖“仍停留在编辑页直接点击外层 Apply/OK”的路径，并在关闭、重开
+  配置页以及重启 Plasma 后核对供应商数量、稳定 ID 和脚本摘要。
+
+## 9. 下一阶段顺序
+
+1. 让编辑器“测试脚本”复用定时刷新的真实执行链，并增加自定义凭据的 KDE Wallet 管理。
+2. 按厂商逐个增加凭据管理和原生查询适配器，优先 Kimi For Coding 与智谱 GLM。
+3. 基于 Qt HTTP Server 增加仅监听 `127.0.0.1` 的回调服务和请求限制。
+4. 最后补拖拽排序、独立图标和多实例事件命名空间。

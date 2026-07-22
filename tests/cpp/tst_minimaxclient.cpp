@@ -12,13 +12,21 @@ class MiniMaxClientTest : public QObject
 private Q_SLOTS:
     void createsRestrictedAuthenticatedRequest();
     void exposesCredentialManagementContract();
+    void unconfiguredStateIsNotAnError();
 };
 
 void MiniMaxClientTest::createsRestrictedAuthenticatedRequest()
 {
-    const QNetworkRequest request = MiniMaxClient::createRequest("test-key");
+    const QList<QUrl> endpoints = MiniMaxClient::endpointCandidates();
+    QCOMPARE(endpoints.size(), 4);
+    QCOMPARE(endpoints.first(),
+             QUrl(QStringLiteral("https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains")));
+    QCOMPARE(endpoints.last(),
+             QUrl(QStringLiteral("https://api.minimax.io/v1/token_plan/remains")));
 
-    QCOMPARE(request.url(), QUrl(QStringLiteral("https://www.minimaxi.com/v1/token_plan/remains")));
+    const QNetworkRequest request = MiniMaxClient::createRequest(endpoints.first(), "test-key");
+
+    QCOMPARE(request.url(), endpoints.first());
     QCOMPARE(request.rawHeader("Authorization"), QByteArray("Bearer test-key"));
     QCOMPARE(request.rawHeader("Content-Type"), QByteArray("application/json"));
     QCOMPARE(request.rawHeader("Accept"), QByteArray("application/json"));
@@ -36,6 +44,16 @@ void MiniMaxClientTest::exposesCredentialManagementContract()
     QVERIFY(metaObject.indexOfProperty("credentialError") >= 0);
     QVERIFY(metaObject.indexOfMethod("saveCredential(QString)") >= 0);
     QVERIFY(metaObject.indexOfMethod("clearCredential()") >= 0);
+}
+
+void MiniMaxClientTest::unconfiguredStateIsNotAnError()
+{
+    qunsetenv("MINIMAX_API_KEY");
+    MiniMaxClient client;
+
+    QCOMPARE(client.snapshot().value(QStringLiteral("statusLabel")).toString(),
+             QStringLiteral("未配置"));
+    QCOMPARE(client.snapshot().value(QStringLiteral("errorText")).toString(), QString{});
 }
 
 QTEST_GUILESS_MAIN(MiniMaxClientTest)

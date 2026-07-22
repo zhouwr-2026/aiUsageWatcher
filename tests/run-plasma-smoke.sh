@@ -6,13 +6,7 @@ cd "$repo_root"
 
 qmltestrunner=/usr/lib/qt6/bin/qmltestrunner
 tmp_dir="$(mktemp -d)"
-runtime_pid=""
-
 cleanup() {
-    if [[ -n "$runtime_pid" ]] && kill -0 "$runtime_pid" 2>/dev/null; then
-        kill -TERM "$runtime_pid" 2>/dev/null || true
-        wait "$runtime_pid" 2>/dev/null || true
-    fi
     rm -rf -- "$tmp_dir"
 }
 trap cleanup EXIT
@@ -20,7 +14,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
-for tool in "$qmltestrunner" /usr/bin/cmake /usr/bin/kpackagetool6 /usr/bin/plasmawindowed /usr/bin/diff /usr/bin/rg; do
+for tool in "$qmltestrunner" /usr/bin/cmake /usr/bin/kpackagetool6 /usr/bin/diff /usr/bin/rg /usr/bin/ldd /usr/bin/python3; do
     [[ -x "$tool" ]] || { echo "缺少冒烟工具: $tool" >&2; exit 1; }
 done
 if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
@@ -41,14 +35,21 @@ echo "[smoke] 构建并安装 QML 包与 C++ 后端"
 /usr/bin/cmake --install "$tmp_dir/build"
 
 plugin_path="$user_install_prefix/lib/qt6/plugins/plasma/applets/aiUsageWatcher.so"
+worker_path="$user_install_prefix/libexec/quota-pilot-script-worker"
 if [[ ! -f "$plugin_path" ]]; then
     echo "原生插件未安装到预期位置: $plugin_path" >&2
+    exit 1
+fi
+if [[ ! -x "$worker_path" ]]; then
+    echo "脚本 worker 未安装到预期位置: $worker_path" >&2
     exit 1
 fi
 
 package_info="$(/usr/bin/kpackagetool6 --type Plasma/Applet --show aiUsageWatcher)"
 installed_dir="$(printf '%s\n' "$package_info" \
-    | sed -n 's/^[[:space:]]*Path[[:space:]]*:[[:space:]]*//p' \
+    | sed -n \
+        -e 's/^[[:space:]]*Path[[:space:]]*:[[:space:]]*//p' \
+        -e 's/^[[:space:]]*路径[[:space:]]*：[[:space:]]*//p' \
     | head -n 1)"
 installed_dir="${installed_dir%/}"
 if [[ -z "$installed_dir" || ! -d "$installed_dir" ]]; then
@@ -77,54 +78,20 @@ QT_QPA_PLATFORM=offscreen "$qmltestrunner" \
     -input tests/tst_fullView.qml \
     -import package/contents/ui
 
-runtime_log="$tmp_dir/plasmawindowed.log"
-echo "[smoke] 运行: plasmawindowed aiUsageWatcher（8 秒观察窗）"
-/usr/bin/env -u MINIMAX_API_KEY \
-    QT_FORCE_STDERR_LOGGING=1 \
-    QT_PLUGIN_PATH="$user_install_prefix/lib/qt6/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}" \
-    /usr/bin/plasmawindowed aiUsageWatcher >"$runtime_log" 2>&1 &
-runtime_pid=$!
-sleep 8
-
-if ! kill -0 "$runtime_pid" 2>/dev/null; then
-    set +e
-    wait "$runtime_pid"
-    runtime_status=$?
-    set -e
-    runtime_pid=""
-    echo "plasmawindowed 在观察窗内提前退出，status=$runtime_status" >&2
-    sed -n '1,240p' "$runtime_log" >&2
+echo "[smoke] 原生插件依赖"
+if /usr/bin/ldd "$plugin_path" | /usr/bin/rg -n 'not found'; then
+    echo "原生插件存在缺失依赖" >&2
     exit 1
 fi
 
-kill -TERM "$runtime_pid" 2>/dev/null || true
-set +e
-wait "$runtime_pid"
-runtime_status=$?
-set -e
-runtime_pid=""
-echo "[smoke] plasmawindowed exit status after owned TERM: $runtime_status"
-if [[ "$runtime_status" -eq 124 ]]; then
-    echo "拒绝把 timeout 124 单独视为成功" >&2
-    exit 1
-fi
-if [[ "$runtime_status" -ne 0 && "$runtime_status" -ne 143 ]]; then
-    sed -n '1,240p' "$runtime_log" >&2
-    echo "plasmawindowed 非预期退出状态: $runtime_status" >&2
+echo "[smoke] 独立脚本 worker"
+worker_result="$($worker_path <<'EOF'
+{"mode":"extract","script":"({request:{url:'https://example.com'},extractor:function(response){return {used:response.used,limit:response.limit}}})","response":{"used":1,"limit":2}}
+EOF
+)"
+if ! /usr/bin/python3 -c 'import json,sys; r=json.load(sys.stdin); assert r["ok"] and r["value"] == {"used":1,"limit":2}' <<<"$worker_result"; then
+    echo "脚本 worker 自测失败" >&2
     exit 1
 fi
 
-forbidden='ReferenceError|TypeError|PlasmaCore\.Units|Error loading QML file|Failed to load plugin|Could not load plugin'
-if /usr/bin/rg -n "$forbidden" "$runtime_log"; then
-    echo "运行日志包含禁用错误" >&2
-    exit 1
-fi
-
-if ! /usr/bin/rg -q 'aiUsageWatcher: native backend loaded' "$runtime_log"; then
-    sed -n '1,240p' "$runtime_log" >&2
-    echo "未观察到原生后端加载证据" >&2
-    exit 1
-fi
-
-echo "[smoke] runtime forbidden patterns: 0"
-echo "[smoke] PASS（发布前仍须按 tests/README.md 保存 popup/KCM 人工证据）"
+echo "[smoke] PASS（不启动第二个 Plasma 进程；部署后通过用户服务日志验证）"

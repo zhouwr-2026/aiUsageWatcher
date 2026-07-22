@@ -47,6 +47,8 @@ if empty:
     raise SystemExit("metadata 必填字段为空: " + ", ".join(empty))
 if plugin["Id"] != "aiUsageWatcher":
     raise SystemExit("KPlugin.Id 必须是 aiUsageWatcher")
+if plugin["Name"] != "额度领航员":
+    raise SystemExit("KPlugin.Name 必须是额度领航员")
 if metadata["KPackageStructure"] != "Plasma/Applet":
     raise SystemExit("KPackageStructure 必须是 Plasma/Applet")
 if metadata["X-Plasma-API-Minimum-Version"] != "6.0":

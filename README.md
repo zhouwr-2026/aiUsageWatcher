@@ -1,22 +1,41 @@
-# AI Usage Watcher
+# 额度领航员（QuotaPilot）
 
-KDE Plasma 6 桌面小部件，实时监控各大模型厂家的模型套餐用量。
+额度领航员是 KDE Plasma 6 的大模型套餐额度监控小部件。项目代码名为 QuotaPilot，
+并沿用内部插件 ID `aiUsageWatcher`，因此已有安装实例和 KConfig 不需要迁移；软件界面
+统一显示中文名“额度领航员”。
 
-## 形式
+## 当前能力
 
-- 面板图标（compact）：按配置顺序每 5 秒轮巡供应商，以饼图或水平柱状图显示当前供应商最紧张套餐的已用百分比。
-- 悬停提示：与当前轮巡项同步，显示供应商、套餐和已用百分比。
-- 左键弹出框（full）：按供应商展示全部已返回套餐，包括 5 小时、周、月等额度。
-- 右键菜单：Plasma 标准"配置…"入口 + "刷新"。
-- 弹出框标题栏：刷新、配置和保持打开。
+- compact 支持环形饼图或水平进度条，按配置顺序和可配置间隔轮询模型。
+- D-Bus 活跃事件可立即切换模型并显示金色高亮，超时后恢复原模型。
+- Tooltip 只用文字展示当前模型的第一个限额项、已用/总量和重置时间。
+- popup 支持独立的水平柱状图和多模型环形饼图布局，含刷新、配置、保持打开和关闭操作。
+- 模型可增删、排序；可从 8 个固定厂商预设或“自定义”中选择。
+- 固定厂商自动填充标识、名称、官网和套餐结构；自定义模式可添加任意限额项，并用
+  `${used}` / `${limit}` 变量绑定脚本返回值。
+- 自定义供应商会执行 `request` 请求，将 JSON 响应交给独立 JavaScript worker 的
+  `extractor`，再按每个限额项配置的变量生成真实用量快照。
+- 配置表单固定为左标签、右输入框；脚本编辑器支持行号、原生高亮、提示插入、格式化、
+  安全契约测试、自动换行和拖拽调高。
+- Codex 登录后通过官方 ChatGPT 用量接口读取 5 小时/周等真实限额；访问令牌过期时自动
+  刷新，登录凭据始终留在 C++ 后端和用户私有目录。
+- MiniMax 通过 C++ 后端查询，API Key 保存在 KDE Wallet；也兼容 `MINIMAX_API_KEY`，
+  并自动尝试中国区/国际区的官方 Coding Plan 端点。
+- 错误模型仍参与轮询，并在 compact 显示红色感叹号，不会继续展示失败前的旧额度。
+- 配置通过 KConfig XT 持久化，保存后由 Plasma 即时应用。
 
-## 需求与设计
+HTTP+JS 已开放真实执行：网络请求由 C++ 负责，JavaScript 只在独立 worker 中解析
+`request` 和响应；非本机地址强制 HTTPS，并限制同源重定向、请求时间与响应大小。
+编辑器的“测试脚本”当前只做保存前契约校验，真实查询在应用设置或刷新后执行。本地 HTTP
+事件回调仍未开放。固定厂商中目前 Codex 和 MiniMax 已接通真实用量，其余预设未接入时
+显示暂无用量。
+详细边界见 [需求基线](docs/requirements.md)、
+[KCM 与刷新链路设计](docs/superpowers/specs/2026-07-21-kcm-and-refresh-button-design.md) 和
+[脚本安全契约](docs/usage-script-spec.md)。
 
-完整需求与设计见 [docs/requirements.md](docs/requirements.md)。自定义脚本编写规范见 [docs/usage-script-spec.md](docs/usage-script-spec.md)。
+## 构建与安装
 
-## 构建
-
-项目包含 QML 界面和 C++ 原生查询后端，CMake 会同时安装两部分：
+需要 Qt 6.6+、Plasma 6、KF6 CoreAddons、KF6 Config、KF6 Wallet、CMake。
 
 ```bash
 cmake -S . -B build -DCMAKE_INSTALL_PREFIX="$HOME/.local"
@@ -24,99 +43,57 @@ cmake --build build
 cmake --install build
 ```
 
-当前 MiniMax 开发版只从启动进程的 `MINIMAX_API_KEY` 环境变量读取凭据。
-不要把 Key 写入源码、配置文件或日志；后续版本会增加配置表单和 KWallet 保存。
-
-## 开发与验证
-
-### 前置条件
-
-- KDE Plasma 6 桌面环境
-- `plasmawindowed` 命令（通常随 `plasma-desktop` 安装）
-- Qt 6、Plasma 6、KF6 CoreAddons 和 CMake 开发包
-
-### 运行小部件
+独立运行：
 
 ```bash
-# 构建并安装 QML 包与 C++ 插件
-cmake -S . -B build -DCMAKE_INSTALL_PREFIX="$HOME/.local"
-cmake --build build
-cmake --install build
-
-# 用 plasmawindowed 独立窗口运行（无需添加到面板）
 QT_PLUGIN_PATH="$HOME/.local/lib/qt6/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}" \
   plasmawindowed aiUsageWatcher
 ```
 
-### 验证清单
+## D-Bus 活跃事件
 
-1. compact 使用饼图或水平柱状图，每 5 秒切换一个已配置供应商。
-2. 悬停文案与当前 compact 的供应商、套餐和百分比一致。
-3. 左键展开后能看到所有供应商的全部套餐；右键只出现"配置…"和"刷新"。
-4. MiniMax 返回的剩余百分比会动态转换为已用百分比；未配置 Key 时显示明确灰色状态。
-5. 颜色语义：已用 `<85%` 绿色、`85..94%` 黄色、`>=95%` 红色，无数据灰色。
-6. 执行 `bash tests/run-static-checks.sh` 和 `bash tests/run-plasma-smoke.sh`。
+启用“D-Bus 事件优先”后，发送模型 ID 或显示名称：
 
-## 代码架构
-
-```
-package/                          # 小部件包根目录
-├── metadata.json                 # KPlugin 元数据（Id: aiUsageWatcher）
-└── contents/
-    ├── config/
-    │   ├── config.qml            # KCM ConfigModel 入口
-    │   └── main.xml              # KConfig XT 配置文件
-    ├── js/
-    │   ├── mockData.js           # 种子数据、波动函数与数据派生
-    │   └── providerConfig.js     # KCM 供应商配置校验逻辑
-    └── ui/
-        ├── main.qml              # 根组件（PlasmoidItem）
-        ├── CompactView.qml       # compact 视图（pie/bar）
-        ├── FullView.qml          # full 弹出面板
-        ├── Orb.qml               # 圆球组件
-        ├── PieChart.qml          # 自研饼图组件（Canvas）
-        ├── ProviderGroup.qml     # 供应商卡片
-        ├── PlanBar.qml           # 套餐进度条
-        └── config/
-            ├── GeneralConfig.qml   # 常规设置页
-            ├── ProvidersConfig.qml # 供应商管理页
-            └── ProviderEditor.qml  # 供应商编辑对话框
-docs/
-├── requirements.md               # 统一需求、设计与计划文档
-└── usage-script-spec.md          # 自定义用量查询脚本规范
-tests/
-├── tst_mockData.qml              # 数据契约与派生逻辑测试
-├── tst_compactView.qml           # compact 视图测试
-├── tst_fullView.qml              # full 视图测试
-├── tst_generalConfig.qml         # 常规设置测试
-├── tst_providerConfig.qml        # 供应商配置测试
-├── run-static-checks.sh          # 自动静态检查入口
-├── run-plasma-smoke.sh           # 安装级冒烟测试入口
-└── README.md                     # 测试说明
+```bash
+dbus-send --session --type=signal /QuotaPilot \
+  org.kde.quotaPilot.ModelActivated string:minimax
 ```
 
-### 组件层级
+信号路径为 `/QuotaPilot`，接口为 `org.kde.quotaPilot`，信号为
+`ModelActivated(QString)`。未知模型会被忽略并写入本地日志，事件不会接触凭据。
 
+## 验证
+
+```bash
+bash tests/run-static-checks.sh
+cmake -S . -B build -DCMAKE_INSTALL_PREFIX="$HOME/.local"
+cmake --build build
+ctest --test-dir build --output-on-failure
 ```
-PlasmoidItem (main.qml)
-├── compactRepresentation: CompactView → Orb 风格圆球
-└── fullRepresentation: FullView → Flickable → Column
-    └── Repeater(providers) → ProviderGroup（标题 + 错误 + plans Repeater）
-        └── Repeater(plans) → PlanBar（计划名 + 进度条 + 百分比 + 重置信息）
+
+安装级测试会写入用户本地 Plasma 目录，仅在准备验证真实桌面实例时执行：
+
+```bash
+bash tests/run-plasma-smoke.sh
 ```
 
-### 数据流
+## 结构
 
-- KConfig `providers` 只保存 `ProviderDefinition`（持久化）
-- `mockData.js` 输出 `RuntimeProviderSnapshot`（仅内存）
-- 纯函数 `buildDisplayProviders` 合并定义为展示模型
-- Timer 每 60 秒刷新，compact 每 5 秒轮巡供应商
+```text
+package/contents/
+├── config/                 KConfig XT 与 KCM 入口
+├── js/                     厂商目录、脚本工具、定义规范化与配置校验
+└── ui/
+    ├── main.qml            数据流、刷新、轮询、事件接线
+    ├── CompactView.qml     compact 饼图/进度条、错误与高亮
+    ├── QuotaTooltip.qml    首个限额项文字 Tooltip
+    ├── FullView.qml        popup 外壳与水平柱状图布局
+    ├── PanelPieView.qml    popup 环形饼图布局
+    └── config/             常规设置、模型管理、模型编辑
+src/                        Codex、MiniMax、自定义查询、KWallet、D-Bus 与脚本 worker
+tests/                      QML/JS、C++、静态与桌面冒烟测试
+```
 
-### 颜色语义
+## 相关项目
 
-| `usedPercent` | 语义 | 颜色 |
-|---|---|------|
-| `< 85` | 正常 | `Kirigami.Theme.positiveTextColor` |
-| `85..94` | 注意 | `Kirigami.Theme.neutralTextColor` |
-| `>= 95` | 紧张 | `Kirigami.Theme.negativeTextColor` |
-| 无数据 | 未知 | `Kirigami.Theme.disabledTextColor` |---
+- [cc-switch](/home/zhouwr/Project/CodeWorkspace/cc-switch-main) — 用户已有的另一桌面工具（Tauri 2），当需要参考其 UI/UX 模式、配置持久化思路或跨平台打包方式时可以查阅。

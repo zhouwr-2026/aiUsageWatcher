@@ -3,12 +3,15 @@
 #pragma once
 
 #include <QByteArrayView>
+#include <QList>
 #include <QNetworkRequest>
 #include <QObject>
 #include <QString>
+#include <QUrl>
 #include <QVariantMap>
 
 class QNetworkAccessManager;
+class QNetworkReply;
 namespace KWallet
 {
 class Wallet;
@@ -39,7 +42,8 @@ public:
     Q_INVOKABLE void saveCredential(const QString &apiKey);
     Q_INVOKABLE void clearCredential();
 
-    static QNetworkRequest createRequest(QByteArrayView apiKey);
+    static QList<QUrl> endpointCandidates();
+    static QNetworkRequest createRequest(const QUrl &url, QByteArrayView apiKey);
 
 Q_SIGNALS:
     void snapshotChanged();
@@ -65,10 +69,17 @@ private:
     void setLoading(bool loading);
     void setError(const QString &message);
     void setSnapshot(const QVariantMap &snapshot);
+    void requestNextEndpoint();
+    void finishRefresh();
 
     QNetworkAccessManager *m_network = nullptr;
+    QNetworkReply *m_reply = nullptr;
     KWallet::Wallet *m_wallet = nullptr;
     QByteArray m_storedApiKey;
+    QByteArray m_activeApiKey;
+    QList<QUrl> m_endpoints;
+    QString m_lastRequestError;
+    qsizetype m_endpointIndex = 0;
     QString m_pendingApiKey;
     QString m_credentialStatus;
     QVariantMap m_snapshot;

@@ -9,6 +9,7 @@ import org.kde.kcmutils as KCM
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasmoid
 import "../../js/providerConfig.js" as ProviderConfig
+import "../../js/scriptTools.js" as ScriptTools
 
 KCM.SimpleKCM {
     id: root
@@ -17,6 +18,16 @@ KCM.SimpleKCM {
     property string cfg_providersDefault: ""
     property string cfg_compactStyle: "pie"
     property string cfg_compactStyleDefault: "pie"
+    property string cfg_panelStyle: "bar"
+    property string cfg_panelStyleDefault: "bar"
+    property string cfg_displayStrategy: "polling"
+    property string cfg_displayStrategyDefault: "polling"
+    property int cfg_pollingIntervalSec: 5
+    property int cfg_pollingIntervalSecDefault: 5
+    property string cfg_eventMode: "dbus"
+    property string cfg_eventModeDefault: "dbus"
+    property int cfg_highlightDurationSec: 30
+    property int cfg_highlightDurationSecDefault: 30
     property int cfg_refreshIntervalSec: 60
     property int cfg_refreshIntervalSecDefault: 60
     property int cfg_opacityPercent: 80
@@ -26,12 +37,26 @@ KCM.SimpleKCM {
     readonly property int workingCount: providersModel.count
     readonly property var usageBackend: Plasmoid
     property string editingId: ""
+    property bool creatingProvider: false
     property string pendingDeleteId: ""
     property bool editorVisible: false
     property bool miniMaxCredentialConfigured: false
     property bool miniMaxCredentialBusy: false
     property bool miniMaxCredentialError: false
     property string miniMaxCredentialStatus: qsTr("尚未保存 API Key")
+    property bool miniMaxUsageLoading: false
+    property string miniMaxUsageStatus: qsTr("未配置")
+    property string miniMaxUsageError: ""
+    property bool codexLoggedIn: false
+    property bool codexLoginBusy: false
+    property bool codexLoginError: false
+    property string codexLoginStatus: qsTr("正在检查登录状态…")
+    property string codexDeviceCode: ""
+    property string codexDeviceUrl: "https://auth.openai.com/codex/device"
+    property var codexAccounts: []
+    property bool codexUsageLoading: false
+    property string codexUsageStatus: qsTr("未登录")
+    property string codexUsageError: ""
 
     function copy(value) {
         return JSON.parse(JSON.stringify(value))
@@ -79,12 +104,14 @@ KCM.SimpleKCM {
         return true
     }
 
-    function updateProvider(candidate) {
-        const index = indexForId(candidate.id)
-        const result = ProviderConfig.validateProvider(candidate, siblingsExcept(candidate.id))
+    function updateProvider(candidate, originalId) {
+        const existingId = originalId || candidate.id
+        const index = indexForId(existingId)
+        const result = ProviderConfig.validateProvider(candidate, siblingsExcept(existingId))
         if (index < 0 || !result.valid)
             return false
         providersModel.set(index, definitionRow(copy(candidate)))
+        editingId = candidate.id
         syncWorkingValue()
         return true
     }
@@ -94,6 +121,16 @@ KCM.SimpleKCM {
         if (index < 0)
             return false
         providersModel.remove(index)
+        syncWorkingValue()
+        return true
+    }
+
+    function moveProvider(id, offset) {
+        const index = indexForId(id)
+        const destination = index + offset
+        if (index < 0 || destination < 0 || destination >= providersModel.count)
+            return false
+        providersModel.move(index, destination, 1)
         syncWorkingValue()
         return true
     }
@@ -110,14 +147,26 @@ KCM.SimpleKCM {
 
     function beginAdd() {
         editingId = ""
+        creatingProvider = true
         providerEditor.siblings = definitions()
         providerEditor.setCandidate({
+            catalogId: "custom",
             id: nextProviderId(),
             providerName: "",
+            website: "",
+            vendor: "自定义",
             sourceLabel: "自定义",
             trustMode: "strict",
             template: "%1 限额  %2/%3  重置于 %4",
-            plans: [{ id: "plan-1", planName: "", unit: "" }]
+            script: ScriptTools.DEFAULT_SCRIPT,
+            plans: [{
+                id: "quota-1",
+                planName: "",
+                unit: "",
+                sourceType: "http-js",
+                usedVariable: "${used}",
+                limitVariable: "${limit}"
+            }]
         }, false)
         editorVisible = true
     }
@@ -127,6 +176,7 @@ KCM.SimpleKCM {
         if (index < 0)
             return false
         editingId = id
+        creatingProvider = false
         providerEditor.siblings = siblingsExcept(id)
         providerEditor.setCandidate(
             JSON.parse(providersModel.get(index).definitionJson), true)
@@ -145,13 +195,30 @@ KCM.SimpleKCM {
     function cancelEditor() {
         editorVisible = false
         editingId = ""
+        creatingProvider = false
     }
 
-    function saveEditor() {
+    function syncEditorCandidate() {
+        if (!editorVisible)
+            return false
         const candidate = providerEditor.currentCandidate()
-        const saved = editingId ? updateProvider(candidate) : addProvider(candidate)
-        if (saved)
-            cancelEditor()
+        if (creatingProvider && !editingId) {
+            if (!addProvider(candidate))
+                return false
+            editingId = candidate.id
+            providerEditor.editingExisting = true
+            return true
+        }
+        return updateProvider(candidate, editingId)
+    }
+
+    function saveConfig() {
+        if (!editorVisible)
+            return true
+        const saved = syncEditorCandidate()
+        if (!saved)
+            console.warn("aiUsageWatcher: provider save rejected:",
+                         providerEditor.validation.message)
         return saved
     }
 
@@ -160,11 +227,17 @@ KCM.SimpleKCM {
         const busy = usageBackend["miniMaxCredentialBusy"]
         const error = usageBackend["miniMaxCredentialError"]
         const status = usageBackend["miniMaxCredentialStatus"]
+        const snapshot = usageBackend["miniMaxSnapshot"]
         miniMaxCredentialConfigured = configured === true
         miniMaxCredentialBusy = busy === true
         miniMaxCredentialError = error === true
         miniMaxCredentialStatus = typeof status === "string" && status.length > 0
             ? status : qsTr("尚未保存 API Key")
+        miniMaxUsageLoading = usageBackend["miniMaxLoading"] === true
+        miniMaxUsageStatus = snapshot && typeof snapshot.statusLabel === "string"
+            ? snapshot.statusLabel : qsTr("未配置")
+        miniMaxUsageError = snapshot && typeof snapshot.errorText === "string"
+            ? snapshot.errorText : ""
     }
 
     function saveMiniMaxApiKey(apiKey) {
@@ -189,11 +262,66 @@ KCM.SimpleKCM {
         return true
     }
 
+    function refreshMiniMaxUsage() {
+        const operation = usageBackend["refreshMiniMax"]
+        if (typeof operation !== "function") {
+            miniMaxUsageError = qsTr("MiniMax 查询后端未加载，请重启 Plasma 后重试")
+            return false
+        }
+        operation.call(usageBackend)
+        return true
+    }
+
+    function syncCodexLoginState() {
+        codexLoggedIn = usageBackend["codexLoggedIn"] === true
+        codexLoginBusy = usageBackend["codexLoginBusy"] === true
+        codexLoginError = usageBackend["codexLoginError"] === true
+        const status = usageBackend["codexLoginStatus"]
+        const code = usageBackend["codexDeviceCode"]
+        const url = usageBackend["codexDeviceUrl"]
+        const accounts = usageBackend["codexAccounts"]
+        const snapshot = usageBackend["codexSnapshot"]
+        codexLoginStatus = typeof status === "string" && status.length > 0
+            ? status : qsTr("尚未登录 Codex")
+        codexDeviceCode = typeof code === "string" ? code : ""
+        codexDeviceUrl = typeof url === "string" && url.length > 0
+            ? url : "https://auth.openai.com/codex/device"
+        codexAccounts = Array.isArray(accounts) ? accounts : []
+        codexUsageLoading = usageBackend["codexUsageLoading"] === true
+        codexUsageStatus = snapshot && typeof snapshot.statusLabel === "string"
+            ? snapshot.statusLabel : qsTr("未登录")
+        codexUsageError = snapshot && typeof snapshot.errorText === "string"
+            ? snapshot.errorText : ""
+    }
+
+    function callCodexBackend(name) {
+        const operation = usageBackend[name]
+        if (typeof operation !== "function") {
+            codexLoginError = true
+            codexLoginStatus = qsTr("Codex 登录后端未加载，请重启 Plasma 后重试")
+            return false
+        }
+        operation.call(usageBackend)
+        return true
+    }
+
+    function removeCodexAccount(profileId) {
+        const operation = usageBackend["removeCodexAccount"]
+        if (typeof operation !== "function") {
+            codexLoginError = true
+            codexLoginStatus = qsTr("Codex 账号后端未加载，请重启 Plasma 后重试")
+            return false
+        }
+        operation.call(usageBackend, profileId)
+        return true
+    }
+
     Component.onCompleted: {
         const parsed = ProviderConfig.parseWorkingDefinitions(cfg_providers)
         for (let i = 0; i < parsed.length; ++i)
             providersModel.append(definitionRow(parsed[i]))
         syncCredentialState()
+        syncCodexLoginState()
     }
 
     Connections {
@@ -204,29 +332,55 @@ KCM.SimpleKCM {
         function onMiniMaxCredentialStatusChanged() { root.syncCredentialState() }
         function onMiniMaxCredentialBusyChanged() { root.syncCredentialState() }
         function onMiniMaxCredentialErrorChanged() { root.syncCredentialState() }
+        function onMiniMaxSnapshotChanged() { root.syncCredentialState() }
+        function onMiniMaxLoadingChanged() { root.syncCredentialState() }
+        function onCodexLoggedInChanged() { root.syncCodexLoginState() }
+        function onCodexLoginStatusChanged() { root.syncCodexLoginState() }
+        function onCodexLoginBusyChanged() { root.syncCodexLoginState() }
+        function onCodexLoginErrorChanged() { root.syncCodexLoginState() }
+        function onCodexDeviceCodeChanged() { root.syncCodexLoginState() }
+        function onCodexAccountsChanged() { root.syncCodexLoginState() }
+        function onCodexSnapshotChanged() { root.syncCodexLoginState() }
+        function onCodexUsageLoadingChanged() { root.syncCodexLoginState() }
     }
 
     ListModel {
         id: providersModel
     }
 
-    header: QQC2.ToolBar {
-        visible: root.editorVisible
+    title: root.editorVisible
+        ? (root.creatingProvider
+           ? qsTr("添加供应商")
+           : qsTr("编辑 %1").arg(providerEditor.candidate.providerName || qsTr("供应商")))
+        : qsTr("供应商")
 
-        contentItem: RowLayout {
+    titleDelegate: Component {
+        RowLayout {
+            width: parent ? parent.width : implicitWidth
+            height: parent ? parent.height : implicitHeight
+            spacing: Kirigami.Units.smallSpacing
+
             QQC2.ToolButton {
+                objectName: "providerBackButton"
+                visible: root.editorVisible
                 icon.name: "go-previous"
-                text: qsTr("返回")
-                display: QQC2.AbstractButton.TextBesideIcon
+                display: QQC2.AbstractButton.IconOnly
+                Accessible.name: qsTr("返回供应商列表")
+                QQC2.ToolTip.text: Accessible.name
+                QQC2.ToolTip.visible: hovered
                 onClicked: root.cancelEditor()
             }
 
+            Kirigami.Separator {
+                visible: root.editorVisible
+                Layout.preferredHeight: Kirigami.Units.gridUnit
+            }
+
             Kirigami.Heading {
+                objectName: "providerPageTitle"
                 Layout.fillWidth: true
                 level: 2
-                text: root.editingId
-                    ? qsTr("编辑 %1").arg(providerEditor.candidate.providerName || qsTr("供应商"))
-                    : qsTr("添加供应商")
+                text: root.title
                 elide: Text.ElideRight
             }
         }
@@ -245,13 +399,10 @@ KCM.SimpleKCM {
             RowLayout {
                 Layout.fillWidth: true
 
-                Kirigami.Heading {
-                    Layout.fillWidth: true
-                    level: 2
-                    text: qsTr("供应商")
-                }
+                Item { Layout.fillWidth: true }
 
                 QQC2.Button {
+                    objectName: "addProviderButton"
                     text: qsTr("添加供应商")
                     icon.name: "list-add"
                     onClicked: root.beginAdd()
@@ -260,7 +411,7 @@ KCM.SimpleKCM {
 
             QQC2.Label {
                 Layout.fillWidth: true
-                text: qsTr("选择供应商以编辑套餐和查询凭据。")
+                text: qsTr("选择供应商以查看内置限额，或编辑自定义查询契约。")
                 color: Kirigami.Theme.disabledTextColor
                 wrapMode: Text.Wrap
             }
@@ -274,6 +425,7 @@ KCM.SimpleKCM {
                     required property string providerId
                     required property string providerName
                     required property string planSummary
+                    required property int index
 
                     Layout.fillWidth: true
                     onClicked: root.beginEdit(providerDelegate.providerId)
@@ -294,6 +446,24 @@ KCM.SimpleKCM {
                                 color: Kirigami.Theme.disabledTextColor
                                 elide: Text.ElideRight
                             }
+                        }
+
+                        QQC2.ToolButton {
+                            icon.name: "go-up"
+                            enabled: providerDelegate.index > 0
+                            Accessible.name: qsTr("上移 %1").arg(providerDelegate.providerName)
+                            QQC2.ToolTip.text: Accessible.name
+                            QQC2.ToolTip.visible: hovered
+                            onClicked: root.moveProvider(providerDelegate.providerId, -1)
+                        }
+
+                        QQC2.ToolButton {
+                            icon.name: "go-down"
+                            enabled: providerDelegate.index < providersModel.count - 1
+                            Accessible.name: qsTr("下移 %1").arg(providerDelegate.providerName)
+                            QQC2.ToolTip.text: Accessible.name
+                            QQC2.ToolTip.visible: hovered
+                            onClicked: root.moveProvider(providerDelegate.providerId, 1)
                         }
 
                         QQC2.ToolButton {
@@ -325,35 +495,33 @@ KCM.SimpleKCM {
                 id: providerEditor
 
                 Layout.fillWidth: true
+                highlighterBackend: root.usageBackend
                 credentialConfigured: root.miniMaxCredentialConfigured
                 credentialBusy: root.miniMaxCredentialBusy
                 credentialError: root.miniMaxCredentialError
                 credentialStatus: root.miniMaxCredentialStatus
+                miniMaxUsageLoading: root.miniMaxUsageLoading
+                miniMaxUsageStatus: root.miniMaxUsageStatus
+                miniMaxUsageError: root.miniMaxUsageError
+                codexLoggedIn: root.codexLoggedIn
+                codexLoginBusy: root.codexLoginBusy
+                codexLoginError: root.codexLoginError
+                codexLoginStatus: root.codexLoginStatus
+                codexDeviceCode: root.codexDeviceCode
+                codexDeviceUrl: root.codexDeviceUrl
+                codexAccounts: root.codexAccounts
+                codexUsageLoading: root.codexUsageLoading
+                codexUsageStatus: root.codexUsageStatus
+                codexUsageError: root.codexUsageError
+                onCandidateChanged: root.syncEditorCandidate()
                 onSaveApiKeyRequested: apiKey => root.saveMiniMaxApiKey(apiKey)
                 onClearApiKeyRequested: root.clearMiniMaxApiKey()
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-
-                Item {
-                    Layout.fillWidth: true
-                }
-
-                QQC2.Button {
-                    text: qsTr("取消")
-                    icon.name: "dialog-cancel"
-                    onClicked: root.cancelEditor()
-                }
-
-                QQC2.Button {
-                    objectName: "saveProviderButton"
-                    text: qsTr("完成")
-                    icon.name: "dialog-ok-apply"
-                    enabled: providerEditor.validation.valid
-                    highlighted: true
-                    onClicked: root.saveEditor()
-                }
+                onRefreshMiniMaxRequested: root.refreshMiniMaxUsage()
+                onStartCodexLoginRequested: root.callCodexBackend("startCodexLogin")
+                onCancelCodexLoginRequested: root.callCodexBackend("cancelCodexLogin")
+                onOpenCodexLoginPageRequested: root.callCodexBackend("openCodexLoginPage")
+                onRemoveCodexAccountRequested: profileId => root.removeCodexAccount(profileId)
+                onRefreshCodexUsageRequested: root.callCodexBackend("refreshCodexUsage")
             }
         }
     }
@@ -364,7 +532,7 @@ KCM.SimpleKCM {
         objectName: "deleteProviderDialog"
         parent: root
         title: qsTr("删除供应商？")
-        subtitle: qsTr("将从当前配置中移除该供应商及其套餐。")
+        subtitle: qsTr("将从当前配置中移除该供应商及其限额项。")
         standardButtons: Kirigami.Dialog.Ok | Kirigami.Dialog.Cancel
         onAccepted: root.deleteProvider(root.pendingDeleteId)
     }

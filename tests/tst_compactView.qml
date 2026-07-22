@@ -10,6 +10,7 @@ Item {
     property var testProviders: []
     property string testStyle: "pie"
     property int testProviderIndex: 0
+    property bool testHighlighted: false
 
     QtObject {
         id: fakePlasmoid
@@ -22,6 +23,7 @@ Item {
         providers: host.testProviders
         compactStyle: host.testStyle
         providerIndex: host.testProviderIndex
+        highlighted: host.testHighlighted
         plasmoidItem: fakePlasmoid
     }
 
@@ -33,6 +35,7 @@ Item {
             host.testProviders = []
             host.testStyle = "pie"
             host.testProviderIndex = 0
+            host.testHighlighted = false
         }
 
         function test_current_provider_tightest_percent_is_rendered() {
@@ -94,7 +97,27 @@ Item {
 
             host.testProviderIndex = 1
             compare(compact.currentUsage.providerName, "Codex")
-            compare(findChild(compact, "compactPercent").text, "67%")
+            tryCompare(findChild(compact, "compactPercent"), "text", "67%", 500)
+        }
+
+        function test_error_badge_and_event_highlight_are_visible() {
+            host.testProviders = [{
+                providerName: "Unconfigured",
+                statusLabel: "未配置",
+                errorText: "",
+                plans: []
+            }]
+            verify(!findChild(compact, "errorBadge").visible)
+
+            host.testProviders = [{
+                providerName: "Failed",
+                errorText: "请求失败",
+                plans: []
+            }]
+            host.testHighlighted = true
+
+            verify(findChild(compact, "errorBadge").visible)
+            compare(compact.highlighted, true)
         }
     }
 }

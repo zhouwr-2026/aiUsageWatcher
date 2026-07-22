@@ -66,9 +66,10 @@ TestCase {
         compare(wrapped.providerName, "Codex")
         compare(empty.providerName, "未配置")
         compare(empty.usedPercent, -1)
+        compare(empty.statusLabel, "")
     }
 
-    function test_provider_rotation_skips_providers_without_usage() {
+    function test_provider_rotation_includes_providers_without_usage() {
         var providers = [{
             providerName: "MiniMax",
             plans: [{ planName: "每周", usedPercent: 28 }]
@@ -80,8 +81,52 @@ TestCase {
             plans: [{ planName: "每周", usedPercent: 67 }]
         }]
 
-        compare(MockData.nextProviderIndexWithUsage(providers, 0), 2)
+        compare(MockData.nextProviderIndexWithUsage(providers, 0), 1)
+        compare(MockData.nextProviderIndexWithUsage(providers, 1), 2)
         compare(MockData.nextProviderIndexWithUsage(providers, 2), 0)
+    }
+
+    function test_manual_windows_create_runtime_snapshot() {
+        var definitions = MockData.normalizeDefinitions([{
+            id: "custom",
+            providerName: "Custom",
+            vendor: "自定义",
+            plans: [{
+                id: "five-hours",
+                planName: "5h",
+                unit: "次",
+                sourceType: "manual",
+                manualUsed: 25,
+                limit: 100
+            }]
+        }])
+        var snapshots = MockData.createSeedSnapshots(definitions)
+        var display = MockData.buildDisplayProviders(definitions, snapshots)
+
+        compare(snapshots.length, 1)
+        compare(snapshots[0].statusLabel, "可用")
+        compare(snapshots[0].plans[0].used, 25)
+        compare(snapshots[0].plans[0].total, 100)
+        compare(display[0].plans[0].usedPercent, 25)
+        compare(display[0].vendor, "自定义")
+    }
+
+    function test_normalize_definitions_keeps_new_fields_and_old_defaults() {
+        var definitions = MockData.normalizeDefinitions([{
+            id: "custom",
+            providerName: "Custom",
+            vendor: "Vendor",
+            plans: [{
+                id: "month", planName: "month", unit: "tokens",
+                resetVariable: "${resetAt}"
+            }]
+        }])
+
+        compare(definitions[0].vendor, "Vendor")
+        compare(definitions[0].plans[0].sourceType, "http-js")
+        compare(definitions[0].plans[0].limit, 0)
+        compare(definitions[0].plans[0].manualUsed, 0)
+        compare(definitions[0].plans[0].resetVariable, "${resetAt}")
     }
 
     function test_seed_minimax_waits_for_real_backend() {
@@ -94,6 +139,7 @@ TestCase {
 
         verify(minimax !== null)
         compare(minimax.statusLabel, "未配置")
+        compare(minimax.errorText, "")
         compare(minimax.plans.length, 0)
     }
 
@@ -126,20 +172,33 @@ TestCase {
         compare(after[1].providerId, "codex")
     }
 
-    function test_minimax_not_fluctuated() {
-        var before = [{
-            providerId: "minimax",
+    function test_replace_snapshot_accepts_cpp_array_like_plans() {
+        var cppLikeSnapshot = {
+            providerId: "codex",
             statusLabel: "可用",
             errorText: "",
-            plans: [{ planId: "general-weekly", used: 28, total: 100 }]
-        }]
+            plans: {
+                0: {
+                    planId: "5-hours",
+                    planName: "5 小时",
+                    used: 42.5,
+                    total: 100,
+                    unit: "%",
+                    resetText: "07-22 18:00",
+                    extraText: "",
+                    isValid: true,
+                    invalidReason: ""
+                },
+                length: 1
+            }
+        }
 
-        var after = MockData.fluctuateSnapshots(before, function() { return 1 })
+        var after = MockData.replaceSnapshot([], cppLikeSnapshot)
 
-        compare(after[0].plans[0].used, 28)
-        verify(after !== before)
-        verify(after[0] !== before[0])
-        verify(after[0].plans[0] !== before[0].plans[0])
+        compare(after.length, 1)
+        verify(Array.isArray(after[0].plans))
+        compare(after[0].plans.length, 1)
+        compare(after[0].plans[0].used, 42.5)
     }
 
     function test_invalid_definitions_fall_back_to_seed() {
@@ -155,58 +214,15 @@ TestCase {
         }]).length, seedCount)
     }
 
-    function test_codex_derivation() {
+    function test_codex_seed_never_claims_fake_usage() {
         var out = MockData.buildDisplayProviders(
             MockData.SEED_PROVIDER_DEFINITIONS,
             MockData.SEED_RUNTIME_SNAPSHOTS)
         var codex = providerById(out, "codex")
 
         verify(codex !== null)
-        compare(codex.plans[0].usedPercent, 67)
-        compare(codex.plans[0].usedPercentLabel, "67%")
-        compare(codex.plans[0].usedText, "503")
-        compare(codex.plans[0].totalText, "750")
-        compare(codex.plans[0].barClass, "bar-green")
-        compare(codex.plans[0].templateText, codex.template)
+        compare(codex.statusLabel, "未登录")
+        compare(codex.plans.length, 0)
     }
 
-    function test_fluctuation_is_immutable_and_display_stays_in_sync() {
-        var before = [{
-            providerId: "sample",
-            statusLabel: "可用",
-            errorText: "",
-            plans: [{
-                planId: "quota",
-                planName: "套餐",
-                used: 40,
-                total: 100,
-                unit: "次",
-                resetText: "明天",
-                extraText: "",
-                isValid: true,
-                invalidReason: ""
-            }]
-        }]
-        var definitions = [{
-            id: "sample",
-            providerName: "Sample",
-            sourceLabel: "测试",
-            template: "%1 %2/%3 %4",
-            plans: [{ id: "quota", planName: "套餐", unit: "次" }]
-        }]
-        var after = MockData.fluctuateSnapshots(before, function() { return 1 })
-        var display = MockData.buildDisplayProviders(definitions, after)
-
-        compare(before[0].plans[0].used, 40)
-        verify(after !== before)
-        verify(after[0] !== before[0])
-        verify(after[0].plans !== before[0].plans)
-        verify(after[0].plans[0] !== before[0].plans[0])
-        verify(after[0].plans[0].used !== before[0].plans[0].used)
-        compare(after[0].plans[0].total, 100)
-        compare(display[0].plans[0].usedText, String(after[0].plans[0].used))
-        compare(display[0].plans[0].totalText, String(after[0].plans[0].total))
-        compare(display[0].plans[0].usedPercent,
-                Math.round(after[0].plans[0].used / after[0].plans[0].total * 100))
-    }
 }

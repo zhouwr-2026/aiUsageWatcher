@@ -32,9 +32,11 @@ QVariantMap toVariantMap(const MiniMaxSnapshot &snapshot)
     QVariantList plans;
     plans.reserve(snapshot.plans.size());
     for (const MiniMaxPlan &plan : snapshot.plans) {
-        const QString resetText = QDateTime::fromMSecsSinceEpoch(plan.resetAtMs)
-                                      .toLocalTime()
-                                      .toString(QStringLiteral("MM-dd HH:mm"));
+        const QString resetText = plan.resetAtMs > 0
+            ? QDateTime::fromMSecsSinceEpoch(plan.resetAtMs)
+                  .toLocalTime()
+                  .toString(QStringLiteral("MM-dd HH:mm"))
+            : QString{};
         plans.push_back(QVariantMap{
             {QStringLiteral("planId"), plan.planId},
             {QStringLiteral("planName"), plan.planName},
@@ -77,8 +79,7 @@ QString networkErrorMessage(int httpStatus, QNetworkReply::NetworkError error)
 MiniMaxClient::MiniMaxClient(QObject *parent)
     : QObject(parent)
     , m_network(new QNetworkAccessManager(this))
-    , m_snapshot(emptySnapshot(QStringLiteral("未配置"),
-                               QStringLiteral("请在供应商设置中保存 MiniMax API Key")))
+    , m_snapshot(emptySnapshot(QStringLiteral("未配置")))
 {
     const bool configuredByEnvironment = !qgetenv("MINIMAX_API_KEY").trimmed().isEmpty();
     m_credentialStatus = configuredByEnvironment
@@ -93,6 +94,7 @@ MiniMaxClient::MiniMaxClient(QObject *parent)
 MiniMaxClient::~MiniMaxClient()
 {
     m_storedApiKey.fill('\0');
+    m_activeApiKey.fill('\0');
     m_pendingApiKey.fill(QChar(u'\0'));
 }
 
@@ -126,9 +128,19 @@ bool MiniMaxClient::credentialError() const
     return m_credentialError;
 }
 
-QNetworkRequest MiniMaxClient::createRequest(QByteArrayView apiKey)
+QList<QUrl> MiniMaxClient::endpointCandidates()
 {
-    QNetworkRequest request(QUrl(QStringLiteral("https://www.minimaxi.com/v1/token_plan/remains")));
+    return {
+        QUrl(QStringLiteral("https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains")),
+        QUrl(QStringLiteral("https://api.minimaxi.com/v1/token_plan/remains")),
+        QUrl(QStringLiteral("https://api.minimax.io/v1/api/openplatform/coding_plan/remains")),
+        QUrl(QStringLiteral("https://api.minimax.io/v1/token_plan/remains")),
+    };
+}
+
+QNetworkRequest MiniMaxClient::createRequest(const QUrl &url, QByteArrayView apiKey)
+{
+    QNetworkRequest request(url);
     request.setRawHeader("Authorization", QByteArrayLiteral("Bearer ") + apiKey.toByteArray());
     request.setRawHeader("Content-Type", "application/json");
     request.setRawHeader("Accept", "application/json");
@@ -149,16 +161,34 @@ void MiniMaxClient::refresh()
         apiKey = m_storedApiKey;
     }
     if (apiKey.isEmpty()) {
-        setSnapshot(emptySnapshot(QStringLiteral("未配置"),
-                                  QStringLiteral("请在供应商设置中保存 MiniMax API Key")));
+        setSnapshot(emptySnapshot(QStringLiteral("未配置")));
         return;
     }
 
-    setLoading(true);
-    QNetworkReply *reply = m_network->get(createRequest(apiKey));
+    m_activeApiKey.fill('\0');
+    m_activeApiKey = apiKey;
     apiKey.fill('\0');
+    m_endpoints = endpointCandidates();
+    m_endpointIndex = 0;
+    m_lastRequestError.clear();
+    setLoading(true);
+    requestNextEndpoint();
+}
 
-    QTimer::singleShot(15000, reply, [reply]() {
+void MiniMaxClient::requestNextEndpoint()
+{
+    if (m_endpointIndex >= m_endpoints.size()) {
+        setError(m_lastRequestError.isEmpty()
+                     ? QStringLiteral("无法连接 MiniMax 服务") : m_lastRequestError);
+        finishRefresh();
+        return;
+    }
+
+    QNetworkReply *reply = m_network->get(
+        createRequest(m_endpoints.at(m_endpointIndex++), m_activeApiKey));
+    m_reply = reply;
+
+    QTimer::singleShot(10000, reply, [reply]() {
         if (reply->isRunning()) {
             reply->setProperty("aiUsageWatcherTimedOut", true);
             reply->abort();
@@ -171,33 +201,51 @@ void MiniMaxClient::refresh()
         }
     });
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        if (m_reply == reply) {
+            m_reply = nullptr;
+        }
         const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         const bool timedOut = reply->property("aiUsageWatcherTimedOut").toBool();
         const bool responseTooLarge = reply->property("aiUsageWatcherResponseTooLarge").toBool();
 
+        bool succeeded = false;
         if (timedOut) {
-            setError(QStringLiteral("MiniMax 请求超时"));
+            m_lastRequestError = QStringLiteral("MiniMax 请求超时");
         } else if (responseTooLarge) {
-            setError(QStringLiteral("MiniMax 响应过大，已拒绝处理"));
+            m_lastRequestError = QStringLiteral("MiniMax 响应过大，已拒绝处理");
         } else if (reply->error() != QNetworkReply::NoError || httpStatus < 200 || httpStatus >= 300) {
-            setError(networkErrorMessage(httpStatus, reply->error()));
+            m_lastRequestError = networkErrorMessage(httpStatus, reply->error());
         } else {
             const QByteArray payload = reply->read(maximumResponseBytes + 1);
             if (payload.size() > maximumResponseBytes) {
-                setError(QStringLiteral("MiniMax 响应过大，已拒绝处理"));
+                m_lastRequestError = QStringLiteral("MiniMax 响应过大，已拒绝处理");
             } else {
                 const MiniMaxParseResult result = MiniMaxResponseParser::parse(payload);
                 if (result.ok) {
                     setSnapshot(toVariantMap(result.snapshot));
+                    succeeded = true;
                 } else {
-                    setError(result.errorMessage);
+                    m_lastRequestError = result.errorMessage;
                 }
             }
         }
 
-        setLoading(false);
         reply->deleteLater();
+        if (succeeded) {
+            finishRefresh();
+        } else {
+            requestNextEndpoint();
+        }
     });
+}
+
+void MiniMaxClient::finishRefresh()
+{
+    m_activeApiKey.fill('\0');
+    m_activeApiKey.clear();
+    m_endpoints.clear();
+    m_endpointIndex = 0;
+    setLoading(false);
 }
 
 void MiniMaxClient::saveCredential(const QString &apiKey)
@@ -360,8 +408,7 @@ void MiniMaxClient::performPendingCredentialOperation()
                                false,
                                false);
             if (!environmentConfigured) {
-                setSnapshot(emptySnapshot(QStringLiteral("未配置"),
-                                          QStringLiteral("请在供应商设置中保存 MiniMax API Key")));
+                setSnapshot(emptySnapshot(QStringLiteral("未配置")));
             }
         } else {
             setCredentialState(QStringLiteral("API Key 移除失败，请检查 KDE 钱包"), false, true);
@@ -415,10 +462,7 @@ void MiniMaxClient::setLoading(bool loading)
 
 void MiniMaxClient::setError(const QString &message)
 {
-    QVariantMap snapshot = m_snapshot;
-    snapshot.insert(QStringLiteral("statusLabel"), QStringLiteral("请求失败"));
-    snapshot.insert(QStringLiteral("errorText"), message);
-    setSnapshot(snapshot);
+    setSnapshot(emptySnapshot(QStringLiteral("请求失败"), message));
 }
 
 void MiniMaxClient::setSnapshot(const QVariantMap &snapshot)

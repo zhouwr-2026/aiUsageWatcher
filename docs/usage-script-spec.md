@@ -1,104 +1,55 @@
-# 自定义用量查询脚本规范
+# HTTP+JS 用量脚本安全契约
 
-> 本文定义未来真实数据后端与当前 UI 的边界。当前迭代不执行或编辑脚本，但 mock 数据和展示模型必须使用同一语义。
+当前版本会在应用设置或刷新后执行脚本声明的真实查询。C++ 先调用独立 worker 提取
+`request`，完成 HTTP 请求后再把 JSON 响应交给同一 worker 的 `extractor`，最后按限额
+项配置的变量生成运行时快照。
 
-## 1. 脚本结构
+## 脚本入口
 
-脚本返回对象字面量：
-
-```js
-({
-  request: { url, method, headers, body? },
-  extractor: function (response) { return { /* quota */ }; }
-})
-```
-
-`extractor` 可返回单个 quota 或 quota 数组。预览、日志和 IPC 不得包含真实凭据。
-
-### request
-
-| 字段 | 类型 | 约束 |
-|---|---|---|
-| `url` | string | 必填，`http`/`https`；占位符位于字符串内 |
-| `method` | string | 必填，仅 `GET` / `POST` |
-| `headers` | object | 可选；键名不得含占位符 |
-| `body` | string | 可选 |
-
-支持 `{{baseUrl}}`、`{{apiKey}}`、`{{accessToken}}`、`{{userId}}`。预览仅使用哨兵值。
-
-## 2. extractor quota
-
-| 字段 | 类型 | 含义 |
-|---|---|---|
-| `planName` | string | 套餐名 |
-| `used` | number | 已用额度 |
-| `total` | number | 总额度 |
-| `remaining` | number | 可选兼容输入；仅在 `used` 缺失且 total 有效时用于推导 `used = total - remaining` |
-| `unit` | string | 单位；超过 8 字符或含空白时进入 `unitOverflow` |
-| `isValid` | boolean | `false` 时不参与最紧张值计算 |
-| `invalidMessage` | string | 失效原因 |
-| `resetAt` | string | 重置时间点 |
-| `extra` | string | 独立补充文本 |
-
-字段使用 camelCase。百分比不由 extractor 提供，避免多个事实来源。
-
-## 3. 归一化规则
-
-每个 quota 转为 `DisplayPlan`：
-
-| DisplayPlan 字段 | 规则 |
-|---|---|
-| `planName` | quota `planName`，缺失时使用 provider definition 中的名称 |
-| `used` | 优先 quota `used`；否则由 `total - remaining` 推导 |
-| `total` | quota `total` |
-| `usedPercent` | `clamp(round(used / total * 100), 0, 100)`；无效时 `-1` |
-| `usedPercentLabel` | 有效时 `${usedPercent}%`，否则 `—` |
-| `usedText` | `used` 的本地化独立文本，不含 total |
-| `totalText` | `total` 的本地化独立文本 |
-| `unitText` | 长度不超过 8 且不含空白的 unit |
-| `unitOverflow` | 过长或含空白的 unit |
-| `resetText` | `resetAt` 的显示文本 |
-| `extraText` | `extra` |
-| `isInvalid` | `isValid === false` |
-| `invalidReason` | `invalidMessage` |
-| `barClass` | 按 `<85` 绿、`85..94` 黄、`>=95` 红派生；无效为灰 |
-
-唯一百分比是 `usedPercent`，值越高越紧张。有效计划中最大值驱动 compact 和 provider LED。不得再用剩余百分比驱动颜色或最紧张值。
-
-## 4. 模板边界
-
-模板保存在 `ProviderDefinition.template`，不属于 quota 或 plan snapshot。占位符固定为：
-
-- `%1` = `planName`
-- `%2` = `usedText`
-- `%3` = `totalText`
-- `%4` = `resetText`
-
-默认模板为 `%1 限额  %2/%3  重置于 %4`。`%2`、`%3` 必须使用独立字段，禁止给 `%2` 传入 `used / total` 组合字符串。
-
-## 5. 示例
-
-```js
+```javascript
 ({
   request: {
-    url: "{{baseUrl}}/api/usage",
-    method: "POST",
-    headers: { "Authorization": "Bearer {{apiKey}}" },
-    body: JSON.stringify({ userId: "{{userId}}" })
+    url: "https://example.com/api/usage",
+    method: "GET",
+    headers: {}
   },
-  extractor: function (response) {
+  extractor: function(response) {
     return {
-      planName: response.planName || "默认套餐",
       used: response.used,
-      total: response.total,
-      unit: "tokens",
-      isValid: !response.error,
-      invalidMessage: response.error || "",
-      resetAt: response.resetTime,
-      extra: response.note || ""
+      limit: response.limit,
+      resetAt: response.resetAt
     };
   }
 })
 ```
 
-若返回 `used: 88, total: 100`，DisplayPlan 必须得到 `usedPercent: 88`、黄色 `barClass`、`usedText: "88"`、`totalText: "100"`。
+每个限额项用变量引用绑定 `extractor` 的返回键，例如已用量 `${used}`、限额总量
+`${limit}`、到期时间 `${resetAt}`。变量必须为 `${name}` 格式；已用量和总量必须是
+有限数字且总量大于 0。到期时间可留空，填写时由脚本返回适合直接展示的文本，例如
+`07-27 00:00`。额外键忽略；缺失的用量变量保留“暂无数据”，缺失到期时间则不显示时间。
+
+## 网络边界
+
+- 非本机地址只允许 `https`；`localhost` / loopback 可用 `http` 做开发测试。
+- 禁止重定向到不同源；请求超时 15 秒，响应体上限 1 MiB，请求体上限 64 KiB。
+- `response` 是服务返回的 JSON 对象或数组，不暴露文件、进程、网络或 Qt 对象。
+- 当前自定义脚本中的固定请求头会随脚本保存在 KConfig；在通用 KWallet 凭据入口完成前，
+  不应把长期密钥直接写进脚本。
+
+## 执行边界
+
+- 独立低权限 worker 进程；不得在 plasmashell、Plasmoid QML 或原生 Applet 主进程执行。
+- 每次执行有墙钟/CPU 超时和任务、输出大小上限。
+- worker 崩溃只能影响当前 provider，UI 与其他 provider 必须继续运行。
+- 定时刷新和手动刷新使用同一执行链。
+
+## 编辑器边界
+
+编辑器负责文本编辑、原生语法高亮、行号、插入提示、轻量格式化和契约校验，不直接拥有
+网络与执行权限。“测试脚本”当前只检查 `request.url`、`extractor` 和限额变量是否齐全；
+保存或应用设置后，可通过面板刷新按钮执行真实查询。若未来采用 Qt WebEngine，必须另行
+评估包体、CSP 和本地资源隔离。
+
+提示下拉使用 `request`、`extractor`、`response`、`used`、`limit`、`resetAt` 等原始
+JavaScript 标识符，插入时不附加 `${}`。`${name}` 仅是限额项引用 `extractor` 返回键的
+绑定语法。编辑区允许拖拽改变高度，并可在“不换行”和“自动换行”之间切换。

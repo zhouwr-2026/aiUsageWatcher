@@ -369,6 +369,21 @@ function providerUsageAt(displayProviders, providerIndex) {
     };
 }
 
+function nextProviderIndexWithUsage(displayProviders, providerIndex) {
+    if (!Array.isArray(displayProviders) || displayProviders.length === 0)
+        return -1;
+
+    var numericIndex = _isFiniteNumber(providerIndex) ? Math.floor(providerIndex) : 0;
+    var currentIndex = ((numericIndex % displayProviders.length)
+                        + displayProviders.length) % displayProviders.length;
+    for (var offset = 1; offset <= displayProviders.length; ++offset) {
+        var candidateIndex = (currentIndex + offset) % displayProviders.length;
+        if (providerUsageAt(displayProviders, candidateIndex).usedPercent >= 0)
+            return candidateIndex;
+    }
+    return currentIndex;
+}
+
 function stripProviderSuffix(name) {
     if (typeof name !== "string")
         return "";

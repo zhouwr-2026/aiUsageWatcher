@@ -98,8 +98,8 @@ PlasmoidItem {
         interval: 5000
         running: root.providers.length > 1
         repeat: true
-        onTriggered: root.compactProviderIndex = (root.compactProviderIndex + 1)
-                                                  % root.providers.length
+        onTriggered: root.compactProviderIndex = MockData.nextProviderIndexWithUsage(
+                         root.providers, root.compactProviderIndex)
     }
 
     Connections {

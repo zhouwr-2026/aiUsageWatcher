@@ -68,6 +68,22 @@ TestCase {
         compare(empty.usedPercent, -1)
     }
 
+    function test_provider_rotation_skips_providers_without_usage() {
+        var providers = [{
+            providerName: "MiniMax",
+            plans: [{ planName: "每周", usedPercent: 28 }]
+        }, {
+            providerName: "未配置",
+            plans: []
+        }, {
+            providerName: "Codex",
+            plans: [{ planName: "每周", usedPercent: 67 }]
+        }]
+
+        compare(MockData.nextProviderIndexWithUsage(providers, 0), 2)
+        compare(MockData.nextProviderIndexWithUsage(providers, 2), 0)
+    }
+
     function test_seed_minimax_waits_for_real_backend() {
         var snapshots = MockData.createSeedSnapshots(MockData.SEED_PROVIDER_DEFINITIONS)
         var minimax = null

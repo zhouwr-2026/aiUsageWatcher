@@ -3,14 +3,22 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
-import "../js/mockData.js" as MockData
+import "../js/mockData.js" as MockData    // 兼容旧字段（stripProviderSuffix / usageClass）
+import "../js/displayProvider.js" as DisplayProvider
+import "../js/providerSnapshot.js" as ProviderSnapshot
 
 PlasmoidItem {
     id: root
 
     property var providerDefinitions: MockData.normalizeDefinitions(Plasmoid.configuration.providers)
-    property var runtimeSnapshots: MockData.createSeedSnapshots(providerDefinitions)
-    property var providers: MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
+    property var runtimeSnapshots: []
+    readonly property string effectiveSortMode: Plasmoid.configuration.sortMode || "default"
+    readonly property string customOrderRaw: Plasmoid.configuration.customOrder || ""
+    readonly property var providers: DisplayProvider.buildDisplay(
+        providerDefinitions, runtimeSnapshots, {
+            sortMode: root.effectiveSortMode,
+            customOrderRaw: root.customOrderRaw
+        })
     property int compactProviderIndex: 0
     property int restoreProviderIndex: 0
     property bool eventHighlighted: false
@@ -114,11 +122,15 @@ PlasmoidItem {
         applyMiniMaxSnapshot()
         applyCodexSnapshot()
         applyCustomSnapshots()
-        providers = MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
+        providers = DisplayProvider.buildDisplay(providerDefinitions, runtimeSnapshots, {
+            sortMode: root.effectiveSortMode,
+            customOrderRaw: root.customOrderRaw
+        })
         lastRefreshTime = new Date()
         requestMiniMaxRefresh()
         requestCodexRefresh()
         requestCustomRefresh()
+        refreshTimer.restart()
     }
 
     function activateModel(modelName) {
@@ -174,6 +186,7 @@ PlasmoidItem {
     ]
 
     Timer {
+        id: refreshTimer
         interval: root.refreshIntervalSec * 1000
         running: true
         repeat: true

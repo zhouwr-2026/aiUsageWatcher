@@ -15,6 +15,14 @@ Rectangle {
     property var plans: []
     property string errorText: ""
     property string templateText: ""
+    property string website: ""
+    property string logoSource: ""
+    property string logoChar: ""
+    property bool logoIsSvg: true
+
+    function _websiteValid(value) {
+        return typeof value === "string" && /^https?:\/\/[^\s]+$/i.test(value)
+    }
 
     function statusColor(statusClass) {
         switch (statusClass) {
@@ -42,21 +50,64 @@ Rectangle {
             spacing: Kirigami.Units.smallSpacing
 
             Rectangle {
+                Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                Layout.preferredHeight: Layout.preferredWidth
+                radius: width / 2
+                color: "transparent"
+
+                Image {
+                    id: logoImage
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    source: root.logoSource.length > 0
+                        ? (root.logoIsSvg
+                           ? "data:image/svg+xml;utf8," + root.logoSource
+                           : root.logoSource)
+                        : ""
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    visible: status === Image.Ready
+                }
+
+                PlasmaComponents.Label {
+                    anchors.centerIn: parent
+                    visible: logoImage.status !== Image.Ready
+                    text: root.logoChar || ""
+                    color: Kirigami.Theme.disabledTextColor
+                    font: Kirigami.Theme.smallFont
+                }
+            }
+
+            Item {
+                Layout.preferredWidth: Kirigami.Units.smallSpacing
+                Layout.preferredHeight: 1
+            }
+
+            Rectangle {
                 Layout.preferredWidth: Kirigami.Units.smallSpacing * 2
                 Layout.preferredHeight: Layout.preferredWidth
                 radius: width / 2
                 color: root.statusColor(root.ledClass)
             }
 
-            PlasmaComponents.Label {
-                objectName: "providerNameLabel"
-
+            MouseArea {
+                id: websiteMouseArea
                 Layout.fillWidth: true
                 Layout.minimumWidth: 0
-                text: root.providerName
-                color: Kirigami.Theme.textColor
-                font.bold: true
-                elide: Text.ElideRight
+                enabled: root._websiteValid(root.website)
+                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                hoverEnabled: enabled
+
+                PlasmaComponents.Label {
+                    objectName: "providerNameLabel"
+                    anchors.fill: parent
+                    text: root.providerName
+                    color: parent.enabled ? Kirigami.Theme.linkColor : Kirigami.Theme.textColor
+                    font.bold: true
+                    font.underline: parent.enabled
+                    elide: Text.ElideRight
+                }
+                onClicked: Qt.openUrlExternally(root.website)
             }
 
             PlasmaComponents.Label {

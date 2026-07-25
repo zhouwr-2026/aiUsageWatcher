@@ -209,6 +209,10 @@ Item {
                 objectName: "providerGroup"
                 width: ListView.view.width
                 providerName: MockData.stripProviderSuffix(modelData.providerName || "")
+                website: modelData.website || ""
+                logoSource: modelData.logoSource || ""
+                logoChar: modelData.logoChar || ""
+                logoIsSvg: modelData.logoIsSvg !== false
                 ledClass: modelData.ledClass || "led-gray"
                 sourceLabel: modelData.sourceLabel || ""
                 statusLabel: modelData.statusLabel || ""

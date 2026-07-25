@@ -8,6 +8,7 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import "../../js/providerCatalog.js" as ProviderCatalog
 import "../../js/providerConfig.js" as ProviderConfig
+import "../../js/providerRegistry.js" as ProviderRegistry
 import "../../js/scriptTools.js" as ScriptTools
 
 Item {
@@ -325,10 +326,10 @@ Item {
                             if (root.candidate.logoPath && root.candidate.logoPath.length > 0)
                                 return root.candidate.logoPath
                             if (!root.isCustom) {
-                                var def = ProviderCatalog.definitionFor(root.candidate.catalogId || "")
-                                return def && def.logoSvg
-                                    ? "data:image/svg+xml;utf8," + def.logoSvg
-                                    : ""
+                                const svg = ProviderRegistry.logoSvgFor(
+                                    root.candidate.catalogId || "")
+                                if (svg && svg.length > 0)
+                                    return "data:image/svg+xml;utf8," + svg
                             }
                             return ""
                         }

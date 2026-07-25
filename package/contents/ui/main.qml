@@ -259,7 +259,10 @@ PlasmoidItem {
         panelStyle: root.panelStyle
         lastRefreshTime: root.lastRefreshTime
         sortMode: root.effectiveSortMode
-        onSortModeChanged: mode => Plasmoid.configuration.sortMode = mode
+        onSortModeChanged: mode => {
+            Plasmoid.configuration.sortMode = mode
+            Qt.callLater(root.refresh)  // 即时拉取 + restart timer
+        }
         onRefreshRequested: root.refresh()
         onCloseRequested: root.expanded = false
         onConfigureRequested: root.openConfiguration()

@@ -54,6 +54,7 @@ Rectangle {
                 Layout.preferredHeight: Layout.preferredWidth
                 radius: width / 2
                 color: "transparent"
+                visible: root.logoSource.length > 0 || root.logoChar.length > 0
 
                 Image {
                     id: logoImage

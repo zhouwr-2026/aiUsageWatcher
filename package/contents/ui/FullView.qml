@@ -13,7 +13,6 @@ Item {
     property string panelStyle: "bar"
     property date lastRefreshTime: new Date()
     property string sortMode: "default"
-    signal sortModeChanged(string mode)
 
     readonly property int renderedPlanCount: {
         let count = 0

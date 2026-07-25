@@ -27,8 +27,35 @@ KCM.SimpleKCM {
     property int cfg_opacityPercentDefault: 80
     property alias cfg_keepPanelOpen: keepPanelOpen.checked
     property bool cfg_keepPanelOpenDefault: false
+    property alias cfg_sortMode: sortModeControl.currentValue
+
+    readonly property var sortModeOptions: [
+        { text: qsTr("默认顺序"), value: "default" },
+        { text: qsTr("字母 A-Z"), value: "alphabetical" },
+        { text: qsTr("已用% 降序"), value: "usedPercent" },
+        { text: qsTr("剩余% 降序"), value: "remainingPercent" },
+        { text: qsTr("最近重置"), value: "nextReset" },
+        { text: qsTr("自定义顺序"), value: "custom" }
+    ]
 
     Kirigami.FormLayout {
+        QQC2.ComboBox {
+            id: sortModeControl
+
+            objectName: "sortModeControl"
+            Kirigami.FormData.label: qsTr("面板供应商排序：")
+            model: root.sortModeOptions
+            textRole: "text"
+            valueRole: "value"
+            currentIndex: {
+                const idx = root.sortModeOptions.findIndex(function(opt) {
+                    return opt.value === (root.cfg_sortMode || "default")
+                })
+                return Math.max(0, idx)
+            }
+            onActivated: root.cfg_sortMode = currentValue
+        }
+
         QQC2.ComboBox {
             id: compactStyle
 

@@ -9,6 +9,12 @@
         </entry>
     </group>
     <group name="ui">
+        <entry name="sortMode" type="string">
+            <default>default</default>
+        </entry>
+        <entry name="customOrder" type="string">
+            <default></default>
+        </entry>
         <entry name="refreshIntervalSec" type="int">
             <default>60</default>
             <min>10</min>

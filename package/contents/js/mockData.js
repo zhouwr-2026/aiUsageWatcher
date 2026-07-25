@@ -24,7 +24,20 @@ function _legacyParse(raw) {
 function createSeedSnapshots(definitions) { return [] }
 
 function replaceSnapshot(snapshots, replacement) {
-    return DisplayProvider ? snapshots.slice() : []
+    if (!Array.isArray(snapshots))
+        snapshots = []
+    if (!replacement || typeof replacement !== "object")
+        return snapshots.slice()
+    var list = snapshots.slice()
+    var pid = replacement.providerId
+    for (var i = 0; i < list.length; i++) {
+        if (list[i] && list[i].providerId === pid) {
+            list[i] = replacement
+            return list
+        }
+    }
+    list.push(replacement)
+    return list
 }
 
 function stripProviderSuffix(name) {

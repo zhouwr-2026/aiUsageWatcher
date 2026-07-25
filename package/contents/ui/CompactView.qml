@@ -28,26 +28,44 @@ Item {
     Layout.preferredWidth: implicitWidth
     clip: true
 
-    onProviderIndexChanged: providerSwitch.restart()
-
     Behavior on providerIndex {
         id: providerSwitch
         SequentialAnimation {
-            PropertyAnimation {
-                target: pieFace
-                property: "scale"
-                from: 0.94
-                to: 1.0
-                duration: 120
-                easing.type: Easing.OutCubic
+            ParallelAnimation {
+                PropertyAnimation {
+                    target: pieFace
+                    property: "scale"
+                    from: 0.94
+                    to: 1.0
+                    duration: 120
+                    easing.type: Easing.OutCubic
+                }
+                PropertyAnimation {
+                    target: pieFace
+                    property: "opacity"
+                    from: 0.85
+                    to: 1.0
+                    duration: 120
+                    easing.type: Easing.OutCubic
+                }
             }
-            PropertyAnimation {
-                target: barFace
-                property: "scale"
-                from: 0.94
-                to: 1.0
-                duration: 120
-                easing.type: Easing.OutCubic
+            ParallelAnimation {
+                PropertyAnimation {
+                    target: barFace
+                    property: "scale"
+                    from: 0.94
+                    to: 1.0
+                    duration: 120
+                    easing.type: Easing.OutCubic
+                }
+                PropertyAnimation {
+                    target: barFace
+                    property: "opacity"
+                    from: 0.85
+                    to: 1.0
+                    duration: 120
+                    easing.type: Easing.OutCubic
+                }
             }
         }
     }

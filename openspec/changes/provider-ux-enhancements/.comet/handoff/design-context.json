@@ -1,0 +1,14 @@
+{
+  "change": "provider-ux-enhancements",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "cb02954baf06312847d8db750315aa86b8214c6f42ff75cc9c7f942f8543a046",
+  "files": [
+    { "path": "openspec/changes/provider-ux-enhancements/proposal.md", "sha256": "9db57ed88f9f1fa827a7cfc14bf85748f6ff13c61200262f706f8d5c62b3509b" },
+    { "path": "openspec/changes/provider-ux-enhancements/design.md", "sha256": "32fdb010124dc6331df4a3c055800c2a5e09bdd90070317bfb1bd6333a9c9047" },
+    { "path": "openspec/changes/provider-ux-enhancements/tasks.md", "sha256": "40c36f0fa57e4a266ad4b086a1036e814637f70e09e82cd8529c556f144203d2" },
+    { "path": "openspec/changes/provider-ux-enhancements/specs/provider-ux-enhancements/spec.md", "sha256": "d8bd87f591b2813a688c8f4420208779ee8f43d4926fbfc990098a41c251e177" }
+  ]
+}

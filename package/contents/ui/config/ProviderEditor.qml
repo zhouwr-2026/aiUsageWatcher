@@ -76,6 +76,7 @@ Item {
             trustMode: "strict",
             template: ProviderCatalog.DEFAULT_TEMPLATE,
             script: ScriptTools.DEFAULT_SCRIPT,
+            logoPath: "",
             plans: [{
                 id: "quota-1",
                 planName: "",
@@ -290,6 +291,58 @@ Item {
                 placeholderText: "https://example.com/"
                 inputMethodHints: Qt.ImhUrlCharactersOnly
                 onTextEdited: root.updateField("website", text)
+            }
+
+            FieldLabel { text: qsTr("Logo 路径：") }
+
+            RowLayout {
+                Layout.preferredWidth: root.fieldWidth
+                Layout.maximumWidth: root.fieldWidth
+                spacing: Kirigami.Units.smallSpacing
+
+                QQC2.TextField {
+                    objectName: "providerLogoPathField"
+                    Layout.fillWidth: true
+                    text: root.candidate.logoPath || ""
+                    readOnly: !root.isCustom
+                    placeholderText: "file:///home/user/.local/share/icons/my.png"
+                    inputMethodHints: Qt.ImhUrlCharactersOnly
+                    onTextEdited: root.updateField("logoPath", text)
+                }
+
+                Rectangle {
+                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                    Layout.preferredHeight: Layout.preferredWidth
+                    radius: width / 2
+                    color: Kirigami.Theme.alternateBackgroundColor
+
+                    Image {
+                        id: logoImage
+
+                        anchors.fill: parent
+                        anchors.margins: 1
+                        source: {
+                            if (root.candidate.logoPath && root.candidate.logoPath.length > 0)
+                                return root.candidate.logoPath
+                            if (!root.isCustom) {
+                                var def = ProviderCatalog.definitionFor(root.candidate.catalogId || "")
+                                return def && def.logoSvg
+                                    ? "data:image/svg+xml;utf8," + def.logoSvg
+                                    : ""
+                            }
+                            return ""
+                        }
+                        fillMode: Image.PreserveAspectFit
+                        visible: status === Image.Ready
+                    }
+
+                    QQC2.Label {
+                        anchors.centerIn: parent
+                        visible: logoImage.status !== Image.Ready
+                        text: (root.candidate.providerName || "").trim().charAt(0).toUpperCase()
+                        color: Kirigami.Theme.disabledTextColor
+                    }
+                }
             }
         }
 

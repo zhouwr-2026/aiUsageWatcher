@@ -57,6 +57,7 @@ KCM.SimpleKCM {
     property bool codexUsageLoading: false
     property string codexUsageStatus: qsTr("未登录")
     property string codexUsageError: ""
+    property string cfg_sortMode: Plasmoid.configuration.sortMode || "default"
 
     function copy(value) {
         return JSON.parse(JSON.stringify(value))
@@ -64,10 +65,18 @@ KCM.SimpleKCM {
 
     function definitionRow(definition) {
         const names = definition.plans.map(function(plan) { return plan.planName })
+        const enabled = typeof definition.enabled === "boolean" ? definition.enabled : true
+        const logoSource = (typeof definition.logoPath === "string"
+                            && definition.logoPath.length > 0)
+            ? definition.logoPath : ""
+        const logoChar = (definition.providerName || "").trim().charAt(0).toUpperCase()
         return {
             providerId: definition.id,
             providerName: definition.providerName,
             planSummary: names.join("、"),
+            enabled: enabled,
+            logoSource: logoSource,
+            logoChar: logoChar,
             definitionJson: JSON.stringify(definition)
         }
     }
@@ -426,6 +435,9 @@ KCM.SimpleKCM {
                     required property string providerName
                     required property string planSummary
                     required property int index
+                    required property bool enabled
+                    required property string logoSource
+                    required property string logoChar
 
                     Layout.fillWidth: true
                     onClicked: root.beginEdit(providerDelegate.providerId)
@@ -433,6 +445,7 @@ KCM.SimpleKCM {
                     contentItem: RowLayout {
                         ColumnLayout {
                             Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
 
                             QQC2.Label {
                                 Layout.fillWidth: true
@@ -448,9 +461,45 @@ KCM.SimpleKCM {
                             }
                         }
 
+                        Rectangle {
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                            Layout.preferredHeight: Layout.preferredWidth
+                            radius: width / 2
+                            color: Kirigami.Theme.alternateBackgroundColor
+                            Image {
+                                id: logoThumb
+                                anchors.fill: parent
+                                anchors.margins: 1
+                                source: providerDelegate.logoSource
+                                fillMode: Image.PreserveAspectFit
+                                visible: status === Image.Ready
+                            }
+                            QQC2.Label {
+                                anchors.centerIn: parent
+                                visible: logoThumb.status !== Image.Ready
+                                text: providerDelegate.logoChar
+                                color: Kirigami.Theme.disabledTextColor
+                            }
+                        }
+
+                        QQC2.Switch {
+                            objectName: "providerEnabledSwitch"
+                            checked: providerDelegate.enabled
+                            Accessible.name: qsTr("启用 %1").arg(providerDelegate.providerName)
+                            onToggled: {
+                                const index = root.indexForId(providerDelegate.providerId)
+                                if (index < 0) return
+                                const def = JSON.parse(providersModel.get(index).definitionJson)
+                                def.enabled = checked
+                                providersModel.set(index, definitionRow(def))
+                                root.syncWorkingValue()
+                            }
+                        }
+
                         QQC2.ToolButton {
                             icon.name: "go-up"
                             enabled: providerDelegate.index > 0
+                                     && root.cfg_sortMode === "custom"
                             Accessible.name: qsTr("上移 %1").arg(providerDelegate.providerName)
                             QQC2.ToolTip.text: Accessible.name
                             QQC2.ToolTip.visible: hovered
@@ -460,6 +509,7 @@ KCM.SimpleKCM {
                         QQC2.ToolButton {
                             icon.name: "go-down"
                             enabled: providerDelegate.index < providersModel.count - 1
+                                     && root.cfg_sortMode === "custom"
                             Accessible.name: qsTr("下移 %1").arg(providerDelegate.providerName)
                             QQC2.ToolTip.text: Accessible.name
                             QQC2.ToolTip.visible: hovered

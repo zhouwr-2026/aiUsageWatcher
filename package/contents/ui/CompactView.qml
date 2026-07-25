@@ -30,24 +30,25 @@ Item {
 
     onProviderIndexChanged: providerSwitch.restart()
 
-    SequentialAnimation {
+    Behavior on providerIndex {
         id: providerSwitch
-
-        NumberAnimation {
-            target: root
-            property: "opacity"
-            from: 1
-            to: 0
-            duration: 90
-            easing.type: Easing.InOutQuad
-        }
-        NumberAnimation {
-            target: root
-            property: "opacity"
-            from: 0
-            to: 1
-            duration: 140
-            easing.type: Easing.OutCubic
+        SequentialAnimation {
+            PropertyAnimation {
+                target: pieFace
+                property: "scale"
+                from: 0.94
+                to: 1.0
+                duration: 120
+                easing.type: Easing.OutCubic
+            }
+            PropertyAnimation {
+                target: barFace
+                property: "scale"
+                from: 0.94
+                to: 1.0
+                duration: 120
+                easing.type: Easing.OutCubic
+            }
         }
     }
 

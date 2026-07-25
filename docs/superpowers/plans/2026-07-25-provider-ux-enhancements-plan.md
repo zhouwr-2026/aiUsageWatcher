@@ -74,7 +74,7 @@ base-ref: a51fa80a3a4d0a68780199bfcc6bd3bc4dd8519e
 
 **Steps:**
 
-- [ ] **Step 1.1:** 创建文件 `package/contents/js/providerRegistry.js`，加 `.pragma library`，定义常量：
+- [x] **Step 1.1:** 创建文件 `package/contents/js/providerRegistry.js`，加 `.pragma library`，定义常量：
 
 ```js
 // SPDX-License-Identifier: GPL-2.0-or-later
@@ -233,7 +233,7 @@ var _PRESETS = [{
 }]
 ```
 
-- [ ] **Step 1.2:** 实现工具函数：
+- [x] **Step 1.2:** 实现工具函数：
 
 ```js
 function _copy(value) {
@@ -314,7 +314,7 @@ function defaultProviders() {
 }
 ```
 
-- [ ] **Step 1.3:** 验证
+- [x] **Step 1.3:** 验证
 ```bash
 cd /home/zhouwr/Project/CodeWorkspace/AIQuotaPilot
 node -e "
@@ -325,7 +325,7 @@ console.log('options:', (code.match(/function providerOptions/) ? 'present' : 'm
 ```
 Expected: `lines:` 数值 < 250；`present`。
 
-- [ ] **Step 1.4:** Commit
+- [x] **Step 1.4:** Commit
 ```bash
 git add package/contents/js/providerRegistry.js
 git commit -m "feat(provider-ux): add providerRegistry.js with SVG catalog defaults"
@@ -359,7 +359,7 @@ git commit -m "feat(provider-ux): add providerRegistry.js with SVG catalog defau
 
 **Steps:**
 
-- [ ] **Step 2.1:** 创建 `providerSnapshot.js`：
+- [x] **Step 2.1:** 创建 `providerSnapshot.js`：
 
 ```js
 // SPDX-License-Identifier: GPL-2.0-or-later
@@ -467,7 +467,7 @@ function refreshOne(providerId, opts) {
 }
 ```
 
-- [ ] **Step 2.2:** 创建 `displayProvider.js`：
+- [x] **Step 2.2:** 创建 `displayProvider.js`：
 
 ```js
 // SPDX-License-Identifier: GPL-2.0-or-later
@@ -785,7 +785,7 @@ function nextProviderIndexWithUsage(displayProviders, providerIndex) {
 
 > 注：把 tasks 1.5 `firstCharFallback` 与 tasks 1.1 `enabled` / `logoPath` 兜底、`customOrder` 兜底放进 `displayProvider` 是与 spec D8/D7 一致的最小落地。
 
-- [ ] **Step 2.3:** 把 `mockData.js` 替换为 shim：
+- [x] **Step 2.3:** 把 `mockData.js` 替换为 shim：
 
 ```js
 // SPDX-License-Identifier: GPL-2.0-or-later
@@ -854,7 +854,7 @@ function forEach(arr, callback) {
 }
 ```
 
-- [ ] **Step 2.4:** 验证三文件行数 < 250：
+- [x] **Step 2.4:** 验证三文件行数 < 250：
 ```bash
 wc -l package/contents/js/providerRegistry.js \
        package/contents/js/providerSnapshot.js \
@@ -862,7 +862,7 @@ wc -l package/contents/js/providerRegistry.js \
 ```
 Expected: 全部 < 260（每文件）。
 
-- [ ] **Step 2.5:** Commit
+- [x] **Step 2.5:** Commit
 ```bash
 git add package/contents/js/providerSnapshot.js \
         package/contents/js/displayProvider.js \
@@ -883,7 +883,7 @@ git commit -m "feat(provider-ux): split data layer into registry/snapshot/displa
 
 **Steps:**
 
-- [ ] **Step 3.1:** 修改 import：
+- [x] **Step 3.1:** 修改 import：
 ```diff
 - import "../js/mockData.js" as MockData
 + import "../js/mockData.js" as MockData    // 兼容旧字段（stripProviderSuffix / usageClass）
@@ -892,7 +892,7 @@ git commit -m "feat(provider-ux): split data layer into registry/snapshot/displa
 ```
 > 注：保留 `MockData` 仅消费 `stripProviderSuffix` 与 `usageClass` 兜底；新逻辑用 `DisplayProvider`。
 
-- [ ] **Step 3.2:** 替换 `providers` 派生：
+- [x] **Step 3.2:** 替换 `providers` 派生：
 ```qml
     property var providerDefinitions: MockData.normalizeDefinitions(Plasmoid.configuration.providers)
     property var runtimeSnapshots: []
@@ -905,7 +905,7 @@ git commit -m "feat(provider-ux): split data layer into registry/snapshot/displa
         })
 ```
 
-- [ ] **Step 3.3:** `Timer` 改为有 id：
+- [x] **Step 3.3:** `Timer` 改为有 id：
 ```qml
     Timer {
         id: refreshTimer
@@ -916,7 +916,7 @@ git commit -m "feat(provider-ux): split data layer into registry/snapshot/displa
     }
 ```
 
-- [ ] **Step 3.4:** `refresh()` 末尾追加：
+- [x] **Step 3.4:** `refresh()` 末尾追加：
 ```diff
      function refresh() {
          ...
@@ -927,14 +927,14 @@ git commit -m "feat(provider-ux): split data layer into registry/snapshot/displa
      }
 ```
 
-- [ ] **Step 3.5:** 验证编译可启动：
+- [x] **Step 3.5:** 验证编译可启动：
 ```bash
 kpackagetool6 --install aiUsageWatcher 2>&1 | tail -n 5
 plasmawindowed --help 2>&1 | head -n 5 || true
 ```
 Expected: `kpackagetool6` 退出 0。
 
-- [ ] **Step 3.6:** Commit
+- [x] **Step 3.6:** Commit
 ```bash
 git add package/contents/ui/main.qml
 git commit -m "feat(provider-ux): sort derivation + refresh Timer restart"
@@ -953,14 +953,14 @@ git commit -m "feat(provider-ux): sort derivation + refresh Timer restart"
 
 **Steps:**
 
-- [ ] **Step 4.1:** 在 root properties 增加：
+- [x] **Step 4.1:** 在 root properties 增加：
 ```diff
      property date lastRefreshTime: new Date()
 +    property string sortMode: "default"
 +    signal sortModeChanged(string mode)
 ```
 
-- [ ] **Step 4.2:** 在 headerActions 内、refreshButton 之后插入：
+- [x] **Step 4.2:** 在 headerActions 内、refreshButton 之后插入：
 ```qml
                 PlasmaComponents.ToolButton {
                     id: sortButton
@@ -985,7 +985,7 @@ git commit -m "feat(provider-ux): sort derivation + refresh Timer restart"
                 }
 ```
 
-- [ ] **Step 4.3:** 修改 statusLabel 文本为派生 `statusText`：
+- [x] **Step 4.3:** 修改 statusLabel 文本为派生 `statusText`：
 ```diff
 -            text: root.statusText
 +            text: root.statusText + qsTr(" · 排序：%1").arg(sortModeText())
@@ -1005,7 +1005,7 @@ git commit -m "feat(provider-ux): sort derivation + refresh Timer restart"
     }
 ```
 
-- [ ] **Step 4.4:** 在 main.qml FullView 初始化处绑定：
+- [x] **Step 4.4:** 在 main.qml FullView 初始化处绑定：
 ```qml
     fullRepresentation: FullView {
         ...
@@ -1015,7 +1015,7 @@ git commit -m "feat(provider-ux): sort derivation + refresh Timer restart"
 ```
 （同步任务 9 配置层）。
 
-- [ ] **Step 4.5:** Commit
+- [x] **Step 4.5:** Commit
 ```bash
 git add package/contents/ui/FullView.qml package/contents/ui/main.qml
 git commit -m "feat(provider-ux): sortMode cycling button in FullView header"
@@ -1034,7 +1034,7 @@ git commit -m "feat(provider-ux): sortMode cycling button in FullView header"
 
 **Steps:**
 
-- [ ] **Step 5.1:** 在 root 增加属性：
+- [x] **Step 5.1:** 在 root 增加属性：
 ```qml
     property string website: ""
     property string logoSource: ""
@@ -1046,7 +1046,7 @@ git commit -m "feat(provider-ux): sortMode cycling button in FullView header"
     }
 ```
 
-- [ ] **Step 5.2:** 修改标题 Row 左侧加 Logo（替换原来的 LED 圆点为 Row 内嵌）：
+- [x] **Step 5.2:** 修改标题 Row 左侧加 Logo（替换原来的 LED 圆点为 Row 内嵌）：
 ```qml
         RowLayout {
             Layout.fillWidth: true
@@ -1118,7 +1118,7 @@ git commit -m "feat(provider-ux): sortMode cycling button in FullView header"
 
 > 备注：`Image.source` 在 SVG 模式下需要 `prefix = "data:image/svg+xml;utf8,"`；非 SVG 时直接用绝对 / file:// URL（来自 logoPath）。
 
-- [ ] **Step 5.3:** 同步 FullView.qml 的 ProviderGroup 委托：
+- [x] **Step 5.3:** 同步 FullView.qml 的 ProviderGroup 委托：
 ```diff
 -                delegate: ProviderGroup {
 -                    required property var modelData
@@ -1144,7 +1144,7 @@ git commit -m "feat(provider-ux): sortMode cycling button in FullView header"
 +                }
 ```
 
-- [ ] **Step 5.4:** Commit
+- [x] **Step 5.4:** Commit
 ```bash
 git add package/contents/ui/ProviderGroup.qml package/contents/ui/FullView.qml
 git commit -m "feat(provider-ux): provider website link + logo rendering"
@@ -1162,7 +1162,7 @@ git commit -m "feat(provider-ux): provider website link + logo rendering"
 
 **Steps:**
 
-- [ ] **Step 6.1:** 删除 SequentialAnimation（30-52），替换为：
+- [x] **Step 6.1:** 删除 SequentialAnimation（30-52），替换为：
 ```qml
     Behavior on providerIndex {
         SequentialAnimation {
@@ -1188,7 +1188,7 @@ git commit -m "feat(provider-ux): provider website link + logo rendering"
     }
 ```
 
-- [ ] **Step 6.2:** 增加 CrossFade：
+- [x] **Step 6.2:** 增加 CrossFade：
 ```qml
     CrossFade {
         id: providerCrossFade
@@ -1205,16 +1205,16 @@ git commit -m "feat(provider-ux): provider website link + logo rendering"
 ```
 > 因为 Plasma 6 在 `org.kde.kirigami` 已暴露 `CrossFade`，若不可用则降级用两个 Item 叠加手动 tween（fallback，留在任务 PR 评审讨论）。
 
-- [ ] **Step 6.3:** 删除整组件 `opacity` 切换：
+- [x] **Step 6.3:** 删除整组件 `opacity` 切换：
 ```diff
 -        NumberAnimation { target: root; property: "opacity"; from: 1; to: 0; ... }
 -        NumberAnimation { target: root; property: "opacity"; from: 0; to: 1; ... }
 ```
 （Step 6.1 已替换 SequentialAnimation 内容；不需要 root.opacity 切换。）
 
-- [ ] **Step 6.4:** 颜色绑定保留现状：`Charts.PieChart.colorSource` 已直接绑定 `usageColor`，无中间帧变更。
+- [x] **Step 6.4:** 颜色绑定保留现状：`Charts.PieChart.colorSource` 已直接绑定 `usageColor`，无中间帧变更。
 
-- [ ] **Step 6.5:** 验证启动：
+- [x] **Step 6.5:** 验证启动：
 ```bash
 plasmawindowed aiUsageWatcher 2>&1 | head -n 30 &
 sleep 4
@@ -1222,7 +1222,7 @@ kill %1 2>/dev/null || true
 ```
 Expected: 无 QML warning 报 undefined property。
 
-- [ ] **Step 6.6:** Commit
+- [x] **Step 6.6:** Commit
 ```bash
 git add package/contents/ui/CompactView.qml
 git commit -m "feat(provider-ux): CrossFade + scale animation for Orb switch"
@@ -1241,7 +1241,7 @@ git commit -m "feat(provider-ux): CrossFade + scale animation for Orb switch"
 
 **Steps:**
 
-- [ ] **Step 7.1:** 修改 `definitionRow`：
+- [x] **Step 7.1:** 修改 `definitionRow`：
 ```diff
      function definitionRow(definition) {
          const names = definition.plans.map(function(plan) { return plan.planName })
@@ -1262,7 +1262,7 @@ git commit -m "feat(provider-ux): CrossFade + scale animation for Orb switch"
      }
 ```
 
-- [ ] **Step 7.2:** 修改 Repeater delegate：在 ColumnLayout 旁加 Switch + 缩略图，▲/▼ 启用条件绑定 `cfg_sortMode === "custom"`。
+- [x] **Step 7.2:** 修改 Repeater delegate：在 ColumnLayout 旁加 Switch + 缩略图，▲/▼ 启用条件绑定 `cfg_sortMode === "custom"`。
 
 ```diff
                      contentItem: RowLayout {
@@ -1339,9 +1339,9 @@ git commit -m "feat(provider-ux): CrossFade + scale animation for Orb switch"
                          }
 ```
 
-- [ ] **Step 7.3:** 在 root properties 增 `property string cfg_sortMode: Plasmoid.configuration.sortMode || "default"`（仅用于显示/状态，配置由 GeneralConfig 写入）。
+- [x] **Step 7.3:** 在 root properties 增 `property string cfg_sortMode: Plasmoid.configuration.sortMode || "default"`（仅用于显示/状态，配置由 GeneralConfig 写入）。
 
-- [ ] **Step 7.4:** 列表渲染前过滤（UI 层，运行时仍由 displayProvider.filterEnabled 兜底）：
+- [x] **Step 7.4:** 列表渲染前过滤（UI 层，运行时仍由 displayProvider.filterEnabled 兜底）：
 ```diff
      Repeater {
 -        model: providersModel
@@ -1350,7 +1350,7 @@ git commit -m "feat(provider-ux): CrossFade + scale animation for Orb switch"
 ```
 > 不需要在 Repeater 里加 filter，因为运行期过滤已由 `displayProvider.filterEnabled` 在主页面承担；UI 列表保留全集合以便编辑已禁用条目。
 
-- [ ] **Step 7.5:** Commit
+- [x] **Step 7.5:** Commit
 ```bash
 git add package/contents/ui/config/ProvidersConfig.qml
 git commit -m "feat(provider-ux): enable toggle + logo thumbnail in ProvidersConfig"
@@ -1369,7 +1369,7 @@ git commit -m "feat(provider-ux): enable toggle + logo thumbnail in ProvidersCon
 
 **Steps:**
 
-- [ ] **Step 8.1:** 在 basicForm 的"官网链接"下方追加：
+- [x] **Step 8.1:** 在 basicForm 的"官网链接"下方追加：
 ```diff
              FieldLabel { text: qsTr("官网链接：") }
              QQC2.TextField {
@@ -1432,7 +1432,7 @@ git commit -m "feat(provider-ux): enable toggle + logo thumbnail in ProvidersCon
 +            }
 ```
 
-- [ ] **Step 8.2:** 修改 `blankCustomDefinition` 增 `logoPath: ""` 兜底：
+- [x] **Step 8.2:** 修改 `blankCustomDefinition` 增 `logoPath: ""` 兜底：
 ```diff
      function blankCustomDefinition() {
          return {
@@ -1445,7 +1445,7 @@ git commit -m "feat(provider-ux): enable toggle + logo thumbnail in ProvidersCon
      }
 ```
 
-- [ ] **Step 8.3:** Commit
+- [x] **Step 8.3:** Commit
 ```bash
 git add package/contents/ui/config/ProviderEditor.qml
 git commit -m "feat(provider-ux): logo path text field + thumbnail preview"
@@ -1465,7 +1465,7 @@ git commit -m "feat(provider-ux): logo path text field + thumbnail preview"
 
 **Steps:**
 
-- [ ] **Step 9.1:** 编辑 `main.xml`：
+- [x] **Step 9.1:** 编辑 `main.xml`：
 ```diff
      <group name="ui">
 +        <entry name="sortMode" type="string">
@@ -1481,7 +1481,7 @@ git commit -m "feat(provider-ux): logo path text field + thumbnail preview"
      </group>
 ```
 
-- [ ] **Step 9.2:** GeneralConfig.qml 增加属性与 ComboBox：
+- [x] **Step 9.2:** GeneralConfig.qml 增加属性与 ComboBox：
 ```diff
      property alias cfg_keepPanelOpen: keepPanelOpen.checked
      property bool cfg_keepPanelOpenDefault: false
@@ -1520,14 +1520,14 @@ git commit -m "feat(provider-ux): logo path text field + thumbnail preview"
      }
 ```
 
-- [ ] **Step 9.3:** 验证 schema 安装：
+- [x] **Step 9.3:** 验证 schema 安装：
 ```bash
 kpackagetool6 --remove aiUsageWatcher 2>/dev/null || true
 kpackagetool6 --install aiUsageWatcher 2>&1 | tail -n 5
 ```
 Expected: `install` 退出 0；运行 `plasmawindowed aiUsageWatcher` 配置面板出现新字段。
 
-- [ ] **Step 9.4:** Commit
+- [x] **Step 9.4:** Commit
 ```bash
 git add package/contents/config/main.xml package/contents/ui/config/GeneralConfig.qml
 git commit -m "feat(provider-ux): sortMode + customOrder schema fields"
@@ -1542,7 +1542,7 @@ git commit -m "feat(provider-ux): sortMode + customOrder schema fields"
 
 **Steps:**
 
-- [ ] **Step 10.1:** 启动并观察圆球：
+- [x] **Step 10.1:** 启动并观察圆球：
 ```bash
 plasmawindowed aiUsageWatcher &
 PW_PID=$!
@@ -1553,7 +1553,7 @@ kill $PW_PID 2>/dev/null
 ```
 Expected: 截图存在；圆球显示 `—` 或具体已用% 数字。
 
-- [ ] **Step 10.2:** 切换 sortMode：
+- [x] **Step 10.2:** 切换 sortMode：
 ```bash
 plasmawindowed aiUsageWatcher &
 PW_PID=$!
@@ -1563,7 +1563,7 @@ kill $PW_PID 2>/dev/null
 ```
 Expected: 顺序按所选模式变化（字母 / 已用% 等）。
 
-- [ ] **Step 10.3:** 禁用供应商：
+- [x] **Step 10.3:** 禁用供应商：
 ```bash
 # 在 ProvidersConfig.qml KCM 中将某个供应商 enabled = false
 plasmawindowed aiUsageWatcher &
@@ -1573,10 +1573,10 @@ kill $PW_PID 2>/dev/null
 ```
 Expected: 面板不再显示该供应商；Orb 轮训跳过。
 
-- [ ] **Step 10.4:** 验证 Orb CrossFade：
+- [x] **Step 10.4:** 验证 Orb CrossFade：
 > 接受 200ms 内完成切换，无黑帧，无数字闪烁（手动观察）。
 
-- [ ] **Step 10.5:** Commit 验证截图（可选）：
+- [x] **Step 10.5:** Commit 验证截图（可选）：
 ```bash
 git add screenshots/
 git commit -m "docs(provider-ux): capture manual acceptance screenshots" || true
@@ -1591,7 +1591,7 @@ git commit -m "docs(provider-ux): capture manual acceptance screenshots" || true
 
 **Steps:**
 
-- [ ] **Step 11.1:** 旧配置（无 `enabled` / `logoPath` / `sortMode` / `customOrder` 字段）兼容：
+- [x] **Step 11.1:** 旧配置（无 `enabled` / `logoPath` / `sortMode` / `customOrder` 字段）兼容：
 ```bash
 mkdir -p ~/.local/share/plasma/plasmoids/org.kde.plasma.aiUsageWatcher
 cp -r package/* ~/.local/share/plasma/plasmoids/org.kde.plasma.aiUsageWatcher/
@@ -1602,14 +1602,14 @@ kill %1 2>/dev/null || true
 ```
 Expected: 启动无 QML warning；面板正常显示。
 
-- [ ] **Step 11.2:** `kpackagetool6 --install`：
+- [x] **Step 11.2:** `kpackagetool6 --install`：
 ```bash
 kpackagetool6 --remove aiUsageWatcher 2>/dev/null
 kpackagetool6 --install aiUsageWatcher 2>&1 | tail -n 5
 ```
 Expected: 退出 0，无报错。
 
-- [ ] **Step 11.3:** `git diff` 对照 design / delta spec：
+- [x] **Step 11.3:** `git diff` 对照 design / delta spec：
 ```bash
 git diff a51fa80 HEAD -- package/ docs/superpowers/specs/2026-07-25-provider-ux-enhancements-design.md
 ```
@@ -1626,13 +1626,13 @@ git diff --name-only | grep -v -E 'package/contents/(js/(providerRegistry|provid
 ```
 应无输出。
 
-- [ ] **Step 11.4:** 跑提供的小工具脚本（如有）：
+- [x] **Step 11.4:** 跑提供的小工具脚本（如有）：
 ```bash
 test -f scripts/check-no-mock.sh && bash scripts/check-no-mock.sh
 ```
 若尚无该脚本，本任务跳过（spec 不要求新增测试基础设施）。
 
-- [ ] **Step 11.5:** Commit 文档同步：
+- [x] **Step 11.5:** Commit 文档同步：
 ```bash
 git add docs/superpowers/specs/2026-07-25-provider-ux-enhancements-design.md
 # 若任务执行中 plan agent 决定反向回填 design（仅限未实现行为，记录为 deferred）

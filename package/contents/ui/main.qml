@@ -5,7 +5,6 @@ import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
 import "../js/mockData.js" as MockData    // 兼容旧字段（stripProviderSuffix / usageClass）
 import "../js/displayProvider.js" as DisplayProvider
-import "../js/providerSnapshot.js" as ProviderSnapshot
 
 PlasmoidItem {
     id: root
@@ -51,7 +50,10 @@ PlasmoidItem {
         applyMiniMaxSnapshot()
         applyCodexSnapshot()
         applyCustomSnapshots()
-        providers = MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
+        providers = DisplayProvider.buildDisplay(providerDefinitions, runtimeSnapshots, {
+            sortMode: root.effectiveSortMode,
+            customOrderRaw: root.customOrderRaw
+        })
         requestCustomRefresh()
     }
 
@@ -256,6 +258,8 @@ PlasmoidItem {
         keepPanelOpen: root.keepPanelOpen
         panelStyle: root.panelStyle
         lastRefreshTime: root.lastRefreshTime
+        sortMode: root.effectiveSortMode
+        onSortModeChanged: mode => Plasmoid.configuration.sortMode = mode
         onRefreshRequested: root.refresh()
         onCloseRequested: root.expanded = false
         onConfigureRequested: root.openConfiguration()

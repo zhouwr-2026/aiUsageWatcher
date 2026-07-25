@@ -12,6 +12,8 @@ Item {
     property bool keepPanelOpen: false
     property string panelStyle: "bar"
     property date lastRefreshTime: new Date()
+    property string sortMode: "default"
+    signal sortModeChanged(string mode)
 
     readonly property int renderedPlanCount: {
         let count = 0
@@ -50,6 +52,17 @@ Item {
         return errorProviderCount > 0
                 ? status + qsTr(" · %1 个异常供应商").arg(errorProviderCount)
                 : status
+    }
+
+    function sortModeText() {
+        switch (root.sortMode) {
+        case "alphabetical": return qsTr("字母 A-Z")
+        case "usedPercent": return qsTr("已用%")
+        case "remainingPercent": return qsTr("剩余%")
+        case "nextReset": return qsTr("最近重置")
+        case "custom": return qsTr("自定义")
+        default: return qsTr("默认")
+        }
     }
 
     signal refreshRequested()
@@ -115,6 +128,28 @@ Item {
                         from: 0
                         to: 360
                         duration: 300
+                    }
+                }
+
+                PlasmaComponents.ToolButton {
+                    id: sortButton
+                    objectName: "sortButton"
+
+                    property var sortModes: [
+                        "default", "alphabetical", "usedPercent",
+                        "remainingPercent", "nextReset", "custom"
+                    ]
+
+                    focusPolicy: Qt.StrongFocus
+                    icon.name: "view-sort"
+                    Accessible.name: qsTr("排序：%1").arg(sortMode)
+                    PlasmaComponents.ToolTip.text: Accessible.name
+                    PlasmaComponents.ToolTip.visible: hovered
+                    onClicked: {
+                        const currentIndex = sortModes.indexOf(root.sortMode)
+                        const nextIndex = (currentIndex + 1) % sortModes.length
+                        const nextMode = sortModes[nextIndex]
+                        root.sortModeChanged(nextMode)
                     }
                 }
 
@@ -209,7 +244,7 @@ Item {
             objectName: "statusLabel"
 
             Layout.fillWidth: true
-            text: root.statusText
+            text: root.statusText + qsTr(" · 排序：%1").arg(sortModeText())
             color: Kirigami.Theme.disabledTextColor
             font: Kirigami.Theme.smallFont
             elide: Text.ElideRight

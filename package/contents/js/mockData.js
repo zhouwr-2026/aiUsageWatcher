@@ -106,7 +106,8 @@ function normalizeDefinitions(raw) {
             // 内置 catalog 用预设，但保留用户的 enabled / logoPath 状态
             return Object.assign({}, fixedDefinition, {
                 "enabled": definition.enabled !== false,
-                "logoPath": typeof definition.logoPath === "string" ? definition.logoPath : ""
+                "logoPath": (typeof definition.logoPath === "string" && definition.logoPath.length > 0)
+                    ? definition.logoPath : fixedDefinition.logoPath || ""
             });
         }
         var providerScript = typeof definition.script === "string" && definition.script

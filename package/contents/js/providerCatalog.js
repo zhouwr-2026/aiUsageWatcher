@@ -5,6 +5,17 @@
 var CUSTOM_ID = "custom";
 var DEFAULT_TEMPLATE = "%1 限额  %2/%3  重置于 %4";
 
+var _LOGO_ASSETS = {
+    minimax: "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/minimax.png",
+    codex: "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/codex.svg",
+    "zhipu-glm": "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/zhipu-glm.svg",
+    "claude-code": "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/claude-code.png",
+    "kimi-for-coding": "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/kimi-for-coding.png",
+    siliconflow: "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/siliconflow.svg",
+    codexzh: "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/codexzh-icon.png",
+    "opencode-go": "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/opencode-go.svg"
+};
+
 var PRESETS = [{
     "catalogId": "codex",
     "label": "Codex",
@@ -127,6 +138,7 @@ function definitionFor(catalogId) {
     var preset = presetFor(catalogId);
     if (!preset)
         return null;
+    var logoAsset = _LOGO_ASSETS[catalogId] || "";
     return {
         "catalogId": preset.catalogId,
         "id": preset.id,
@@ -137,6 +149,7 @@ function definitionFor(catalogId) {
         "trustMode": "strict",
         "template": DEFAULT_TEMPLATE,
         "script": "",
+        "logoPath": logoAsset,
         "plans": preset.plans.map(function(plan) {
             return Object.assign({}, plan, {
                 "sourceType": "native",

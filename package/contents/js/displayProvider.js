@@ -218,6 +218,14 @@ function _tightestForProvider(display) {
     return { percent: max, remaining: remaining }
 }
 
+// logoPath 已经是 file:// 绝对路径，直接返回
+// fallback 是 SVG data string（当 logoPath 为空时）
+function _resolveLogoPath(logoPath, fallback) {
+    if (typeof logoPath === "string" && logoPath.length > 0)
+        return logoPath
+    return fallback || ""
+}
+
 function buildDisplay(definitions, snapshots, options) {
     options = options || {}
     var enabledDefinitions = filterEnabled(definitions)
@@ -239,8 +247,7 @@ function buildDisplay(definitions, snapshots, options) {
             errorText: snapshot && snapshot.errorText ? snapshot.errorText : "",
             template: definition.template || DEFAULT_TEMPLATE,
             website: definition.website || ProviderRegistry.websiteFor(definition.catalogId),
-            logoSource: (typeof definition.logoPath === "string"
-                         && definition.logoPath.length > 0) ? definition.logoPath : nativeLogo,
+            logoSource: _resolveLogoPath(definition.logoPath, nativeLogo),
             logoChar: firstCharFallback(definition.providerName
                                         || ProviderRegistry.providerNameFor(definition.catalogId)),
             logoIsSvg: !definition.logoPath,

@@ -18,6 +18,20 @@ PlasmoidItem {
             sortMode: root.effectiveSortMode,
             customOrderRaw: root.customOrderRaw
         })
+    Component.onCompleted: {
+        console.log("[LOGO] count=", providers.length)
+        for (var i = 0; i < providers.length; ++i) {
+            console.log("[LOGO]", i, providers[i].providerName, "logoSource=", providers[i].logoSource, "logoIsSvg=", providers[i].logoIsSvg)
+        }
+        applyMiniMaxSnapshot()
+        applyCodexSnapshot()
+        applyCodexZhSnapshot()
+        applyCustomSnapshots()
+        requestMiniMaxRefresh()
+        requestCodexRefresh()
+        requestCodexZhRefresh()
+        requestCustomRefresh()
+    }
     property int compactProviderIndex: 0
     property int restoreProviderIndex: 0
     property bool eventHighlighted: false
@@ -247,17 +261,6 @@ PlasmoidItem {
             if (root.displayStrategy === "event" && root.eventMode === "dbus")
                 root.activateModel(modelName)
         }
-    }
-
-    Component.onCompleted: {
-        applyMiniMaxSnapshot()
-        applyCodexSnapshot()
-        applyCodexZhSnapshot()
-        applyCustomSnapshots()
-        requestMiniMaxRefresh()
-        requestCodexRefresh()
-        requestCodexZhRefresh()
-        requestCustomRefresh()
     }
 
     compactRepresentation: CompactView {

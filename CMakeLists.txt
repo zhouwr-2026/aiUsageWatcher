@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(aiUsageWatcher VERSION 0.2.0 LANGUAGES CXX)
+project(AIQuotaPilot VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,9 +22,9 @@ find_package(KF6Config 6.0 REQUIRED)
 find_package(KF6Wallet 6.0 REQUIRED)
 find_package(Plasma 6.0 REQUIRED)
 
-plasma_install_package(package aiUsageWatcher)
+plasma_install_package(package AIQuotaPilot)
 
-kcoreaddons_add_plugin(aiUsageWatcher
+kcoreaddons_add_plugin(AIQuotaPilot
     SOURCES
         src/aiusagewatcherapplet.cpp
         src/aiusagewatcherapplet.h
@@ -44,7 +44,7 @@ kcoreaddons_add_plugin(aiUsageWatcher
         src/codexzhresponseparser.h
     INSTALL_NAMESPACE "plasma/applets"
 )
-target_link_libraries(aiUsageWatcher
+target_link_libraries(AIQuotaPilot
     PRIVATE
         Qt6::Core
         Qt6::DBus
@@ -56,8 +56,8 @@ target_link_libraries(aiUsageWatcher
         KF6::Wallet
         Plasma::Plasma
 )
-set_target_properties(aiUsageWatcher PROPERTIES PREFIX "")
-target_compile_definitions(aiUsageWatcher
+set_target_properties(AIQuotaPilot PROPERTIES PREFIX "")
+target_compile_definitions(AIQuotaPilot
     PRIVATE
         QUOTA_PILOT_SCRIPT_WORKER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/quota-pilot-script-worker"
 )

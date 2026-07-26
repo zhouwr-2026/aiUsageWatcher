@@ -111,8 +111,6 @@ KCM.SimpleKCM {
 
     function syncWorkingValue() {
         cfg_providers = ProviderConfig.serializeDefinitions(definitions())
-        // 手动通知 KCM 框架有未保存变更
-        root.needsSave = true
     }
 
     function addProvider(candidate) {

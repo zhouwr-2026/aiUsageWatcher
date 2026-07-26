@@ -262,11 +262,11 @@ Item {
                     anchors.fill: parent
                     anchors.margins: 2
                     source: {
+                        const catalogId = root.candidate.catalogId || ""
                         if (root.candidate.logoPath && root.candidate.logoPath.length > 0)
                             return root.candidate.logoPath
-                        if (!root.isCustom) {
-                            const svg = ProviderRegistry.logoSvgFor(
-                                root.candidate.catalogId || "")
+                        if (catalogId.length > 0 && !root.isCustom) {
+                            const svg = ProviderRegistry.logoSvgFor(catalogId)
                             if (svg && svg.length > 0)
                                 return "data:image/svg+xml;utf8," + svg
                         }

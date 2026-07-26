@@ -133,6 +133,7 @@ AiUsageWatcherApplet::AiUsageWatcherApplet(QObject *parent,
                                            const QVariantList &args)
     : Plasma::Applet(parent, data, args)
     , m_miniMaxClient(this)
+    , m_codexzhClient(this)
     , m_customUsageClient(this)
     , m_codexNetwork(new QNetworkAccessManager(this))
     , m_codexPollTimer(new QTimer(this))
@@ -173,6 +174,30 @@ AiUsageWatcherApplet::AiUsageWatcherApplet(QObject *parent,
             &MiniMaxClient::credentialErrorChanged,
             this,
             &AiUsageWatcherApplet::miniMaxCredentialErrorChanged);
+    connect(&m_codexzhClient,
+            &CodexZhClient::snapshotChanged,
+            this,
+            &AiUsageWatcherApplet::codexzhSnapshotChanged);
+    connect(&m_codexzhClient,
+            &CodexZhClient::loadingChanged,
+            this,
+            &AiUsageWatcherApplet::codexzhLoadingChanged);
+    connect(&m_codexzhClient,
+            &CodexZhClient::credentialConfiguredChanged,
+            this,
+            &AiUsageWatcherApplet::codexzhCredentialConfiguredChanged);
+    connect(&m_codexzhClient,
+            &CodexZhClient::credentialStatusChanged,
+            this,
+            &AiUsageWatcherApplet::codexzhCredentialStatusChanged);
+    connect(&m_codexzhClient,
+            &CodexZhClient::credentialBusyChanged,
+            this,
+            &AiUsageWatcherApplet::codexzhCredentialBusyChanged);
+    connect(&m_codexzhClient,
+            &CodexZhClient::credentialErrorChanged,
+            this,
+            &AiUsageWatcherApplet::codexzhCredentialErrorChanged);
     connect(&m_customUsageClient,
             &CustomUsageClient::snapshotsChanged,
             this,
@@ -227,6 +252,36 @@ bool AiUsageWatcherApplet::miniMaxCredentialBusy() const
 bool AiUsageWatcherApplet::miniMaxCredentialError() const
 {
     return m_miniMaxClient.credentialError();
+}
+
+QVariantMap AiUsageWatcherApplet::codexzhSnapshot() const
+{
+    return m_codexzhClient.snapshot();
+}
+
+bool AiUsageWatcherApplet::codexzhLoading() const
+{
+    return m_codexzhClient.loading();
+}
+
+bool AiUsageWatcherApplet::codexzhCredentialConfigured() const
+{
+    return m_codexzhClient.credentialConfigured();
+}
+
+QString AiUsageWatcherApplet::codexzhCredentialStatus() const
+{
+    return m_codexzhClient.credentialStatus();
+}
+
+bool AiUsageWatcherApplet::codexzhCredentialBusy() const
+{
+    return m_codexzhClient.credentialBusy();
+}
+
+bool AiUsageWatcherApplet::codexzhCredentialError() const
+{
+    return m_codexzhClient.credentialError();
 }
 
 QVariantMap AiUsageWatcherApplet::codexSnapshot() const
@@ -297,6 +352,21 @@ void AiUsageWatcherApplet::saveMiniMaxApiKey(const QString &apiKey)
 void AiUsageWatcherApplet::clearMiniMaxApiKey()
 {
     m_miniMaxClient.clearCredential();
+}
+
+void AiUsageWatcherApplet::refreshCodexZhUsage()
+{
+    m_codexzhClient.refresh();
+}
+
+void AiUsageWatcherApplet::saveCodexZhApiKey(const QString &apiKey)
+{
+    m_codexzhClient.saveCredential(apiKey);
+}
+
+void AiUsageWatcherApplet::clearCodexZhApiKey()
+{
+    m_codexzhClient.clearCredential();
 }
 
 void AiUsageWatcherApplet::refreshCustomProviders(const QVariantList &definitions)

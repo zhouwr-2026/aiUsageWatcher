@@ -6,6 +6,8 @@
 #include <QColor>
 #include <QVariantList>
 
+#include "codexloginoutputparser.h"
+#include "codexzhclient.h"
 #include "customusageclient.h"
 #include "minimaxclient.h"
 
@@ -35,6 +37,12 @@ class AiUsageWatcherApplet : public Plasma::Applet
     Q_PROPERTY(QVariantList codexAccounts READ codexAccounts NOTIFY codexAccountsChanged)
     Q_PROPERTY(QVariantList customUsageSnapshots READ customUsageSnapshots NOTIFY customUsageSnapshotsChanged)
     Q_PROPERTY(bool customUsageLoading READ customUsageLoading NOTIFY customUsageLoadingChanged)
+    Q_PROPERTY(QVariantMap codexzhSnapshot READ codexzhSnapshot NOTIFY codexzhSnapshotChanged)
+    Q_PROPERTY(bool codexzhLoading READ codexzhLoading NOTIFY codexzhLoadingChanged)
+    Q_PROPERTY(bool codexzhCredentialConfigured READ codexzhCredentialConfigured NOTIFY codexzhCredentialConfiguredChanged)
+    Q_PROPERTY(QString codexzhCredentialStatus READ codexzhCredentialStatus NOTIFY codexzhCredentialStatusChanged)
+    Q_PROPERTY(bool codexzhCredentialBusy READ codexzhCredentialBusy NOTIFY codexzhCredentialBusyChanged)
+    Q_PROPERTY(bool codexzhCredentialError READ codexzhCredentialError NOTIFY codexzhCredentialErrorChanged)
 
 public:
     AiUsageWatcherApplet(QObject *parent,
@@ -58,6 +66,12 @@ public:
     QVariantList codexAccounts() const;
     QVariantList customUsageSnapshots() const;
     bool customUsageLoading() const;
+    QVariantMap codexzhSnapshot() const;
+    bool codexzhLoading() const;
+    bool codexzhCredentialConfigured() const;
+    QString codexzhCredentialStatus() const;
+    bool codexzhCredentialBusy() const;
+    bool codexzhCredentialError() const;
 
     Q_INVOKABLE void refreshMiniMax();
     Q_INVOKABLE void saveMiniMaxApiKey(const QString &apiKey);
@@ -69,6 +83,9 @@ public:
     Q_INVOKABLE void openCodexLoginPage();
     Q_INVOKABLE void removeCodexAccount(const QString &profileId);
     Q_INVOKABLE void refreshCustomProviders(const QVariantList &definitions);
+    Q_INVOKABLE void refreshCodexZhUsage();
+    Q_INVOKABLE void saveCodexZhApiKey(const QString &apiKey);
+    Q_INVOKABLE void clearCodexZhApiKey();
     Q_INVOKABLE void attachJavaScriptHighlighter(QQuickTextDocument *document,
                                                  const QColor &keywordColor,
                                                  const QColor &stringColor,
@@ -93,6 +110,12 @@ Q_SIGNALS:
     void codexAccountsChanged();
     void customUsageSnapshotsChanged();
     void customUsageLoadingChanged();
+    void codexzhSnapshotChanged();
+    void codexzhLoadingChanged();
+    void codexzhCredentialConfiguredChanged();
+    void codexzhCredentialStatusChanged();
+    void codexzhCredentialBusyChanged();
+    void codexzhCredentialErrorChanged();
 
 private Q_SLOTS:
     void handleModelActivated(const QString &modelName);
@@ -124,6 +147,7 @@ private:
                             bool error);
 
     MiniMaxClient m_miniMaxClient;
+    CodexZhClient m_codexzhClient;
     CustomUsageClient m_customUsageClient;
     QNetworkAccessManager *m_codexNetwork = nullptr;
     QNetworkReply *m_codexReply = nullptr;

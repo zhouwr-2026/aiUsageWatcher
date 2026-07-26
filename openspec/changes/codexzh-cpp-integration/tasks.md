@@ -1,8 +1,8 @@
 ## 1. 提取子 agent C++ 代码并注册构建
 
-- [ ] 1.1 从 stash@{1} 提取 codexzhclient.cpp/h、codexzhresponseparser.cpp/h 到 src/ 目录
-- [ ] 1.2 修改 CMakeLists.txt 注册 4 个新源文件 + 添加 test 目标
-- [ ] 1.3 编译验证（`cmake --build build`），修复任何编译错误
+- [x] 1.1 从 stash@{1} 提取 codexzhclient.cpp/h、codexzhresponseparser.cpp/h 到 src/ 目录
+- [x] 1.2 修改 CMakeLists.txt 注册 4 个新源文件 + 添加 test 目标
+- [x] 1.3 编译验证（`cmake --build build`），修复任何编译错误
 
 ## 2. applet 桥接 CodexZhClient
 

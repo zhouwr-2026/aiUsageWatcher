@@ -1554,7 +1554,7 @@ archived-with: 2026-07-26-provider-ux-enhancements
 
 **Steps:**
 
-- [x] **Step 10.1:** 启动并观察圆球：
+- [x] **Step 10.1:** 启动并观察小图标：
 ```bash
 plasmawindowed aiUsageWatcher &
 PW_PID=$!
@@ -1563,7 +1563,7 @@ ls -la screenshots/ 2>/dev/null || mkdir -p screenshots
 import -window root "${PW_PID}" screenshots/01-default.png 2>/dev/null || true
 kill $PW_PID 2>/dev/null
 ```
-Expected: 截图存在；圆球显示 `—` 或具体已用% 数字。
+Expected: 截图存在；小图标显示 `—` 或具体已用% 数字。
 
 - [x] **Step 10.2:** 切换 sortMode：
 ```bash

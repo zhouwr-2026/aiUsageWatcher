@@ -1,54 +1,53 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0/"
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0/
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
                           http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
-    <group name="providers">
-        <entry name="providers" type="string">
-            <default></default>
-        </entry>
-    </group>
-    <group name="ui">
-        <entry name="sortMode" type="string">
-            <default>default</default>
-        </entry>
-        <entry name="customOrder" type="string">
-            <default></default>
-        </entry>
-        <entry name="refreshIntervalSec" type="int">
-            <default>60</default>
-            <min>10</min>
-            <max>3600</max>
-        </entry>
-        <entry name="opacityPercent" type="int">
-            <default>80</default>
-            <min>20</min>
-            <max>100</max>
-        </entry>
-        <entry name="compactStyle" type="string">
-            <default>pie</default>
-        </entry>
-        <entry name="panelStyle" type="string">
-            <default>bar</default>
-        </entry>
-        <entry name="displayStrategy" type="string">
-            <default>polling</default>
-        </entry>
-        <entry name="pollingIntervalSec" type="int">
-            <default>5</default>
-            <min>1</min>
-            <max>300</max>
-        </entry>
-        <entry name="eventMode" type="string">
-            <default>dbus</default>
-        </entry>
-        <entry name="highlightDurationSec" type="int">
-            <default>30</default>
-            <min>1</min>
-            <max>600</max>
-        </entry>
-        <entry name="keepPanelOpen" type="bool">
-            <default>false</default>
-        </entry>
-    </group>
+    <kcfgfile name=""/>
+
+    <entry name="providers" type="string">
+        <default></default>
+    </entry>
+
+    <entry name="sortMode" type="string">
+        <default>default</default>
+    </entry>
+    <entry name="customOrder" type="string">
+        <default></default>
+    </entry>
+    <entry name="refreshIntervalSec" type="int">
+        <default>60</default>
+        <min>10</min>
+        <max>3600</max>
+    </entry>
+    <entry name="opacityPercent" type="int">
+        <default>80</default>
+        <min>20</min>
+        <max>100</max>
+    </entry>
+    <entry name="compactStyle" type="string">
+        <default>pie</default>
+    </entry>
+    <entry name="panelStyle" type="string">
+        <default>bar</default>
+    </entry>
+    <entry name="displayStrategy" type="string">
+        <default>polling</default>
+    </entry>
+    <entry name="pollingIntervalSec" type="int">
+        <default>5</default>
+        <min>1</min>
+        <max>300</max>
+    </entry>
+    <entry name="eventMode" type="string">
+        <default>dbus</default>
+    </entry>
+    <entry name="highlightDurationSec" type="int">
+        <default>30</default>
+        <min>1</min>
+        <max>600</max>
+    </entry>
+    <entry name="keepPanelOpen" type="bool">
+        <default>false</default>
+    </entry>
 </kcfg>

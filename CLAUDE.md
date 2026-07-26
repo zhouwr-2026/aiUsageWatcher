@@ -23,7 +23,7 @@ kpackagetool6 --remove aiUsageWatcher
 ```
 
 - 无需 C++ 编译（QML-only），CMakeLists.txt 仅用于包管理器识别
-- 验证：`plasmawindowed aiUsageWatcher` 启动后检查圆球显示、颜色语义、点击展开、Timer 刷新
+- 验证：`plasmawindowed aiUsageWatcher` 启动后检查小图标（柱状图/饼图）显示、颜色语义、点击展开、Timer 刷新
 
 ## 代码架构
 
@@ -34,8 +34,8 @@ package/                          # 小部件包根目录
     ├── config/main.xml           # KConfig XT 配置文件（providerCount, opacityPercent, alwaysOnTop）
     ├── js/mockData.js            # 种子数据 + 波动函数（开发期 mock，Timer 驱动）
     └── ui/
-        ├── main.qml              # 根组件（PlasmoidItem）：compact 圆球 + full 弹出面板
-        ├── Orb.qml               # 圆球组件（单供应商已用 %，三态颜色）
+        ├── main.qml              # 根组件（PlasmoidItem）：compactRepresentation + fullRepresentation
+        ├── CompactView.qml        # 小图标（柱状图/饼图，配置可选）
         ├── ProviderGroup.qml     # 供应商卡片：标题 + LED 灯 + 多条 PlanBar
         ├── PlanBar.qml           # 单条水平进度条（计划名 + 进度条 + 百分比 + 重置时间）
         └── configGeneral.qml     # 配置页入口（占位，待实现）
@@ -49,10 +49,10 @@ openspec/changes/minimal-viable-plasmoid/  # 当前开发变更（Comet 流程�
 
 ```
 PlasmoidItem (main.qml)
-├── compactRepresentation: MouseArea → Orb 风格圆球（显示最紧张供应商的已用 %）
-└── fullRepresentation: Item → Flickable → Column
-    └── Repeater(providers) → 内联 ProviderGroup（标题 + 错误 + plans Repeater）
-        └── Repeater(plans) → 内联 PlanBar（计划名 + 进度条 + 百分比 + 重置信息）
+├── compactRepresentation: CompactView（柱状图/饼图，配置可选；显示最紧张供应商）
+└── fullRepresentation: FullView → Column → ScrollView
+    └── ListView(providers) → ProviderGroup（标题 + Logo + LED 灯 + plans Repeater）
+        └── Repeater(plans) → PlanBar（计划名 + 进度条 + 百分比 + 重置信息）
 ```
 
 ### 数据流
@@ -71,7 +71,7 @@ PlasmoidItem (main.qml)
 
 ### 关键 QML 组件属性
 
-- **Orb.qml**：`usedPercent`、`usedPercentLabel`、`ringClass`、`providerName`
+- **CompactView.qml**：`providers`、`compactStyle`（"pie"/"bar"）、`providerIndex`、`highlighted`、`plasmoidItem`
 - **ProviderGroup.qml**：`providerName`、`ledClass`、`sourceLabel`、`statusLabel`、`plans[]`、`errorText`
 - **PlanBar.qml**：`planName`、`usedPercent`、`usedPercentLabel`、`barClass`、`resetText`、`usedText`、`unitText`、`extraText`
 

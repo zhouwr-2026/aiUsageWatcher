@@ -19,6 +19,10 @@ QT_PLUGIN_PATH="$HOME/.local/lib/qt6/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
   plasmawindowed aiUsageWatcher
 ```
 
+## KDE开发者网站
+
+地址：<https://develop.kde.org/docs/plasma/widget/examples/>
+
 ## 代码架构
 
 ```
@@ -33,12 +37,11 @@ package/                          # 小部件包根目录
     │   └── providerConfig.js     # KCM 供应商配置校验逻辑
     └── ui/
         ├── main.qml              # 根组件（PlasmoidItem）
-        ├── CompactView.qml       # compact 视图（pie/bar）
+        ├── CompactView.qml       # compact 视图（柱状图/饼图，配置可选）
         ├── FullView.qml          # full 弹出面板
-        ├── Orb.qml               # 圆球组件
-        ├── PieChart.qml          # 自研饼图组件（Canvas）
+        ├── PanelPieView.qml      # 主面板饼图（按列展示）
         ├── ProviderGroup.qml     # 供应商卡片
-        ├── PlanBar.qml           # 套餐进度条
+        ├── PlanBar.qml           # 套餐水平进度条
         └── config/
             ├── GeneralConfig.qml   # 常规设置页
             ├── ProvidersConfig.qml # 供应商管理页
@@ -61,9 +64,9 @@ tests/
 
 ```
 PlasmoidItem (main.qml)
-├── compactRepresentation: CompactView → Orb 风格圆球
-└── fullRepresentation: FullView → Flickable → Column
-    └── Repeater(providers) → ProviderGroup
+├── compactRepresentation: CompactView（柱状图/饼图，配置可选）
+└── fullRepresentation: FullView → Column → ScrollView
+    └── ListView(providers) → ProviderGroup
         └── Repeater(plans) → PlanBar
 ```
 
@@ -76,12 +79,12 @@ PlasmoidItem (main.qml)
 
 ### 颜色语义
 
-| `usedPercent` | 语义 | 颜色 |
-|---|---|------|
-| `< 85` | 正常 | `Kirigami.Theme.positiveTextColor` |
-| `85..94` | 注意 | `Kirigami.Theme.neutralTextColor` |
-| `>= 95` | 紧张 | `Kirigami.Theme.negativeTextColor` |
-| 无数据 | 未知 | `Kirigami.Theme.disabledTextColor` |
+| `usedPercent` | 语义 | 颜色                               |
+| ------------- | ---- | ---------------------------------- |
+| `< 85`        | 正常 | `Kirigami.Theme.positiveTextColor` |
+| `85..94`      | 注意 | `Kirigami.Theme.neutralTextColor`  |
+| `>= 95`       | 紧张 | `Kirigami.Theme.negativeTextColor` |
+| 无数据        | 未知 | `Kirigami.Theme.disabledTextColor` |
 
 ### 关键 QML 组件属性
 
@@ -91,7 +94,7 @@ PlasmoidItem (main.qml)
 
 ## 开发约定
 
-- 供应商名自动剥 ` · <App>` 后缀（`stripProviderSuffix` 函数）
+- 供应商名自动剥 `· <App>` 后缀（`stripProviderSuffix` 函数）
 - `unit` 超 8 字符或含空白 → 放 `unitOverflow` 单独展示
 - 进度条动画 300ms `Easing.OutCubic`
 - 数据不可变更新（刷新函数返回新数组，不修改原对象）

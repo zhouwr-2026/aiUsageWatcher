@@ -219,7 +219,7 @@ Item {
                     website: modelData.website || ""
                     logoSource: modelData.logoSource || ""
                     logoChar: modelData.logoChar || ""
-                    logoIsSvg: modelData.logoIsSvg !== false
+                    logoIsSvg: modelData.logoIsSvg === true
                     ledClass: modelData.ledClass || "led-gray"
                     sourceLabel: modelData.sourceLabel || ""
                     statusLabel: modelData.statusLabel || ""

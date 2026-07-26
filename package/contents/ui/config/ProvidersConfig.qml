@@ -61,6 +61,7 @@ KCM.SimpleKCM {
     property string codexUsageStatus: qsTr("未登录")
     property string codexUsageError: ""
     property string cfg_sortMode: Plasmoid.configuration.sortMode || "default"
+    property string cfg_sortModeDefault: "default"
 
     function copy(value) {
         return JSON.parse(JSON.stringify(value))

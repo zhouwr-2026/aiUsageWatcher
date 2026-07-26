@@ -49,6 +49,7 @@ PlasmoidItem {
         runtimeSnapshots = MockData.createSeedSnapshots(providerDefinitions)
         applyMiniMaxSnapshot()
         applyCodexSnapshot()
+        applyCodexZhSnapshot()
         applyCustomSnapshots()
         providers = DisplayProvider.buildDisplay(providerDefinitions, runtimeSnapshots, {
             sortMode: root.effectiveSortMode,
@@ -88,12 +89,38 @@ PlasmoidItem {
 
         runtimeSnapshots = MockData.replaceSnapshot(runtimeSnapshots, snapshot)
         providers = DisplayProvider.buildDisplay(providerDefinitions, runtimeSnapshots, {
+            sortMode: root.effectiveSortMode,
+            customOrderRaw: root.customOrderRaw
+        })
         lastRefreshTime = new Date()
         return true
     }
 
     function requestCodexRefresh() {
         const refreshFunction = usageBackend["refreshCodexUsage"]
+        if (typeof refreshFunction !== "function")
+            return false
+        refreshFunction.call(usageBackend)
+        return true
+    }
+
+    function applyCodexZhSnapshot() {
+        const snapshot = usageBackend["codexzhSnapshot"]
+        if (!snapshot || snapshot.providerId !== "codexzh"
+                || !snapshot.plans || typeof snapshot.plans.length !== "number")
+            return false
+
+        runtimeSnapshots = MockData.replaceSnapshot(runtimeSnapshots, snapshot)
+        providers = DisplayProvider.buildDisplay(providerDefinitions, runtimeSnapshots, {
+            sortMode: root.effectiveSortMode,
+            customOrderRaw: root.customOrderRaw
+        })
+        lastRefreshTime = new Date()
+        return true
+    }
+
+    function requestCodexZhRefresh() {
+        const refreshFunction = usageBackend["refreshCodexZhUsage"]
         if (typeof refreshFunction !== "function")
             return false
         refreshFunction.call(usageBackend)
@@ -129,6 +156,7 @@ PlasmoidItem {
         runtimeSnapshots = MockData.createSeedSnapshots(providerDefinitions)
         applyMiniMaxSnapshot()
         applyCodexSnapshot()
+        applyCodexZhSnapshot()
         applyCustomSnapshots()
         providers = DisplayProvider.buildDisplay(providerDefinitions, runtimeSnapshots, {
             sortMode: root.effectiveSortMode,
@@ -137,6 +165,7 @@ PlasmoidItem {
         lastRefreshTime = new Date()
         requestMiniMaxRefresh()
         requestCodexRefresh()
+        requestCodexZhRefresh()
         requestCustomRefresh()
         refreshTimer.restart()
     }
@@ -235,6 +264,9 @@ PlasmoidItem {
         function onCustomUsageSnapshotsChanged() {
             root.applyCustomSnapshots()
         }
+        function onCodexzhSnapshotChanged() {
+            root.applyCodexZhSnapshot()
+        }
         function onModelActivated(modelName) {
             if (root.displayStrategy === "event" && root.eventMode === "dbus")
                 root.activateModel(modelName)
@@ -244,9 +276,11 @@ PlasmoidItem {
     Component.onCompleted: {
         applyMiniMaxSnapshot()
         applyCodexSnapshot()
+        applyCodexZhSnapshot()
         applyCustomSnapshots()
         requestMiniMaxRefresh()
         requestCodexRefresh()
+        requestCodexZhRefresh()
         requestCustomRefresh()
     }
 

@@ -6,10 +6,10 @@
 
 ## 2. applet 桥接 CodexZhClient
 
-- [ ] 2.1 在 aiusagewatcherapplet.h 添加 Q_PROPERTY（codexzhSnapshot/codexzhLoading/credentialConfigured/credentialStatus/credentialBusy/credentialError）
-- [ ] 2.2 在 aiusagewatcherapplet.cpp 添加 CodexZhClient 成员初始化、signal 连接、getter 方法
-- [ ] 2.3 添加 Q_INVOKABLE 方法：refreshCodexZhUsage/saveCodexZhApiKey/clearCodexZhApiKey
-- [ ] 2.4 编译验证（`cmake --build build`）
+- [x] 2.1 在 aiusagewatcherapplet.h 添加 Q_PROPERTY（codexzhSnapshot/codexzhLoading/credentialConfigured/credentialStatus/credentialBusy/credentialError）
+- [x] 2.2 在 aiusagewatcherapplet.cpp 添加 CodexZhClient 成员初始化、signal 连接、getter 方法
+- [x] 2.3 添加 Q_INVOKABLE 方法：refreshCodexZhUsage/saveCodexZhApiKey/clearCodexZhApiKey
+- [x] 2.4 编译验证（`cmake --build build`）
 
 ## 3. QML 侧接入 CodexZH snapshot
 

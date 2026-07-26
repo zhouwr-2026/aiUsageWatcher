@@ -7,8 +7,6 @@ import org.kde.kirigami as Kirigami
 KCM.SimpleKCM {
     id: root
 
-    property string cfg_providers: ""
-    property string cfg_providersDefault: ""
     property string cfg_compactStyle: "pie"
     property string cfg_compactStyleDefault: "pie"
     property string cfg_panelStyle: "bar"
@@ -28,6 +26,10 @@ KCM.SimpleKCM {
     property alias cfg_keepPanelOpen: keepPanelOpen.checked
     property bool cfg_keepPanelOpenDefault: false
     property alias cfg_sortMode: sortModeControl.currentValue
+    property string cfg_customOrder: ""
+    property string cfg_customOrderDefault: ""
+    property string cfg_providers: ""
+    property string cfg_providersDefault: ""
 
     readonly property var sortModeOptions: [
         { text: qsTr("默认顺序"), value: "default" },

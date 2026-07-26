@@ -366,10 +366,6 @@ KCM.SimpleKCM {
         id: providersModel
     }
 
-    onCfg_providersChanged: {
-        // 变更已写入 cfg_providers，KCM 框架会自动激活"应用"按钮
-    }
-
     title: root.editorVisible
         ? (root.creatingProvider
            ? qsTr("添加供应商")

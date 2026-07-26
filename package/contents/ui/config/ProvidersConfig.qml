@@ -17,8 +17,8 @@ KCM.SimpleKCM {
 
     property string cfg_providers: ""
     property string cfg_providersDefault: ""
-    property string cfg_compactStyle: "pie"
-    property string cfg_compactStyleDefault: "pie"
+    property string cfg_compactStyle: "bar"
+    property string cfg_compactStyleDefault: "bar"
     property string cfg_panelStyle: "bar"
     property string cfg_panelStyleDefault: "bar"
     property string cfg_displayStrategy: "polling"

@@ -37,7 +37,7 @@ PlasmoidItem {
     property bool eventHighlighted: false
     property date lastRefreshTime: new Date()
     readonly property var compactUsage: MockData.providerUsageAt(providers, compactProviderIndex)
-    readonly property string compactStyle: Plasmoid.configuration.compactStyle || "pie"
+    readonly property string compactStyle: Plasmoid.configuration.compactStyle || "bar"
     readonly property string panelStyle: Plasmoid.configuration.panelStyle || "bar"
     readonly property string displayStrategy: Plasmoid.configuration.displayStrategy || "polling"
     readonly property string eventMode: Plasmoid.configuration.eventMode || "dbus"

@@ -26,7 +26,7 @@
         <max>100</max>
     </entry>
     <entry name="compactStyle" type="string">
-        <default>pie</default>
+        <default>bar</default>
     </entry>
     <entry name="panelStyle" type="string">
         <default>bar</default>

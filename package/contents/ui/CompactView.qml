@@ -159,6 +159,8 @@ Item {
         QQC2.ProgressBar {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
+            Layout.minimumHeight: Kirigami.Units.smallSpacing * 2
+            Layout.preferredHeight: Kirigami.Units.smallSpacing * 2
             from: 0
             to: 100
             value: root.currentUsage.usedPercent >= 0 ? root.boundedPercent : 0

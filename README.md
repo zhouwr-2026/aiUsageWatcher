@@ -1,7 +1,7 @@
 # 额度领航员（AIQuotaPilot）
 
 额度领航员是 KDE Plasma 6 的大模型套餐额度监控小部件。项目代码名为 QuotaPilot，
-并沿用内部插件 ID `aiUsageWatcher`，因此已有安装实例和 KConfig 不需要迁移；软件界面
+并沿用内部插件 ID `AIQuotaPilot`，因此已有安装实例和 KConfig 不需要迁移；软件界面
 统一显示中文名“额度领航员”。
 
 ## 当前能力
@@ -47,7 +47,7 @@ cmake --install build
 
 ```bash
 QT_PLUGIN_PATH="$HOME/.local/lib/qt6/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}" \
-  plasmawindowed aiUsageWatcher
+  plasmawindowed AIQuotaPilot
 ```
 
 ## D-Bus 活跃事件

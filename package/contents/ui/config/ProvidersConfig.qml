@@ -9,6 +9,7 @@ import org.kde.kcmutils as KCM
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.plasmoid
 import "../../js/providerConfig.js" as ProviderConfig
+import "../../js/providerRegistry.js" as ProviderRegistry
 import "../../js/scriptTools.js" as ScriptTools
 
 KCM.SimpleKCM {
@@ -34,6 +35,8 @@ KCM.SimpleKCM {
     property int cfg_opacityPercentDefault: 80
     property bool cfg_keepPanelOpen: false
     property bool cfg_keepPanelOpenDefault: false
+    property string cfg_customOrder: ""
+    property string cfg_customOrderDefault: ""
     readonly property int workingCount: providersModel.count
     readonly property var usageBackend: Plasmoid
     property string editingId: ""
@@ -66,18 +69,24 @@ KCM.SimpleKCM {
     function definitionRow(definition) {
         const names = definition.plans.map(function(plan) { return plan.planName })
         const enabled = typeof definition.enabled === "boolean" ? definition.enabled : true
-        const logoSource = (typeof definition.logoPath === "string"
-                            && definition.logoPath.length > 0)
-            ? definition.logoPath : ""
+        const catalogId = definition.catalogId || ""
+        const logoPath = typeof definition.logoPath === "string" ? definition.logoPath : ""
+        const isCustom = catalogId === "custom" || catalogId === ""
+        const logoSource = logoPath.length > 0
+            ? logoPath
+            : (isCustom ? "" : "data:image/svg+xml;utf8," + ProviderRegistry.logoSvgFor(catalogId))
         const logoChar = (definition.providerName || "").trim().charAt(0).toUpperCase()
+        const defCopy = JSON.parse(JSON.stringify(definition))
+        defCopy.enabled = enabled
         return {
+            catalogId: catalogId,
             providerId: definition.id,
             providerName: definition.providerName,
             planSummary: names.join("、"),
             enabled: enabled,
             logoSource: logoSource,
             logoChar: logoChar,
-            definitionJson: JSON.stringify(definition)
+            definitionJson: JSON.stringify(defCopy)
         }
     }
 
@@ -102,6 +111,8 @@ KCM.SimpleKCM {
 
     function syncWorkingValue() {
         cfg_providers = ProviderConfig.serializeDefinitions(definitions())
+        // 手动通知 KCM 框架有未保存变更
+        root.needsSave = true
     }
 
     function addProvider(candidate) {
@@ -109,7 +120,7 @@ KCM.SimpleKCM {
         if (!result.valid)
             return false
         providersModel.append(definitionRow(copy(candidate)))
-        syncWorkingValue()
+        root.syncWorkingValue()
         return true
     }
 
@@ -121,7 +132,7 @@ KCM.SimpleKCM {
             return false
         providersModel.set(index, definitionRow(copy(candidate)))
         editingId = candidate.id
-        syncWorkingValue()
+        root.syncWorkingValue()
         return true
     }
 
@@ -130,7 +141,7 @@ KCM.SimpleKCM {
         if (index < 0)
             return false
         providersModel.remove(index)
-        syncWorkingValue()
+        root.syncWorkingValue()
         return true
     }
 
@@ -226,7 +237,7 @@ KCM.SimpleKCM {
             return true
         const saved = syncEditorCandidate()
         if (!saved)
-            console.warn("aiUsageWatcher: provider save rejected:",
+            console.warn("AIQuotaPilot: provider save rejected:",
                          providerEditor.validation.message)
         return saved
     }
@@ -355,6 +366,10 @@ KCM.SimpleKCM {
 
     ListModel {
         id: providersModel
+    }
+
+    onCfg_providersChanged: {
+        // 变更已写入 cfg_providers，KCM 框架会自动激活"应用"按钮
     }
 
     title: root.editorVisible

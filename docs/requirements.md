@@ -1,11 +1,11 @@
 # 额度领航员（QuotaPilot）— 需求与实现基线
 
-本文是 `aiUsageWatcher` 仓库的当前产品、设计和验收基线。
+本文是 `AIQuotaPilot` 仓库的当前产品、设计和验收基线。
 
 ## 1. 身份与兼容
 
 - 用户界面名称：**额度领航员**；QuotaPilot 仅作为项目代码名使用。
-- 内部 KPlugin ID：`aiUsageWatcher`。为兼容已有安装、配置和钱包条目，本轮不改 ID。
+- 内部 KPlugin ID：`AIQuotaPilot`。为兼容已有安装、配置和钱包条目，本轮不改 ID。
 - 平台：KDE Plasma 6、Qt 6.6+、QML、Kirigami、C++ 原生后端。
 - Plasma 6 使用 `metadata.json`，不回退到 Plasma 5 的 `metadata.desktop`。
 

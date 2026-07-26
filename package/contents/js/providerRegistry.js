@@ -74,7 +74,7 @@ var _SVG_DEFAULTS = {
             "<text x='12' y='16' font-size='12' text-anchor='middle' " +
             "fill='#ffffff' font-family='sans-serif'>Z</text></svg>",
         defaultLogoChar: "Z",
-        resetPeriodSec: 30 * 24 * 3600
+        resetPeriodSec: 7 * 24 * 3600
     },
     "opencode-go": {
         providerName: "OpenCode Go",
@@ -146,8 +146,7 @@ var _PRESETS = [{
     catalogId: "codexzh",
     label: "CodexZH",
     plans: [
-        { id: "daily", planName: "日限额", unit: "%" },
-        { id: "monthly", planName: "月限额", unit: "%" }
+        { id: "weekly", planName: "周限额", unit: "%" }
     ],
     sourceLabel: "套餐",
     vendor: "CodexZH"

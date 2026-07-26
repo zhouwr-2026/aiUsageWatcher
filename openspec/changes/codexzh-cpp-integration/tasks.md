@@ -19,9 +19,9 @@
 
 ## 4. 配置表单 Logo 头像改造
 
-- [ ] 4.1 ProviderEditor.qml 顶端添加 64x64 圆形头像区域：内置供应商显示固定内联 SVG（readOnly），自定义供应商点击弹出文件选择对话框
-- [ ] 4.2 移除 ProviderEditor.qml 现有的 `logoPath` TextField 输入框
-- [ ] 4.3 ProvidersConfig.qml 列表项 Logo 缩略图对齐新布局
+- [x] 4.1 ProviderEditor.qml 顶端添加 64x64 圆形头像区域：内置供应商显示固定内联 SVG（readOnly），自定义供应商点击弹出文件选择对话框
+- [x] 4.2 移除 ProviderEditor.qml 现有的 `logoPath` TextField 输入框
+- [x] 4.3 ProvidersConfig.qml 列表项 Logo 缩略图对齐新布局
 
 ## 5. providerRegistry.js 修正为周限额
 

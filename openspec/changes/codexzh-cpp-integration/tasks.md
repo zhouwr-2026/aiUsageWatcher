@@ -25,11 +25,11 @@
 
 ## 5. providerRegistry.js 修正为周限额
 
-- [ ] 5.1 将 codexzh plans 从 `[{ id: "daily", ... }, { id: "monthly", ... }]` 改为 `[{ id: "weekly", planName: "周限额", unit: "%" }]`
-- [ ] 5.2 验证 resetPeriodSec 与周限额是否匹配（7*24*3600 或 30*24*3600）
+- [x] 5.1 将 codexzh plans 从 `[{ id: "daily", ... }, { id: "monthly", ... }]` 改为 `[{ id: "weekly", planName: "周限额", unit: "%" }]`
+- [x] 5.2 验证 resetPeriodSec 与周限额是否匹配（7*24*3600 或 30*24*3600）
 
 ## 6. 编译验证与集成测试
 
-- [ ] 6.1 `cmake --build build` 编译通过
-- [ ] 6.2 `kpackagetool6 --upgrade package` 安装通过，无 QML 运行时错误
-- [ ] 6.3 确认 CodexZH 供应商在配置页可添加、Logo 正确显示、面板显示"未配置"状态
+- [x] 6.1 `cmake --build build` 编译通过
+- [x] 6.2 `kpackagetool6 --upgrade package` 安装通过，无 QML 运行时错误
+- [x] 6.3 确认 CodexZH 供应商在配置页可添加、Logo 正确显示、面板显示"未配置"状态

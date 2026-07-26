@@ -19,11 +19,11 @@ Item {
                                                                  currentUsage.usedPercent))
 
     implicitWidth: compactStyle === "pie"
-        ? Math.max(height, Kirigami.Units.gridUnit)
+        ? Math.max(height, Kirigami.Units.gridUnit * 2)
         : Kirigami.Units.gridUnit * 4
-    implicitHeight: Kirigami.Units.gridUnit
+    implicitHeight: Kirigami.Units.gridUnit * 2
     Layout.minimumWidth: compactStyle === "pie"
-        ? Math.max(height, Kirigami.Units.gridUnit)
+        ? Kirigami.Units.gridUnit * 2
         : Kirigami.Units.gridUnit * 3
     Layout.preferredWidth: implicitWidth
     clip: true

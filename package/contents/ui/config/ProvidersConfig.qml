@@ -508,7 +508,6 @@ KCM.SimpleKCM {
                         QQC2.ToolButton {
                             icon.name: "go-up"
                             enabled: providerDelegate.index > 0
-                                     && root.cfg_sortMode === "custom"
                             Accessible.name: qsTr("上移 %1").arg(providerDelegate.providerName)
                             QQC2.ToolTip.text: Accessible.name
                             QQC2.ToolTip.visible: hovered
@@ -518,7 +517,6 @@ KCM.SimpleKCM {
                         QQC2.ToolButton {
                             icon.name: "go-down"
                             enabled: providerDelegate.index < providersModel.count - 1
-                                     && root.cfg_sortMode === "custom"
                             Accessible.name: qsTr("下移 %1").arg(providerDelegate.providerName)
                             QQC2.ToolTip.text: Accessible.name
                             QQC2.ToolTip.visible: hovered

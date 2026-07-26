@@ -32,6 +32,9 @@ Item {
     property bool miniMaxUsageLoading: false
     property string miniMaxUsageStatus: qsTr("未配置")
     property string miniMaxUsageError: ""
+    property bool codexzhUsageLoading: false
+    property string codexzhUsageStatus: qsTr("未配置")
+    property string codexzhUsageError: ""
     property bool codexLoggedIn: false
     property bool codexLoginBusy: false
     property bool codexLoginError: false
@@ -58,6 +61,7 @@ Item {
     signal saveApiKeyRequested(string apiKey)
     signal clearApiKeyRequested()
     signal refreshMiniMaxRequested()
+    signal refreshCodexZhRequested()
     signal startCodexLoginRequested()
     signal cancelCodexLoginRequested()
     signal openCodexLoginPageRequested()
@@ -371,10 +375,10 @@ Item {
                 onTextEdited: root.updateField("website", text)
             }
 
-            }
+        }
 
         Kirigami.InlineMessage {
-            visible: !root.isCustom && !root.isMiniMax && !root.isCodex
+            visible: !root.isCustom && !root.isMiniMax && !root.isCodex && !root.isCodexZh
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: root.formWidth
             Layout.maximumWidth: root.formWidth
@@ -539,12 +543,12 @@ Item {
         }
 
         SectionHeading {
-            visible: root.isMiniMax
-            text: qsTr("MiniMax API 凭据")
+            visible: root.isMiniMax || root.isCodexZh
+            text: qsTr("%1 API 凭据").arg(root.isCodexZh ? "CodexZH" : "MiniMax")
         }
 
         GridLayout {
-            visible: root.isMiniMax
+            visible: root.isMiniMax || root.isCodexZh
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: root.formWidth
             Layout.maximumWidth: root.formWidth
@@ -556,12 +560,14 @@ Item {
             QQC2.TextField {
                 id: apiKeyField
 
-                objectName: "miniMaxApiKeyField"
+                objectName: root.isCodexZh ? "codexzhApiKeyField" : "miniMaxApiKeyField"
                 Layout.preferredWidth: root.fieldWidth
                 Layout.maximumWidth: root.fieldWidth
                 placeholderText: root.credentialConfigured
                     ? qsTr("输入新 Key 以替换已保存凭据")
-                    : qsTr("请输入 MiniMax API Key")
+                    : (root.isCodexZh
+                       ? qsTr("请输入 CodexZH API Key")
+                       : qsTr("请输入 MiniMax API Key"))
                 echoMode: TextInput.Password
                 passwordCharacter: "●"
                 enabled: !root.credentialBusy
@@ -578,13 +584,13 @@ Item {
         }
 
         RowLayout {
-            visible: root.isMiniMax
+            visible: root.isMiniMax || root.isCodexZh
             Layout.fillWidth: true
 
             Item { Layout.fillWidth: true }
 
             QQC2.Button {
-                objectName: "saveMiniMaxApiKeyButton"
+                objectName: root.isCodexZh ? "saveCodexZhApiKeyButton" : "saveMiniMaxApiKeyButton"
                 text: root.credentialConfigured ? qsTr("更新 API Key") : qsTr("保存 API Key")
                 icon.name: "document-save"
                 enabled: apiKeyField.text.trim().length > 0 && !root.credentialBusy
@@ -604,10 +610,17 @@ Item {
 
 
             QQC2.Button {
-                text: root.miniMaxUsageLoading ? qsTr("正在刷新…") : qsTr("刷新额度")
+                text: (root.isCodexZh && root.codexzhUsageLoading)
+                    || (root.isMiniMax && root.miniMaxUsageLoading)
+                    ? qsTr("正在刷新…")
+                    : qsTr("刷新额度")
                 icon.name: "view-refresh"
-                enabled: root.credentialConfigured && !root.miniMaxUsageLoading
-                onClicked: root.refreshMiniMaxRequested()
+                enabled: root.credentialConfigured
+                       && !root.miniMaxUsageLoading
+                       && !root.codexzhUsageLoading
+                onClicked: root.isCodexZh
+                           ? root.refreshCodexZhRequested()
+                           : root.refreshMiniMaxRequested()
             }
 
             QQC2.BusyIndicator {
@@ -619,8 +632,8 @@ Item {
         }
 
         Kirigami.InlineMessage {
-            objectName: "miniMaxCredentialMessage"
-            visible: root.isMiniMax
+            objectName: root.isCodexZh ? "codexzhCredentialMessage" : "miniMaxCredentialMessage"
+            visible: root.isMiniMax || root.isCodexZh
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: root.formWidth
             Layout.maximumWidth: root.formWidth
@@ -634,15 +647,22 @@ Item {
 
 
         Kirigami.InlineMessage {
-            visible: root.isMiniMax && root.credentialConfigured
+            visible: (root.isMiniMax || root.isCodexZh) && root.credentialConfigured
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: root.formWidth
             Layout.maximumWidth: root.formWidth
-            text: root.miniMaxUsageError.length > 0
-                ? qsTr("额度查询失败：%1").arg(root.miniMaxUsageError)
-                : qsTr("额度查询：%1").arg(root.miniMaxUsageStatus)
-            type: root.miniMaxUsageError.length > 0
-                ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive
+            text: root.isCodexZh
+                ? (root.codexzhUsageError.length > 0
+                   ? qsTr("额度查询失败：%1").arg(root.codexzhUsageError)
+                   : qsTr("额度查询：%1").arg(root.codexzhUsageStatus))
+                : (root.miniMaxUsageError.length > 0
+                   ? qsTr("额度查询失败：%1").arg(root.miniMaxUsageError)
+                   : qsTr("额度查询：%1").arg(root.miniMaxUsageStatus))
+            type: root.isCodexZh
+                ? (root.codexzhUsageError.length > 0
+                   ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)
+                : (root.miniMaxUsageError.length > 0
+                   ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)
         }
 
         SectionHeading {

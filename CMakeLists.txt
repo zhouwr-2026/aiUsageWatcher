@@ -38,6 +38,10 @@ kcoreaddons_add_plugin(aiUsageWatcher
         src/minimaxclient.h
         src/minimaxresponseparser.cpp
         src/minimaxresponseparser.h
+        src/codexzhclient.cpp
+        src/codexzhclient.h
+        src/codexzhresponseparser.cpp
+        src/codexzhresponseparser.h
     INSTALL_NAMESPACE "plasma/applets"
 )
 target_link_libraries(aiUsageWatcher

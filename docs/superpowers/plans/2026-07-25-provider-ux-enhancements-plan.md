@@ -2,6 +2,7 @@
 change: provider-ux-enhancements
 design-doc: docs/superpowers/specs/2026-07-25-provider-ux-enhancements-design.md
 base-ref: a51fa80a3a4d0a68780199bfcc6bd3bc4dd8519e
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 # provider-ux-enhancements 实施计划
@@ -32,6 +33,7 @@ base-ref: a51fa80a3a4d0a68780199bfcc6bd3bc4dd8519e
 - Orb 切换动画 ≤ 200ms，无中间黑帧（design D5）。
 - 翻译走 `qsTr()`，命名空间保持一致（不允许硬编码 UI 文案）。
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ## 文件结构图（解构）
@@ -52,6 +54,7 @@ base-ref: a51fa80a3a4d0a68780199bfcc6bd3bc4dd8519e
 
 > 不修改 `package/metadata.json`、`package/contents/code/*`（本项目 QML-only）、`docs/usage-script-spec.md`。
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ### Task 1: providerRegistry.js — 静态 catalog 拆分
@@ -331,6 +334,7 @@ git add package/contents/js/providerRegistry.js
 git commit -m "feat(provider-ux): add providerRegistry.js with SVG catalog defaults"
 ```
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ### Task 2: providerSnapshot.js + displayProvider.js + mockData shim
@@ -870,6 +874,7 @@ git add package/contents/js/providerSnapshot.js \
 git commit -m "feat(provider-ux): split data layer into registry/snapshot/display"
 ```
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ### Task 3: main.qml 排序派生 + Timer restart
@@ -940,6 +945,7 @@ git add package/contents/ui/main.qml
 git commit -m "feat(provider-ux): sort derivation + refresh Timer restart"
 ```
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ### Task 4: FullView.qml 排序按钮 + 状态栏扩展
@@ -1021,6 +1027,7 @@ git add package/contents/ui/FullView.qml package/contents/ui/main.qml
 git commit -m "feat(provider-ux): sortMode cycling button in FullView header"
 ```
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ### Task 5: ProviderGroup.qml 官网跳转 + Logo
@@ -1150,6 +1157,7 @@ git add package/contents/ui/ProviderGroup.qml package/contents/ui/FullView.qml
 git commit -m "feat(provider-ux): provider website link + logo rendering"
 ```
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ### Task 6: CompactView.qml CrossFade 动画
@@ -1228,6 +1236,7 @@ git add package/contents/ui/CompactView.qml
 git commit -m "feat(provider-ux): CrossFade + scale animation for Orb switch"
 ```
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ### Task 7: ProvidersConfig.qml 启用/禁用 UI + Logo 缩略图
@@ -1356,6 +1365,7 @@ git add package/contents/ui/config/ProvidersConfig.qml
 git commit -m "feat(provider-ux): enable toggle + logo thumbnail in ProvidersConfig"
 ```
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ### Task 8: ProviderEditor.qml Logo 路径输入 + 预览
@@ -1451,6 +1461,7 @@ git add package/contents/ui/config/ProviderEditor.qml
 git commit -m "feat(provider-ux): logo path text field + thumbnail preview"
 ```
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ### Task 9: config/main.xml + GeneralConfig.qml 配置 schema
@@ -1533,6 +1544,7 @@ git add package/contents/config/main.xml package/contents/ui/config/GeneralConfi
 git commit -m "feat(provider-ux): sortMode + customOrder schema fields"
 ```
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ### Task 10: 视觉验收
@@ -1582,6 +1594,7 @@ git add screenshots/
 git commit -m "docs(provider-ux): capture manual acceptance screenshots" || true
 ```
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ### Task 11: 回归
@@ -1639,6 +1652,7 @@ git add docs/superpowers/specs/2026-07-25-provider-ux-enhancements-design.md
 git commit -m "docs(provider-ux): mark deferred sub-tasks in design doc" || true
 ```
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ## Out of Scope
@@ -1654,6 +1668,7 @@ git commit -m "docs(provider-ux): mark deferred sub-tasks in design doc" || true
 - **Plasma 全局快捷键 / DBus signal 扩字段。** 范围外。
 - **修改 `package/metadata.json`、CMakeLists.txt、JS 之外的 `.md` 文档。**
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ## 风险与回滚
@@ -1669,6 +1684,7 @@ git commit -m "docs(provider-ux): mark deferred sub-tasks in design doc" || true
 
 回滚方式：`git revert` 至 base-ref；无数据迁移、无 schema migration。
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 ## Self-Review
@@ -1696,6 +1712,7 @@ git commit -m "docs(provider-ux): mark deferred sub-tasks in design doc" || true
 4. **优先级**
    - Task 1-2（核心拆分）→ Task 3-4（主界面派生 + 排序 UI）→ Task 5（ProviderGroup 自渲染）→ Task 6（Orb 动画）→ Task 7-8（编辑 UI）→ Task 9（配置 schema）→ Task 10（视觉验收）→ Task 11（回归）。
 
+archived-with: 2026-07-26-provider-ux-enhancements
 ---
 
 Plan 完成并已保存到 `/home/zhouwr/Project/CodeWorkspace/AIQuotaPilot/docs/superpowers/plans/2026-07-25-provider-ux-enhancements-plan.md`。

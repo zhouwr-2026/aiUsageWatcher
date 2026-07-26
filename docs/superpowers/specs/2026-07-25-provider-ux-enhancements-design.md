@@ -2,6 +2,8 @@
 comet_change: provider-ux-enhancements
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-07-26-provider-ux-enhancements
+status: final
 ---
 
 # provider-ux-enhancements — Technical Design

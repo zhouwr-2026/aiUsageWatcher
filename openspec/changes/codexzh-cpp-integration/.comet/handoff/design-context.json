@@ -1,0 +1,14 @@
+{
+  "change": "codexzh-cpp-integration",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "ce5e6ed76fcd020473f09483ecc8ce5b110d901dcec8f2b4bfc4b51bb76539ab",
+  "files": [
+    { "path": "openspec/changes/codexzh-cpp-integration/proposal.md", "sha256": "f517b94422c938ea0aca8177e7733bace2f7dd6843febda0396deb08efaaecdf" },
+    { "path": "openspec/changes/codexzh-cpp-integration/design.md", "sha256": "f7957feb4e43ec6fc4ff7a54d497ffbef70cb8ab136fc3422556f89b052631dc" },
+    { "path": "openspec/changes/codexzh-cpp-integration/tasks.md", "sha256": "5fa60540a038b8826eb7b0be4ddab358e6edcd446d6160fff7cbcf5694c87e85" },
+    { "path": "openspec/changes/codexzh-cpp-integration/specs/codexzh-native-client/spec.md", "sha256": "aa65f7cc1de42ac91b69535b39fdb71fd4928f11a081cfc056db48295f1df997" }
+  ]
+}

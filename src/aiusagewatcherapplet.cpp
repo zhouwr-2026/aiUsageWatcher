@@ -1079,6 +1079,6 @@ void AiUsageWatcherApplet::attachJavaScriptHighlighter(QQuickTextDocument *docum
                               numberColor);
 }
 
-K_PLUGIN_CLASS(AiUsageWatcherApplet)
+K_PLUGIN_CLASS_WITH_JSON(AiUsageWatcherApplet, "../../package/metadata.json")
 
 #include "aiusagewatcherapplet.moc"

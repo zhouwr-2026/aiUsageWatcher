@@ -22,9 +22,9 @@ find_package(KF6Config 6.0 REQUIRED)
 find_package(KF6Wallet 6.0 REQUIRED)
 find_package(Plasma 6.0 REQUIRED)
 
-plasma_install_package(package AIQuotaPilot)
+plasma_install_package(package org.kde.plasma.AIQuotaPilot)
 
-kcoreaddons_add_plugin(AIQuotaPilot
+kcoreaddons_add_plugin(org.kde.plasma.AIQuotaPilot
     SOURCES
         src/aiusagewatcherapplet.cpp
         src/aiusagewatcherapplet.h
@@ -44,7 +44,7 @@ kcoreaddons_add_plugin(AIQuotaPilot
         src/codexzhresponseparser.h
     INSTALL_NAMESPACE "plasma/applets"
 )
-target_link_libraries(AIQuotaPilot
+target_link_libraries(org.kde.plasma.AIQuotaPilot
     PRIVATE
         Qt6::Core
         Qt6::DBus
@@ -56,8 +56,8 @@ target_link_libraries(AIQuotaPilot
         KF6::Wallet
         Plasma::Plasma
 )
-set_target_properties(AIQuotaPilot PROPERTIES PREFIX "")
-target_compile_definitions(AIQuotaPilot
+set_target_properties(org.kde.plasma.AIQuotaPilot PROPERTIES PREFIX "")
+target_compile_definitions(org.kde.plasma.AIQuotaPilot
     PRIVATE
         QUOTA_PILOT_SCRIPT_WORKER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/quota-pilot-script-worker"
 )

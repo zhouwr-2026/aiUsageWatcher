@@ -118,7 +118,7 @@ KCM.SimpleKCM {
         if (!result.valid)
             return false
         providersModel.append(definitionRow(copy(candidate)))
-        root.syncWorkingValue()
+        Qt.callLater(root.syncWorkingValue)
         return true
     }
 
@@ -130,7 +130,7 @@ KCM.SimpleKCM {
             return false
         providersModel.set(index, definitionRow(copy(candidate)))
         editingId = candidate.id
-        root.syncWorkingValue()
+        Qt.callLater(root.syncWorkingValue)
         return true
     }
 
@@ -139,7 +139,7 @@ KCM.SimpleKCM {
         if (index < 0)
             return false
         providersModel.remove(index)
-        root.syncWorkingValue()
+        Qt.callLater(root.syncWorkingValue)
         return true
     }
 
@@ -149,7 +149,7 @@ KCM.SimpleKCM {
         if (index < 0 || destination < 0 || destination >= providersModel.count)
             return false
         providersModel.move(index, destination, 1)
-        syncWorkingValue()
+        Qt.callLater(root.syncWorkingValue)
         return true
     }
 
@@ -505,7 +505,7 @@ KCM.SimpleKCM {
                                 const def = JSON.parse(providersModel.get(index).definitionJson)
                                 def.enabled = checked
                                 providersModel.set(index, definitionRow(def))
-                                root.syncWorkingValue()
+                                Qt.callLater(root.syncWorkingValue)
                             }
                         }
 

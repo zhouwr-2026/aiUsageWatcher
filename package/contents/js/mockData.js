@@ -102,8 +102,13 @@ function normalizeDefinitions(raw) {
     return DisplayProvider.filterEnabled(definitions.map(function(definition, providerIndex) {
         var catalogId = ProviderCatalog.catalogIdForLegacy(definition);
         var fixedDefinition = ProviderCatalog.definitionFor(catalogId);
-        if (fixedDefinition)
-            return fixedDefinition;
+        if (fixedDefinition) {
+            // 内置 catalog 用预设，但保留用户的 enabled / logoPath 状态
+            return Object.assign({}, fixedDefinition, {
+                "enabled": definition.enabled !== false,
+                "logoPath": typeof definition.logoPath === "string" ? definition.logoPath : ""
+            });
+        }
         var providerScript = typeof definition.script === "string" && definition.script
             ? definition.script : "";
         if (!providerScript) {
@@ -134,6 +139,8 @@ function normalizeDefinitions(raw) {
             "template": typeof definition.template === "string" && definition.template
                 ? definition.template : DEFAULT_TEMPLATE,
             "script": providerScript,
+            "enabled": definition.enabled !== false,
+            "logoPath": typeof definition.logoPath === "string" ? definition.logoPath : "",
             "plans": definition.plans.map(function(plan, planIndex) {
                 plan = plan && typeof plan === "object" ? plan : {};
                 return {

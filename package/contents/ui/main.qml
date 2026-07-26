@@ -64,7 +64,10 @@ PlasmoidItem {
             return false
 
         runtimeSnapshots = MockData.replaceSnapshot(runtimeSnapshots, snapshot)
-        providers = MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
+        providers = DisplayProvider.buildDisplay(providerDefinitions, runtimeSnapshots, {
+            sortMode: root.effectiveSortMode,
+            customOrderRaw: root.customOrderRaw
+        })
         lastRefreshTime = new Date()
         return true
     }
@@ -84,7 +87,7 @@ PlasmoidItem {
             return false
 
         runtimeSnapshots = MockData.replaceSnapshot(runtimeSnapshots, snapshot)
-        providers = MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
+        providers = DisplayProvider.buildDisplay(providerDefinitions, runtimeSnapshots, {
         lastRefreshTime = new Date()
         return true
     }
@@ -106,7 +109,10 @@ PlasmoidItem {
         for (let i = 0; i < snapshots.length; ++i)
             nextSnapshots = MockData.replaceSnapshot(nextSnapshots, snapshots[i])
         runtimeSnapshots = nextSnapshots
-        providers = MockData.buildDisplayProviders(providerDefinitions, runtimeSnapshots)
+        providers = DisplayProvider.buildDisplay(providerDefinitions, runtimeSnapshots, {
+            sortMode: root.effectiveSortMode,
+            customOrderRaw: root.customOrderRaw
+        })
         lastRefreshTime = new Date()
         return true
     }

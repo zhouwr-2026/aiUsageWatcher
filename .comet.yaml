@@ -1,0 +1,6 @@
+# AIQuotaPilot 项目级 Comet 配置
+# AIQuotaPilot 是 QML-only Plasma 6 小部件,无需编译/CI
+# 验证方式: kpackagetool6 装包 + plasmawindowed 启动
+
+build_command: kpackagetool6 --upgrade package
+verify_command: kpackagetool6 --upgrade package

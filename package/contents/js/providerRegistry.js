@@ -38,7 +38,7 @@ var _SVG_DEFAULTS = {
     },
     "claude-code": {
         providerName: "Claude Code",
-        website: "https://www.anthropic.com/claude-code",
+        website: "https://claude.com/product/claude-code",
         logoSvg: "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>" +
             "<circle cx='12' cy='12' r='10' fill='#cc785c'/>" +
             "<text x='12' y='16' font-size='12' text-anchor='middle' " +
@@ -48,7 +48,7 @@ var _SVG_DEFAULTS = {
     },
     "kimi-for-coding": {
         providerName: "Kimi For Coding",
-        website: "https://www.kimi.com/code/",
+        website: "https://www.kimi.com/",
         logoSvg: "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>" +
             "<rect x='3' y='3' width='18' height='18' rx='4' fill='#101010'/>" +
             "<text x='12' y='16' font-size='12' text-anchor='middle' " +

@@ -1,5 +1,5 @@
 workflow: full
-phase: build
+phase: verify
 context_compression: off
 build_mode: subagent-driven-development
 build_pause: null
@@ -7,7 +7,7 @@ subagent_dispatch: confirmed
 tdd_mode: direct
 review_mode: standard
 isolation: branch
-verify_mode: null
+verify_mode: full
 auto_transition: true
 base_ref: a51fa80a3a4d0a68780199bfcc6bd3bc4dd8519e
 design_doc: docs/superpowers/specs/2026-07-25-provider-ux-enhancements-design.md

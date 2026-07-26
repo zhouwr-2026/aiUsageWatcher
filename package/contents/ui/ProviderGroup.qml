@@ -53,7 +53,7 @@ Rectangle {
                 Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                 Layout.preferredHeight: Layout.preferredWidth
                 radius: width / 2
-                color: "transparent"
+                color: Kirigami.Theme.alternateBackgroundColor
                 visible: root.logoSource.length > 0 || root.logoChar.length > 0
 
                 Image {

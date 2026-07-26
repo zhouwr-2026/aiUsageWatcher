@@ -13,9 +13,9 @@
 
 ## 3. QML 侧接入 CodexZH snapshot
 
-- [ ] 3.1 main.qml 添加 codexzhSnapshot 读取 + applyCodexZhSnapshot() 函数
-- [ ] 3.2 main.qml 添加 requestCodexZhRefresh() + Connections 监听 codexzhSnapshotChanged
-- [ ] 3.3 main.qml refresh() 中串联 CodexZH 的刷新和 snapshot 应用
+- [x] 3.1 main.qml 添加 codexzhSnapshot 读取 + applyCodexZhSnapshot() 函数
+- [x] 3.2 main.qml 添加 requestCodexZhRefresh() + Connections 监听 codexzhSnapshotChanged
+- [x] 3.3 main.qml refresh() 中串联 CodexZH 的刷新和 snapshot 应用
 
 ## 4. 配置表单 Logo 头像改造
 

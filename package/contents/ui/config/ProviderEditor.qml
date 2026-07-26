@@ -4,6 +4,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls as QQC2
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import "../../js/providerCatalog.js" as ProviderCatalog
@@ -46,6 +47,7 @@ Item {
     readonly property bool isCustom: (candidate.catalogId || "custom") === "custom"
     readonly property bool isMiniMax: (candidate.catalogId || "") === "minimax"
     readonly property bool isCodex: (candidate.catalogId || "") === "codex"
+    readonly property bool isCodexZh: (candidate.catalogId || "") === "codexzh"
     readonly property var validation: ProviderConfig.validateProvider(candidate, siblings)
     readonly property var providerOptions: ProviderCatalog.providerOptions()
     readonly property real fieldWidth: Kirigami.Units.gridUnit * 20
@@ -234,6 +236,81 @@ Item {
             text: qsTr("基本信息")
         }
 
+        // 64x64 居中 Logo 头像
+        RowLayout {
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: root.formWidth
+            Layout.maximumWidth: root.formWidth
+
+            Item { Layout.fillWidth: true }
+
+            Rectangle {
+                id: logoAvatar
+
+                Layout.preferredWidth: Kirigami.Units.iconSizes.medium * 2
+                Layout.preferredHeight: Layout.preferredWidth
+                radius: width / 2
+                color: Kirigami.Theme.alternateBackgroundColor
+
+                Image {
+                    id: logoImage
+
+                    anchors.fill: parent
+                    anchors.margins: 2
+                    source: {
+                        if (root.candidate.logoPath && root.candidate.logoPath.length > 0)
+                            return root.candidate.logoPath
+                        if (!root.isCustom) {
+                            const svg = ProviderRegistry.logoSvgFor(
+                                root.candidate.catalogId || "")
+                            if (svg && svg.length > 0)
+                                return "data:image/svg+xml;utf8," + svg
+                        }
+                        return ""
+                    }
+                    fillMode: Image.PreserveAspectFit
+                    visible: status === Image.Ready
+                    asynchronous: true
+                }
+
+                QQC2.Label {
+                    anchors.centerIn: parent
+                    visible: logoImage.status !== Image.Ready
+                    text: (root.candidate.providerName || "").trim().charAt(0).toUpperCase()
+                    color: Kirigami.Theme.disabledTextColor
+                    font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 2
+                }
+
+                MouseArea {
+                    id: logoClickArea
+
+                    anchors.fill: parent
+                    cursorShape: root.isCustom ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    enabled: root.isCustom
+                    hoverEnabled: root.isCustom
+                    onClicked: logoFileDialog.open()
+
+                    QQC2.ToolTip {
+                        visible: parent.containsMouse && root.isCustom
+                        text: qsTr("点击选择供应商 Logo")
+                    }
+                }
+            }
+
+            FileDialog {
+                id: logoFileDialog
+
+                title: qsTr("选择供应商 Logo")
+                nameFilters: [qsTr("图片文件 (*.png *.jpg *.jpeg *.svg *.bmp *.gif)")]
+                onAccepted: {
+                    if (selectedFile)
+                        root.updateField("logoPath", selectedFile)
+                }
+            }
+
+            Item { Layout.fillWidth: true }
+        }
+
         GridLayout {
             id: basicForm
 
@@ -294,58 +371,7 @@ Item {
                 onTextEdited: root.updateField("website", text)
             }
 
-            FieldLabel { text: qsTr("Logo 路径：") }
-
-            RowLayout {
-                Layout.preferredWidth: root.fieldWidth
-                Layout.maximumWidth: root.fieldWidth
-                spacing: Kirigami.Units.smallSpacing
-
-                QQC2.TextField {
-                    objectName: "providerLogoPathField"
-                    Layout.fillWidth: true
-                    text: root.candidate.logoPath || ""
-                    readOnly: !root.isCustom
-                    placeholderText: "file:///home/user/.local/share/icons/my.png"
-                    inputMethodHints: Qt.ImhUrlCharactersOnly
-                    onTextEdited: root.updateField("logoPath", text)
-                }
-
-                Rectangle {
-                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
-                    Layout.preferredHeight: Layout.preferredWidth
-                    radius: width / 2
-                    color: Kirigami.Theme.alternateBackgroundColor
-
-                    Image {
-                        id: logoImage
-
-                        anchors.fill: parent
-                        anchors.margins: 1
-                        source: {
-                            if (root.candidate.logoPath && root.candidate.logoPath.length > 0)
-                                return root.candidate.logoPath
-                            if (!root.isCustom) {
-                                const svg = ProviderRegistry.logoSvgFor(
-                                    root.candidate.catalogId || "")
-                                if (svg && svg.length > 0)
-                                    return "data:image/svg+xml;utf8," + svg
-                            }
-                            return ""
-                        }
-                        fillMode: Image.PreserveAspectFit
-                        visible: status === Image.Ready
-                    }
-
-                    QQC2.Label {
-                        anchors.centerIn: parent
-                        visible: logoImage.status !== Image.Ready
-                        text: (root.candidate.providerName || "").trim().charAt(0).toUpperCase()
-                        color: Kirigami.Theme.disabledTextColor
-                    }
-                }
             }
-        }
 
         Kirigami.InlineMessage {
             visible: !root.isCustom && !root.isMiniMax && !root.isCodex

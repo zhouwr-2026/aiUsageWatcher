@@ -50,7 +50,7 @@ Rectangle {
             spacing: Kirigami.Units.smallSpacing
 
             Rectangle {
-                Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                 Layout.preferredHeight: Layout.preferredWidth
                 radius: width / 2
                 color: "transparent"
@@ -77,18 +77,6 @@ Rectangle {
                     color: Kirigami.Theme.disabledTextColor
                     font: Kirigami.Theme.smallFont
                 }
-            }
-
-            Item {
-                Layout.preferredWidth: Kirigami.Units.smallSpacing
-                Layout.preferredHeight: 1
-            }
-
-            Rectangle {
-                Layout.preferredWidth: Kirigami.Units.smallSpacing * 2
-                Layout.preferredHeight: Layout.preferredWidth
-                radius: width / 2
-                color: root.statusColor(root.ledClass)
             }
 
             MouseArea {

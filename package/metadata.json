@@ -9,7 +9,7 @@
         "Category": "System Information",
         "Description": "智能大模型额度监控领航员",
         "Icon": "utilities-system-monitor",
-        "Id": "AIQuotaPilot",
+        "Id": "org.kde.plasma.AIQuotaPilot",
         "License": "GPL-2.0-or-later",
         "Name": "额度领航员",
         "Version": "0.2.0"

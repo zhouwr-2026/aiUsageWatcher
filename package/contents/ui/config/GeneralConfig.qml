@@ -26,6 +26,7 @@ KCM.SimpleKCM {
     property alias cfg_keepPanelOpen: keepPanelOpen.checked
     property bool cfg_keepPanelOpenDefault: false
     property alias cfg_sortMode: sortModeControl.currentValue
+    property string cfg_sortModeDefault: "default"
     property string cfg_customOrder: ""
     property string cfg_customOrderDefault: ""
     property string cfg_providers: ""

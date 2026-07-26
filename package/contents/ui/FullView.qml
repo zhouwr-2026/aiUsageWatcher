@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents
@@ -190,43 +191,59 @@ Item {
             Layout.fillWidth: true
         }
 
-        ListView {
-            id: providerList
-            objectName: "providerList"
+        ScrollView {
+            id: providerScroll
+            objectName: "providerScroll"
 
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            cacheBuffer: Kirigami.Units.gridUnit * 100
             visible: root.panelStyle === "bar"
-            model: visible ? root.providers : []
-            spacing: Kirigami.Units.smallSpacing
 
-            delegate: ProviderGroup {
-                required property var modelData
+            ListView {
+                id: providerList
+                objectName: "providerList"
 
-                objectName: "providerGroup"
-                width: ListView.view.width
-                providerName: MockData.stripProviderSuffix(modelData.providerName || "")
-                website: modelData.website || ""
-                logoSource: modelData.logoSource || ""
-                logoChar: modelData.logoChar || ""
-                logoIsSvg: modelData.logoIsSvg !== false
-                ledClass: modelData.ledClass || "led-gray"
-                sourceLabel: modelData.sourceLabel || ""
-                statusLabel: modelData.statusLabel || ""
-                plans: modelData.plans || []
-                errorText: modelData.errorText || ""
-                templateText: modelData.template || ""
+                width: providerScroll.width
+                cacheBuffer: Kirigami.Units.gridUnit * 100
+                model: root.providers
+                spacing: Kirigami.Units.smallSpacing
+                interactive: false
+
+                delegate: ProviderGroup {
+                    required property var modelData
+
+                    objectName: "providerGroup"
+                    width: ListView.view.width
+                    providerName: MockData.stripProviderSuffix(modelData.providerName || "")
+                    website: modelData.website || ""
+                    logoSource: modelData.logoSource || ""
+                    logoChar: modelData.logoChar || ""
+                    logoIsSvg: modelData.logoIsSvg !== false
+                    ledClass: modelData.ledClass || "led-gray"
+                    sourceLabel: modelData.sourceLabel || ""
+                    statusLabel: modelData.statusLabel || ""
+                    plans: modelData.plans || []
+                    errorText: modelData.errorText || ""
+                    templateText: modelData.template || ""
+                }
             }
         }
 
-        PanelPieView {
-            objectName: "panelPieView"
+        ScrollView {
+            id: pieScroll
+            objectName: "pieScroll"
+
             Layout.fillWidth: true
             Layout.fillHeight: true
+            clip: true
             visible: root.panelStyle === "pie"
-            providers: visible ? root.providers : []
+
+            PanelPieView {
+                objectName: "panelPieView"
+                width: pieScroll.width
+                providers: root.providers
+            }
         }
 
         PlasmaComponents.Label {

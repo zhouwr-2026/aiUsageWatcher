@@ -5,7 +5,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.quickcharts as Charts
-import "../js/mockData.js" as MockData
+import "../js/providerNormalize.js" as ProviderNormalize
 
 Flickable {
     id: root
@@ -19,7 +19,7 @@ Flickable {
     QQC2.ScrollBar.horizontal: QQC2.ScrollBar {}
 
     function usageColor(percent) {
-        switch (MockData.usageClass(percent, "bar")) {
+        switch (ProviderNormalize.usageClass(percent, "bar")) {
         case "bar-green": return Kirigami.Theme.positiveTextColor
         case "bar-yellow": return Kirigami.Theme.neutralTextColor
         case "bar-red": return Kirigami.Theme.negativeTextColor
@@ -45,7 +45,7 @@ Flickable {
 
                 Kirigami.Heading {
                     Layout.fillWidth: true
-                    text: MockData.stripProviderSuffix(providerColumn.modelData.providerName || "")
+                    text: ProviderNormalize.stripProviderSuffix(providerColumn.modelData.providerName || "")
                     horizontalAlignment: Text.AlignHCenter
                     level: 4
                     elide: Text.ElideRight

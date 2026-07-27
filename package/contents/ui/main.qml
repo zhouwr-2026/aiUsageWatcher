@@ -3,13 +3,13 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
-import "../js/mockData.js" as MockData    // 兼容旧字段（stripProviderSuffix / usageClass）
+import "../js/providerNormalize.js" as ProviderNormalize
 import "../js/displayProvider.js" as DisplayProvider
 
 PlasmoidItem {
     id: root
 
-    property var providerDefinitions: MockData.normalizeDefinitions(Plasmoid.configuration.providers)
+    property var providerDefinitions: ProviderNormalize.normalizeDefinitions(Plasmoid.configuration.providers)
     property var runtimeSnapshots: []
     readonly property string effectiveSortMode: Plasmoid.configuration.sortMode || "default"
     readonly property string customOrderRaw: Plasmoid.configuration.customOrder || ""
@@ -36,7 +36,7 @@ PlasmoidItem {
     property int restoreProviderIndex: 0
     property bool eventHighlighted: false
     property date lastRefreshTime: new Date()
-    readonly property var compactUsage: MockData.providerUsageAt(providers, compactProviderIndex)
+    readonly property var compactUsage: ProviderNormalize.providerUsageAt(providers, compactProviderIndex)
     readonly property string compactStyle: Plasmoid.configuration.compactStyle || "bar"
     readonly property string panelStyle: Plasmoid.configuration.panelStyle || "bar"
     readonly property string displayStrategy: Plasmoid.configuration.displayStrategy || "polling"
@@ -60,7 +60,7 @@ PlasmoidItem {
 
     onProviderDefinitionsChanged: {
         compactProviderIndex = 0
-        runtimeSnapshots = MockData.createSeedSnapshots(providerDefinitions)
+        runtimeSnapshots = ProviderNormalize.createSeedSnapshots(providerDefinitions)
         applyMiniMaxSnapshot()
         applyCodexSnapshot()
         applyCodexZhSnapshot()
@@ -74,7 +74,7 @@ PlasmoidItem {
                 || !snapshot.plans || typeof snapshot.plans.length !== "number")
             return false
 
-        runtimeSnapshots = MockData.replaceSnapshot(runtimeSnapshots, snapshot)
+        runtimeSnapshots = ProviderNormalize.replaceSnapshot(runtimeSnapshots, snapshot)
         lastRefreshTime = new Date()
         return true
     }
@@ -93,7 +93,7 @@ PlasmoidItem {
                 || !snapshot.plans || typeof snapshot.plans.length !== "number")
             return false
 
-        runtimeSnapshots = MockData.replaceSnapshot(runtimeSnapshots, snapshot)
+        runtimeSnapshots = ProviderNormalize.replaceSnapshot(runtimeSnapshots, snapshot)
         lastRefreshTime = new Date()
         return true
     }
@@ -112,7 +112,7 @@ PlasmoidItem {
                 || !snapshot.plans || typeof snapshot.plans.length !== "number")
             return false
 
-        runtimeSnapshots = MockData.replaceSnapshot(runtimeSnapshots, snapshot)
+        runtimeSnapshots = ProviderNormalize.replaceSnapshot(runtimeSnapshots, snapshot)
         lastRefreshTime = new Date()
         return true
     }
@@ -132,7 +132,7 @@ PlasmoidItem {
 
         let nextSnapshots = runtimeSnapshots
         for (let i = 0; i < snapshots.length; ++i)
-            nextSnapshots = MockData.replaceSnapshot(nextSnapshots, snapshots[i])
+            nextSnapshots = ProviderNormalize.replaceSnapshot(nextSnapshots, snapshots[i])
         runtimeSnapshots = nextSnapshots
         lastRefreshTime = new Date()
         return true
@@ -147,7 +147,7 @@ PlasmoidItem {
     }
 
     function refresh() {
-        runtimeSnapshots = MockData.createSeedSnapshots(providerDefinitions)
+        runtimeSnapshots = ProviderNormalize.createSeedSnapshots(providerDefinitions)
         applyMiniMaxSnapshot()
         applyCodexSnapshot()
         applyCodexZhSnapshot()
@@ -167,7 +167,7 @@ PlasmoidItem {
         for (let i = 0; i < providers.length; ++i) {
             const provider = providers[i]
             if (provider.id === normalizedName || provider.providerName === normalizedName
-                    || MockData.stripProviderSuffix(provider.providerName) === normalizedName) {
+                    || ProviderNormalize.stripProviderSuffix(provider.providerName) === normalizedName) {
                 if (!eventHighlighted)
                     restoreProviderIndex = compactProviderIndex
                 compactProviderIndex = i
@@ -193,10 +193,10 @@ PlasmoidItem {
     toolTipSubText: compactUsage.usedPercent < 0
         ? (compactUsage.providerName
            ? qsTr("%1 · 暂无可用数据").arg(
-                  MockData.stripProviderSuffix(compactUsage.providerName))
+                  ProviderNormalize.stripProviderSuffix(compactUsage.providerName))
            : qsTr("暂无可用数据"))
         : qsTr("%1 · %2 · 已用 %3")
-            .arg(MockData.stripProviderSuffix(compactUsage.providerName))
+            .arg(ProviderNormalize.stripProviderSuffix(compactUsage.providerName))
             .arg(compactUsage.planName)
             .arg(compactUsage.usedPercent + "%")
 
@@ -224,7 +224,7 @@ PlasmoidItem {
         interval: root.pollingIntervalSec * 1000
         running: root.providers.length > 1 && root.displayStrategy === "polling"
         repeat: true
-        onTriggered: root.compactProviderIndex = MockData.nextProviderIndexWithUsage(
+        onTriggered: root.compactProviderIndex = ProviderNormalize.nextProviderIndexWithUsage(
                          root.providers, root.compactProviderIndex)
     }
 

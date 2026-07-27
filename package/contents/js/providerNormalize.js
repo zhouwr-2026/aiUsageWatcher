@@ -2,61 +2,11 @@
 
 .pragma library
 
-// DEPRECATED: use providerRegistry.js / providerSnapshot.js / displayProvider.js
-// 该文件仅保留到所有调用方迁移完成为止，所有函数转发至新三文件。
-.import "providerRegistry.js" as ProviderRegistry
-.import "providerSnapshot.js" as ProviderSnapshot
 .import "displayProvider.js" as DisplayProvider
 .import "providerCatalog.js" as ProviderCatalog
 .import "scriptTools.js" as ScriptTools
 
 var DEFAULT_TEMPLATE = "%1 限额  %2/%3  重置于 %4";
-
-var SEED_PROVIDER_DEFINITIONS = [{
-    "catalogId": "custom",
-    "id": "token-hub",
-    "providerName": "云之声Token Hub",
-    "website": "https://example.com/",
-    "vendor": "自定义",
-    "sourceLabel": "自定义",
-    "trustMode": "strict",
-    "template": DEFAULT_TEMPLATE,
-    "script": ScriptTools.DEFAULT_SCRIPT,
-    "plans": [{
-        "id": "five-hours",
-        "planName": "5小时",
-        "unit": "",
-        "sourceType": "http-js",
-        "usedVariable": "${used}",
-        "limitVariable": "${limit}"
-    }, {
-        "id": "seven-days",
-        "planName": "7天",
-        "unit": "",
-        "sourceType": "http-js",
-        "usedVariable": "${used}",
-        "limitVariable": "${limit}"
-    }, {
-        "id": "thirty-days",
-        "planName": "30天",
-        "unit": "",
-        "sourceType": "http-js",
-        "usedVariable": "${used}",
-        "limitVariable": "${limit}"
-    }]
-}, ProviderCatalog.definitionFor("minimax"), ProviderCatalog.definitionFor("codex")];
-
-var SEED_RUNTIME_SNAPSHOTS = [{
-    "providerId": "minimax",
-    "statusLabel": "未配置",
-    "errorText": "",
-    "plans": []
-}, {
-    "providerId": "codex",
-    "statusLabel": "未登录",
-    "errorText": "",
-    "plans": []
-}];
 
 function _isFiniteNumber(value) {
     return typeof value === "number" && isFinite(value);
@@ -72,31 +22,22 @@ function _copyDefinitions(definitions) {
     });
 }
 
-function _legacyParse(raw) {
-    if (Array.isArray(raw))
-        return raw;
-    if (typeof raw === "string" && raw.length > 0) {
-        try { return JSON.parse(raw); } catch (error) { return []; }
-    }
-    return [];
-}
-
 function normalizeDefinitions(raw) {
     var definitions = raw;
     if (typeof definitions === "string") {
         try {
             definitions = JSON.parse(definitions);
         } catch (error) {
-            return DisplayProvider.filterEnabled(_copyDefinitions(SEED_PROVIDER_DEFINITIONS));
+            return DisplayProvider.filterEnabled([]);
         }
     }
     if (!Array.isArray(definitions))
-        return DisplayProvider.filterEnabled(_copyDefinitions(SEED_PROVIDER_DEFINITIONS));
+        return DisplayProvider.filterEnabled([]);
 
     for (var i = 0; i < definitions.length; ++i) {
         if (!definitions[i] || typeof definitions[i] !== "object"
                 || !Array.isArray(definitions[i].plans))
-            return DisplayProvider.filterEnabled(_copyDefinitions(SEED_PROVIDER_DEFINITIONS));
+            return DisplayProvider.filterEnabled([]);
     }
 
     return DisplayProvider.filterEnabled(definitions.map(function(definition, providerIndex) {
@@ -193,23 +134,8 @@ function createSeedSnapshots(definitions) {
 
     var snapshots = [];
     definitions.forEach(function(definition) {
-        var matchedSnapshot = null;
-        for (var i = 0; i < SEED_RUNTIME_SNAPSHOTS.length; ++i) {
-            var snapshot = SEED_RUNTIME_SNAPSHOTS[i];
-            if (snapshot.providerId === definition.id) {
-                matchedSnapshot = Object.assign({}, snapshot, {
-                    "plans": snapshot.plans.map(function(plan) {
-                        return Object.assign({}, plan);
-                    })
-                });
-                break;
-            }
-        }
         var manualPlans = _manualPlans(definition);
-        if (matchedSnapshot) {
-            matchedSnapshot.plans = matchedSnapshot.plans.concat(manualPlans);
-            snapshots.push(matchedSnapshot);
-        } else if (manualPlans.length > 0) {
+        if (manualPlans.length > 0) {
             snapshots.push({
                 "providerId": definition.id,
                 "statusLabel": manualPlans.some(function(plan) { return plan.isValid; })
@@ -256,24 +182,10 @@ function usageClass(percent, prefix) {
     return prefix + "-red";
 }
 
-function buildDisplayProviders(definitions, snapshots) {
-    return DisplayProvider.buildDisplay(definitions, snapshots, { sortMode: "default" });
-}
-
 function providerUsageAt(displayProviders, providerIndex) {
     return DisplayProvider.providerUsageAt(displayProviders, providerIndex);
 }
 
-function tightestUsage(displayProviders) {
-    return DisplayProvider.tightestUsage(displayProviders);
-}
-
 function nextProviderIndexWithUsage(displayProviders, providerIndex) {
     return DisplayProvider.nextProviderIndexWithUsage(displayProviders, providerIndex);
-}
-
-function forEach(arr, callback) {
-    if (!Array.isArray(arr)) return;
-    for (var i = 0; i < arr.length; ++i)
-        callback(arr[i], i);
 }

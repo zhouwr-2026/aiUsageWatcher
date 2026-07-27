@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 .pragma library
-.import "mockData.js" as MockData
+.import "providerNormalize.js" as ProviderNormalize
 .import "providerCatalog.js" as ProviderCatalog
 .import "scriptTools.js" as ScriptTools
 
 function parseWorkingDefinitions(json) {
-    return MockData.normalizeDefinitions(json)
+    return ProviderNormalize.normalizeDefinitions(json)
 }
 
 function serializeDefinitions(items) {
-    return JSON.stringify(MockData.normalizeDefinitions(items))
+    return JSON.stringify(items)
 }
 
 function validateProvider(candidate, siblings) {

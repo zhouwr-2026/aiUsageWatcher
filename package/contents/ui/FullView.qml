@@ -3,7 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents
-import "../js/mockData.js" as MockData
+import "../js/providerNormalize.js" as ProviderNormalize
 
 Item {
     id: root
@@ -215,7 +215,7 @@ Item {
 
                     objectName: "providerGroup"
                     width: ListView.view.width
-                    providerName: MockData.stripProviderSuffix(modelData.providerName || "")
+                    providerName: ProviderNormalize.stripProviderSuffix(modelData.providerName || "")
                     website: modelData.website || ""
                     logoSource: modelData.logoSource || ""
                     logoChar: modelData.logoChar || ""

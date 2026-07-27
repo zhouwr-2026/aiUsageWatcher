@@ -3,7 +3,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.quickcharts as Charts
-import "../js/mockData.js" as MockData
+import "../js/providerNormalize.js" as ProviderNormalize
 
 Item {
     id: root
@@ -13,7 +13,7 @@ Item {
     property string compactStyle: "pie"
     property int providerIndex: 0
     property bool highlighted: false
-    readonly property var currentUsage: MockData.providerUsageAt(providers, providerIndex)
+    readonly property var currentUsage: ProviderNormalize.providerUsageAt(providers, providerIndex)
     readonly property var tightestUsage: currentUsage
     readonly property real boundedPercent: Math.max(0, Math.min(100,
                                                                  currentUsage.usedPercent))
@@ -79,7 +79,7 @@ Item {
     }
 
     function usageColor(percent) {
-        switch (MockData.usageClass(percent, "bar")) {
+        switch (ProviderNormalize.usageClass(percent, "bar")) {
         case "bar-green": return Kirigami.Theme.positiveTextColor
         case "bar-yellow": return Kirigami.Theme.neutralTextColor
         case "bar-red": return Kirigami.Theme.negativeTextColor

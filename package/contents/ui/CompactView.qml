@@ -150,22 +150,54 @@ Item {
         QQC2.Label {
             objectName: "compactBarPercent"
             Layout.minimumWidth: implicitWidth
-            text: root.currentUsage.usedPercent >= 0
-                ? Math.round(root.currentUsage.usedPercent) + "%" : "—"
+            // 无数据时显示占位符 · 有数据时显示百分比
+            text: {
+                const pct = root.currentUsage.usedPercent
+                const name = root.currentUsage.providerName || ""
+                if (pct >= 0) return Math.round(pct) + "%"
+                if (name) return name.slice(0, 2)  // 用供应商名前两字作占位
+                return "—"
+            }
             color: Kirigami.Theme.textColor
             font: Kirigami.Theme.smallFont
         }
 
-        QQC2.ProgressBar {
+        // 自研水平柱状图（不依赖 QQC2.ProgressBar 的主题渲染，
+        // 必保证在 Plasma 6 Breeze 主题下可见）
+        Item {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
-            Layout.minimumHeight: Kirigami.Units.smallSpacing * 2
+            Layout.minimumWidth: Kirigami.Units.gridUnit * 2
             Layout.preferredHeight: Kirigami.Units.smallSpacing * 2
-            from: 0
-            to: 100
-            value: root.currentUsage.usedPercent >= 0 ? root.boundedPercent : 0
-            Accessible.name: root.currentUsage.providerName
-            Accessible.description: qsTr("Used %1%").arg(Math.round(value))
+            Layout.minimumHeight: Layout.preferredHeight
+            implicitHeight: Layout.preferredHeight
+
+            Rectangle {
+                objectName: "compactBarTrack"
+                anchors.fill: parent
+                radius: height / 2
+                color: Kirigami.Theme.disabledTextColor
+                opacity: 0.28
+            }
+
+            Rectangle {
+                objectName: "compactBarFill"
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: root.boundedPercent > 0 ? Math.max(
+                            Kirigami.Units.smallSpacing,
+                            parent.width * root.boundedPercent / 100) : 0
+                radius: height / 2
+                color: root.usageColor(root.currentUsage.usedPercent)
+
+                Behavior on width {
+                    NumberAnimation {
+                        duration: 300
+                        easing.type: Easing.OutCubic
+                    }
+                }
+            }
         }
     }
 

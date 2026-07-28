@@ -34,10 +34,12 @@ CodexZH 响应中的字段：
 |---|---|
 | `weekUsed` | 本周累计使用金额 |
 | `weeklyBudget` / `weeklyQuota` | 本周总额度 |
-| `todayUsed` | 今日使用金额的原始数值 |
+| `todayUsed` | 今日使用金额；两段计算的唯一数据来源 |
 | `todayUsedFormatted` | 今日金额的接口格式化展示文本 |
 
-数学计算必须使用原始数值 `todayUsed`，在 C++ 中命名为 `todayUsedUsd`。
+数学计算必须使用 `data.todayUsed` 规范化后的数值，在 C++ 中命名为 `todayUsedUsd`。
+规范化行为与官网 `toNumberOrNull` 一致：接受 JSON 数字，或去掉 `$`、逗号和空白后
+可解析为有限数的字符串。
 `todayUsedFormatted` 可能包含货币符号、特殊标记或格式差异，只能交给
 `formatUsdFromApi(data.todayUsedFormatted, todayUsedUsd)` 生成展示文本，禁止从该字符串
 反解析数值。
@@ -45,8 +47,8 @@ CodexZH 响应中的字段：
 ## 计算规则
 
 ```text
-weekUsedUsd     = max(weekUsed, 0)
-todayUsedUsd    = clamp(todayUsed, 0, weekUsedUsd)
+weekUsedUsd     = max(normalizeNumber(weekUsed), 0)
+todayUsedUsd    = clamp(normalizeNumber(todayUsed), 0, weekUsedUsd)
 previousUsedUsd = weekUsedUsd - todayUsedUsd
 
 todayPercent    = todayUsedUsd / weeklyLimit * 100
@@ -66,7 +68,7 @@ previousPercent + todayPercent = weekUsedUsd / weeklyLimit * 100
 - `previousUsed == 0`：只显示“今日使用”段。
 - 两者都为 0：只显示未使用轨道。
 - `todayUsed > weekUsed`：按接口数据不一致处理，将今日金额钳制为 `weekUsed`，此前为 0。
-- `todayUsed` 缺失、非数字、非有限数或小于 0：不生成两段数据，回退现有单色图表。
+- `todayUsed` 缺失、无法规范化、非有限数或小于 0：不生成两段数据，回退现有单色图表。
 - `weeklyLimit <= 0` 或 `weekUsed` 无效：沿用现有无效快照处理。
 
 ## 数据模型
@@ -183,7 +185,8 @@ CompactView <────────────── overall usedPercent only
 - `todayUsed=weekUsed`：仅今日段。
 - `weekUsed=0`、`todayUsed=0`：空段数组。
 - `todayUsed > weekUsed`：今日钳制为本周金额。
-- 今日字段缺失、字符串、NaN、无穷或负数：不生成两段，整体周用量仍按现有规则处理。
+- `todayUsed` 为数字或可规范化的数字字符串：生成相同的两段结果。
+- 今日字段缺失、不可解析字符串、NaN、无穷或负数：不生成两段，整体周用量仍按现有规则处理。
 - `todayUsedFormatted` 优先用于今日金额展示，原始数值作为回退。
 
 ### 展示模型

@@ -4,8 +4,12 @@
 
 项目内所有额度图表统一使用 KDE/Qt 原生组件，改善 Plasma 面板小尺寸下的抗锯齿效果：
 
-- 饼图统一使用 `org.kde.quickcharts` 的 `Charts.PieChart`。
-- 水平用量条统一使用 `QQC2.ProgressBar`，并完全覆写原生控件的内容和背景。
+- 饼图统一使用 Plasma CPU/内存监控同款
+  `org.kde.ksysguard.piechart` → `org.kde.quickcharts` 的 `Charts.PieChart` 绘制链。
+- 水平用量条统一使用 Plasma 硬盘使用率监控同款
+  `org.kde.ksysguard.horizontalbars` → `QQC2.ProgressBar` 绘制结构，并完全覆写
+  原生控件的内容和背景。
+- 仅数据来源仍为本项目的额度快照；图表组件和渲染技术与上述 Plasma 原生监控一致。
 
 ## 范围
 
@@ -35,8 +39,11 @@ currentUsage.usedPercent
           │
           └─ clamp 0..100 ──> QQC2.ProgressBar.value
                                     │
-                            contentItem Rectangle
-                            width = visualPosition × width
+                            contentItem Item（占满可用宽度）
+                                    │
+                            └─ fill Rectangle
+                               width = contentItem.width × visualPosition
+                            background Rectangle（完整底轨）
 ```
 
 | 展示位置 | 图表 | 原生组件 | 处理 |
@@ -62,7 +69,10 @@ currentUsage.usedPercent
   `value` 为钳制后的已使用百分比。
 - 像 KDE KSysGuard 上游一样完全覆写 `contentItem` 和 `background`，内部使用圆角
   `Rectangle`；不依赖 Breeze 的默认 ProgressBar 主题渲染。
-- 填充宽度由 `visualPosition` 决定，保留 300ms `Easing.OutCubic` 宽度动画。
+- `contentItem` 必须是占满控件可用宽度的容器；填充 `Rectangle` 是其子项，宽度为
+  `contentItem.width * control.visualPosition`。不得把 `contentItem` 自身宽度绑定到
+  `visualPosition`，以免形成自引用或丢失完整布局宽度。
+- 填充子项的宽度保留 300ms `Easing.OutCubic` 动画。
 - 轨道在 `0%` 和无数据时仍可见；无数据文字和语义色保持现状。
 - 保留现有可访问名称和描述。
 
@@ -99,6 +109,9 @@ Plasma smoke
 - 安装级门：`bash tests/run-plasma-smoke.sh`。
 - 人工视觉门：在真实 Plasma 面板尺寸下保存 compact 与 popup 两种图表截图，
   核对亮暗主题及 100%/125%/150% 缩放。
+- 当前工作区存在与本改造无关的旧 `mockData.js` 测试引用；实施前先记录测试基线，
+  若全量门因此失败，须单独报告为既有问题，并继续运行本次直接相关的 QML 测试，
+  不得把既有失败误归因于图表改造或把未通过说成通过。
 
 ## 失败模式
 
@@ -145,9 +158,25 @@ Sequential implementation, no parallelization opportunity：核心改动集中�
   - Verify: `bash tests/run-static-checks.sh`
 - [ ] **T3 (P1, human: ~30min / Codex: ~5min)** — popup — 使用 ProgressBar 替换 PlanBar 自定义水平条
   - Surfaced by: Architecture Review — 用户要求项目全部水平图表使用原生组件。
-  - Files: `package/contents/ui/PlanBar.qml`, `package/contents/ui/PanelPieView.qml`
+  - Files: `package/contents/ui/PlanBar.qml`（`PanelPieView.qml` 只审计，不改动）
   - Verify: `bash tests/run-static-checks.sh`
 - [ ] **T4 (P1, human: ~45min / Codex: ~10min)** — QA — 验证真实 Plasma 尺寸与缩放下的抗锯齿效果
   - Surfaced by: Test Review — 逻辑测试不能证明 GPU 输出的边缘质量。
-  - Files: `tests/run-plasma-smoke.sh`, `tests/README.md`
+  - Files: `tests/README.md`（仅在现有 smoke 缺少必要断言时最小修改脚本）
   - Verify: `bash tests/run-plasma-smoke.sh` 并保存人工截图
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | 本次不改变产品范围 |
+| Codex Review | `/codex review` | Independent 2nd opinion | 1 | PARTIAL | 结果通道被 403 阻断；已折叠 2 项只读检查发现 |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAR | 8 项问题/缺口已全部写入方案，0 个关键缺口 |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | 原生同款视觉由真实 Plasma 截图门验收 |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | 不适用 |
+
+**CODEX:** 明确了 `ProgressBar.contentItem` 容器与填充子项的层级，记录了既有测试基线风险；外部模型最终摘要因 403 未返回。
+
+**VERDICT:** ENG CLEARED — 方案可进入实施；饼图和水平柱状图的原生技术选型已锁定。
+
+NO UNRESOLVED DECISIONS

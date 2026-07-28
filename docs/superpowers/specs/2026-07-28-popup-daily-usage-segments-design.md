@@ -1,196 +1,220 @@
-# 悬浮面板每日用量分段设计
+# 悬浮面板本周用量两段式设计
+
+## 修订说明
+
+本版本取代“按每天记录并持久化历史”的原方案。新方案不保存历史，只使用 CodexZH
+当前接口响应，把本周已使用部分实时拆成：
+
+1. 此前使用：本周已使用减去今日使用。
+2. 今日使用：接口返回的今日消费。
 
 ## 目标
 
-对能够返回“今日用量”的周套餐，在展开后的悬浮面板中把本周已用额度按实际使用日期拆成连续彩色段，并在鼠标悬浮时显示对应日期和用量占周额度的百分比。
+CodexZH 周限额在展开后的悬浮面板中显示两个连续颜色段，让用户区分今天和此前的
+额度消耗。两个颜色段相加必须等于本周总已使用部分。
 
-示例：周一使用周额度的 20%，周二未使用，周三使用 30%，图表的已用 50% 由周一和周三两段颜色连续组成；悬浮第二段显示“7月29日 · 使用 30%”。
+顶部 Plasma 面板的小图标保持当前单色显示。
 
 ## 成功标准
 
-- 只有 CodexZH 周限额启用每日分段。
-- Codex、MiniMax 及其他没有今日用量字段的供应商保持当前单色图表。
-- 展开面板的列表模式和饼图模式都显示相同的每日分段与提示。
-- 用量为 0 的日期不显示空段，非连续日期的有效段仍紧密排列。
-- 顶部 Plasma 面板的 `CompactView` 完全保持现状。
-- 继续使用 `Charts.PieChart`、`QQC2.ProgressBar`、Qt Pointer Handler 和 Plasma ToolTip，不引入 Canvas、QtQuick Shapes、SVG 图表、自定义 Shader 或第三方图表库。
+- 仅 CodexZH 周限额启用两段式显示。
+- 此前使用金额与今日使用金额之和等于 `weekUsed`。
+- 展开面板的列表模式和饼图模式使用相同的两段数据。
+- 鼠标悬浮颜色段时显示该段名称、百分比和金额。
+- 今日字段缺失或无效时回退现有单色图表。
+- Codex、MiniMax 和其他供应商保持现有单色逻辑。
+- `CompactView.qml` 不因本功能发生改动。
+- 不新增历史存储、KConfig、后台定时归档或账户隔离逻辑。
 
-## 已确认的数据能力
+## 数据来源
 
-| 供应商 | 周累计数据 | 今日用量 | 结论 |
-|---|---|---|---|
-| CodexZH | `weekUsed`、`weeklyBudget`/`weeklyQuota` | `todayUsed` | 启用每日分段 |
-| Codex | 窗口 `used_percent`、`limit_window_seconds`、`reset_at` | 无 | 保持单色 |
-| MiniMax | `current_weekly_remaining_percent`、周开始/结束时间 | 无 | 保持单色 |
+CodexZH 响应中的字段：
 
-CodexZH 的 `todayUsed` 当前只被拼入 `extraText`，实现时需把它作为结构化数值保留在周限额快照中。某次响应缺少或无法解析 `todayUsed` 时，该次快照回退为当前单色图表，不根据字符串提示猜测数值。
+| 字段 | 用途 |
+|---|---|
+| `weekUsed` | 本周累计使用金额 |
+| `weeklyBudget` / `weeklyQuota` | 本周总额度 |
+| `todayUsed` | 今日使用金额的原始数值 |
+| `todayUsedFormatted` | 今日金额的接口格式化展示文本 |
 
-## 范围
+数学计算必须使用原始数值 `todayUsed`，在 C++ 中命名为 `todayUsedUsd`。
+`todayUsedFormatted` 可能包含货币符号、特殊标记或格式差异，只能交给
+`formatUsdFromApi(data.todayUsedFormatted, todayUsedUsd)` 生成展示文本，禁止从该字符串
+反解析数值。
 
-### 修改
+## 计算规则
 
-- CodexZH 响应解析和快照映射：输出结构化今日用量。
-- CodexZH 客户端：记录本周每日用量并生成展示段。
-- 展示模型：把每日段透传到展开面板。
-- `PlanBar.qml`：列表模式的水平每日分段和悬浮提示。
-- `PanelPieView.qml`：饼图模式的圆环每日分段和悬浮提示。
-- 对应的 C++、展示模型和 QML 行为测试。
+```text
+weekUsedUsd     = max(weekUsed, 0)
+todayUsedUsd    = clamp(todayUsed, 0, weekUsedUsd)
+previousUsedUsd = weekUsedUsd - todayUsedUsd
 
-### 不修改
+todayPercent    = todayUsedUsd / weeklyLimit * 100
+previousPercent = previousUsedUsd / weeklyLimit * 100
+```
 
-- `CompactView.qml` 的数据选择、单色圆环、单色水平条和顶部提示。
-- Codex、MiniMax 以及自定义供应商的数据协议和图表行为。
-- 供应商配置格式、刷新频率、排序和整体用量百分比。
-- 现有用量颜色阈值；没有每日段时继续使用现有绿/黄/红语义色。
+金额使用未舍入的数值计算；百分比仅在显示文本时格式化。由此保证：
+
+```text
+previousUsedUsd + todayUsedUsd = weekUsedUsd
+previousPercent + todayPercent = weekUsedUsd / weeklyLimit * 100
+```
+
+边界规则：
+
+- `todayUsed == 0`：只显示“此前使用”段。
+- `previousUsed == 0`：只显示“今日使用”段。
+- 两者都为 0：只显示未使用轨道。
+- `todayUsed > weekUsed`：按接口数据不一致处理，将今日金额钳制为 `weekUsed`，此前为 0。
+- `todayUsed` 缺失、非数字、非有限数或小于 0：不生成两段数据，回退现有单色图表。
+- `weeklyLimit <= 0` 或 `weekUsed` 无效：沿用现有无效快照处理。
 
 ## 数据模型
 
-CodexZH 周限额计划在现有字段之外增加：
+CodexZH 周限额快照增加可选的结构化段：
 
 ```text
-dailySegments: [
+usageSegments: [
   {
-    date: "2026-07-27",
+    kind: "previous",
+    label: "此前使用",
     used: 51.0,
     usedPercent: 20.0,
-    kind: "day"
+    formattedUsed: "$51.00"
   },
   {
-    date: "2026-07-29",
+    kind: "today",
+    label: "今日使用",
     used: 76.5,
     usedPercent: 30.0,
-    kind: "day"
+    formattedUsed: "$76.50"
   }
 ]
 ```
 
-- `used` 保留接口原始额度单位，避免持久化舍入误差。
-- `usedPercent = used / weeklyLimit * 100`，展示前钳制到有效范围。
-- `date` 使用本地日期的 ISO 格式作为稳定键，提示文本在展示层格式化。
-- 颜色由展示顺序决定，不写入持久化数据。
-- `dailySegments` 不存在时按旧单色路径渲染；空数组表示已启用但本周尚无用量。
+- 数值为 0 的段不进入数组。
+- 数组顺序固定为“此前使用”在前、“今日使用”在后。
+- `usageSegments` 不存在时，QML 走当前单色路径。
+- C++ 后端生成并校验结构化段；两个 QML 图表只消费数据，不重复计算业务规则。
+- `displayProvider.js` 只验证并透传数组，不从 `extraText` 提取数据。
+- 展开面板的填充几何使用各段未取整 `usedPercent` 之和；整体百分比文字继续沿用现有
+  取整后的 `usedPercentLabel`。两者只存在显示精度差异，不改变金额或额度语义。
 
-## 后台记录与推导
+## 展示范围
 
-历史只服务 CodexZH，不建立通用历史框架。CodexZH 客户端使用现有 `aiquotapilotrc` 的独立 KConfig 组保存当前周最多 7 个日期值和周期键。
+### 顶部面板
 
-每次 CodexZH 成功刷新时：
+`CompactView.qml` 继续只读取整体 `usedPercent`，保留当前单色圆环或单色水平条，不显示
+两段颜色，也不增加分段提示。
 
-1. 根据本地自然周计算周期键；周期变化时删除上一周期数据。
-2. 将当天 `todayUsed` 覆盖写入当天记录。0 也要保存，用于区分“确认未使用”和“没有采样”。
-3. 用 `weekUsed - todayUsed - 已知历史日用量` 计算此前尚未归属的余额。
-4. 若此前只缺一个日期，把余额精确归入该日期。例如首次在周二运行时，可以直接补出周一。
-5. 若缺少两个及以上日期，无法可靠拆分，保留一个 `kind: "unattributed"` 的“本周此前用量”段，不伪造日期。
-6. 展示时过滤用量为 0 的日期，并按日期升序排列；日期之间不保留视觉空隙。
-7. 仅在记录变化时同步 KConfig，避免每分钟重复写盘。
+### 展开面板列表模式
 
-若同一周期内接口校正导致 `weekUsed` 小于已记录日用量之和，当前接口值优先：放弃冲突的历史拆分，该次显示单色总用量；下一次有效刷新重新开始记录。任何计算结果都不得为负数或超过本周累计用量。
+`PlanBar.qml` 继续使用 `QQC2.ProgressBar`：
 
-## 展示与交互
+- 有 `usageSegments` 时，`value` 为各段精确百分比之和；无分段时仍为现有整体
+  `usedPercent`。
+- 有 `usageSegments` 时，`contentItem` 内依次绘制此前段和今日段。
+- 无结构化段时保留当前单色填充。
+- 未使用部分继续由现有底轨显示。
 
-### 列表模式：`PlanBar`
+### 展开面板饼图模式
 
-- 外层继续使用当前 `QQC2.ProgressBar`，`value` 仍为周累计 `usedPercent`。
-- `contentItem` 内按累计百分比放置每日颜色段，未使用部分继续显示现有底轨。
-- 分段共享一条连续填充，不为零用量日期创建对象。
-- 每段使用 Qt 原生悬浮处理和 Plasma ToolTip。
-- 提示格式：
-  - 日期段：`M月d日 · 使用 X%`
-  - 无法拆分的段：`本周此前用量 · X%`
+`PanelPieView.qml` 继续使用 `Charts.PieChart`：
 
-### 饼图模式：`PanelPieView`
+- 有 `usageSegments` 时，用 `Charts.ArraySource` 提供两个百分比值和对应颜色。
+- 图表范围固定为 `0..100`，剩余额度继续由 `backgroundColor` 绘制。
+- 无结构化段时保留当前 `SingleValueSource` 单色路径。
 
-- 继续使用 `Charts.PieChart`，固定范围 `0..100`。
-- 有每日段时，`valueSources` 改为每日百分比数组，`colorSource` 使用对应颜色数组；剩余周额度继续由 `backgroundColor` 绘制。
-- KQuickCharts 没有公开“当前悬浮分段”信号，因此使用一个 Qt `HoverHandler` 获取图表内坐标：
-  1. 先判断指针是否位于圆环内外半径之间。
-  2. 把坐标换算成与 `PieChart.fromAngle` 一致的角度。
-  3. 用每日段累计百分比定位段索引。
-  4. 索引有效时显示 Plasma ToolTip，移出圆环或进入未使用区域时隐藏。
-- 角度计算只负责原生图表的交互命中，不参与绘制。
+## 颜色与提示
 
-### 颜色
+- “此前使用”和“今日使用”使用两种固定、主题适配且容易区分的颜色。
+- 同一段在列表模式和饼图模式下颜色一致。
+- 颜色不再表示额度紧张程度；整体百分比文字仍可沿用现有语义色。
+- Plasma 原生 ToolTip 文本：
+  - `此前使用 · 20% · $51.00`
+  - `今日使用 · 30% · $76.50`
+- 百分比最多显示两位小数，整数不显示无意义的小数位。
+- 图表的无障碍描述同时包含两段名称、百分比和金额，不能只靠颜色区分。
 
-- 每周按展示顺序从一组主题适配的固定颜色中取色，同一日期在列表和饼图模式下颜色一致。
-- 颜色只用于区分日期，不表达绿/黄/红的额度紧张程度。
-- 日期和百分比同时出现在提示与无障碍描述中，不能只靠颜色传达信息。
+水平条可直接为每个 QML 段绑定 `HoverHandler` 和 Plasma ToolTip。
+
+KQuickCharts 没有公开当前悬浮扇区索引。饼图使用一个 Qt `HoverHandler` 获取坐标，
+通过圆环内外半径和累计角度判断当前段；命中中心、图表外部或未使用区域时不显示提示。
+该计算只负责交互命中，不参与图表绘制。
 
 ## 数据流
 
 ```text
 CodexZH response
-  ├─ weekUsed + weeklyLimit ───────────────> existing usedPercent
-  └─ todayUsed
-        │
-        v
-  CodexZhClient current-week KConfig history
-        │
-        ├─ known daily values
-        └─ optional unattributed prior usage
-                    │
-                    v
-             plan.dailySegments
-                    │
-          displayProvider passthrough
-             ┌──────┴────────┐
-             v               v
-          PlanBar       PanelPieView
+  ├─ weekUsed ──────────────┐
+  ├─ weeklyLimit ───────────┼─> CodexZH C++ backend
+  ├─ todayUsed ─────────────┤       ├─ overall usedPercent
+  └─ todayUsedFormatted ────┘       └─ optional usageSegments[previous, today]
+                                             │
+                                   displayProvider passthrough
+                                      ┌──────┴────────┐
+                                      v               v
+                                   PlanBar       PanelPieView
 
-CompactView <──────── existing usedPercent only
+CompactView <────────────── overall usedPercent only
 ```
 
 ## 错误与降级
 
 | 情况 | 行为 |
 |---|---|
-| 供应商不是 CodexZH | 走现有单色路径 |
-| `todayUsed` 缺失、非数字或为负数 | 当前快照走单色路径，不写历史 |
-| `weeklyLimit <= 0` | 保留现有无效数据处理 |
-| 当天用量为 0 | 保存零值，但不创建可见段 |
-| 连续漏采多个日期 | 合并为“本周此前用量”，不猜测日期 |
-| 周期重置 | 删除旧周记录，从新周重新记录 |
-| 历史与接口累计值冲突 | 接口值优先，当前回退单色 |
-| 悬浮在圆环中心、外部或未使用区域 | 不显示每日提示 |
+| 非 CodexZH 供应商 | 保持当前单色 |
+| 今日原始数值缺失或无效 | 保持当前单色，不解析格式化字符串 |
+| 今日金额为 0 | 只显示此前段 |
+| 此前金额为 0 | 只显示今日段 |
+| 今日金额大于本周金额 | 今日钳制为本周金额，此前为 0 |
+| 两段数组不存在或结构无效 | QML 保持当前单色 |
+| 悬浮在未使用区域 | 不显示分段提示 |
+
+任何两段计算错误都不得改变整体 `weekUsed`、总百分比和现有详情文本。
 
 ## 测试
 
-### C++
+### C++ 解析与映射
 
-- CodexZH 解析器正确输出 `todayUsed`、`weekUsed` 和周额度。
-- 缺失、非数字、负数的 `todayUsed` 不产生每日段。
-- 周一/周二推导、跨零用量日期、周期重置和旧周清理。
-- 多个漏采日期生成一个未归属段。
-- 接口累计值回退时不输出错误的历史分段。
-- 相同快照重复刷新不产生重复段。
+- `weekUsed=50`、`todayUsed=30`：此前 20、今日 30，两段合计 50。
+- 带小数的两段百分比之和等于未取整的本周使用率，整体标签仍按现有规则取整。
+- `todayUsed=0`：仅此前段。
+- `todayUsed=weekUsed`：仅今日段。
+- `weekUsed=0`、`todayUsed=0`：空段数组。
+- `todayUsed > weekUsed`：今日钳制为本周金额。
+- 今日字段缺失、字符串、NaN、无穷或负数：不生成两段，整体周用量仍按现有规则处理。
+- `todayUsedFormatted` 优先用于今日金额展示，原始数值作为回退。
+
+### 展示模型
+
+- 有效 `usageSegments` 原样透传。
+- 不存在、非数组或包含无效数值时不进入分段路径。
+- 非 CodexZH 快照不因计划名称包含“周”而自动启用分段。
 
 ### QML
 
-- `PlanBar` 在 `[20, 30]` 时生成两段，宽度合计为 50%，中间没有空白日期段。
-- 水平条悬浮第二段显示对应日期和 30%。
-- `PanelPieView` 的多值源、颜色源和总范围正确。
-- 圆环命中首段、第二段、中心、外部和未使用区域的结果正确。
-- 没有 `dailySegments` 时，两个展开面板图表继续使用当前单色。
-- Codex、MiniMax 快照即使是周窗口也不生成每日段。
-- `CompactView` 仍只读取整体 `usedPercent`；现有 compact 测试无需改变每日分段预期。
+- `PlanBar` 两段宽度之和等于整体已用宽度，顺序为此前、今日。
+- `PlanBar` 的两段悬浮提示内容正确；0 值段不创建。
+- `PanelPieView` 的值源、颜色源、范围和剩余轨道正确。
+- 饼图命中此前段、今日段、中心、外部和未使用区域的结果正确。
+- 缺少结构化段时，两个展开面板图表继续使用当前单色。
+- `CompactView` 继续忽略 `usageSegments`，现有 compact 行为不变。
 
 ### 验证门
 
 - 运行相关 C++ 单元测试和 QML 测试。
 - 运行 `tests/run-static-checks.sh`。
-- 运行安装级 Plasma smoke，人工检查列表/饼图两种展开面板的分段、提示位置和亮暗主题。
+- 运行安装级 Plasma smoke，人工验证列表/饼图的两段颜色和提示。
 - 检查 diff，确认 `CompactView.qml` 没有因本功能发生改动。
 
-## 风险
+## 不在范围
 
-- 电脑关闭期间无法获得逐日数据；多个漏采日期只能诚实显示为未归属用量。
-- 很小的用量段难以悬浮命中；其视觉宽度和数值保持真实，不人为放大，完整摘要保留在无障碍描述中。
-- KQuickCharts 只负责绘制，不提供分段鼠标索引；圆环命中算法必须用边界测试覆盖起始角、100% 边界和圆环内外半径。
-
-## 明确不做
-
-- 不从 Codex 或 MiniMax 的累计百分比猜测今日用量。
-- 不为自定义供应商扩展今日用量脚本协议。
-- 不增加历史页面、周报、导出、颜色配置或每日预算线。
+- 不记录周内每天的历史。
+- 不推导具体日期或补算漏采天数。
+- 不读写 KConfig 历史。
+- 不区分多个账户的历史。
+- 不扩展 Codex、MiniMax 或自定义供应商。
+- 不增加历史页面、导出、颜色设置或每日预算线。
 - 不改变顶部面板小图标。
-- 不引入通用图表组件或通用时间序列存储。
-
+- 不引入 Canvas、QtQuick Shapes、自定义 Shader 或第三方图表库。

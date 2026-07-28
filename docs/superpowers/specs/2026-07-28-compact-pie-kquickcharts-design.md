@@ -14,8 +14,10 @@
 ## 实现
 
 - 移除 compact 饼图使用的 `Shape`、`ShapePath` 和 `PathAngleArc`。
-- 使用一个 `Charts.PieChart`，通过数组数据源提供“已使用”和“剩余”两个扇区。
-- 已使用扇区沿用 `usageColor()`；剩余扇区沿用当前轨道颜色。
+- 使用一个 `Charts.PieChart` 和 `Charts.SingleValueSource` 提供已使用百分比，
+  固定范围为 `0..100`。
+- 已使用圆弧沿用 `usageColor()`；剩余轨道使用 `backgroundColor`，复用
+  `PanelPieView.qml` 的现有模式。
 - 设置与现有圆环一致的厚度和圆头，数据变化继续使用现有 300ms 动画能力；
   若 KQuickCharts 不支持同等动画，则保留供应商切换动画，不新增自定义动画层。
 - 水平柱状图改用 KDE 原生 `QQC2.ProgressBar` 结构，并像上游实现一样完全覆写

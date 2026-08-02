@@ -46,23 +46,35 @@ Item {
         return display.plans[0]
     }
 
+    // 昨天日期字符串（YYYY-MM-DD）：保证「自充值以来已用」分支与本地日期无关，
+    // 避免固定日期（如 2026-08-01）在当天运行时被误判为「今日已用」而失败。
+    function yesterdayText() {
+        const d = new Date()
+        d.setDate(d.getDate() - 1)
+        const month = d.getMonth() + 1
+        const day = d.getDate()
+        return d.getFullYear() + "-"
+            + (month < 10 ? "0" + month : month) + "-"
+            + (day < 10 ? "0" + day : day)
+    }
+
     TestCase {
         name: "PaygInference"
         when: windowShown
 
         function test_usedIsTopUpMinusRemaining() {
-            const display = buildWith(100, 87.5, "2026-08-01")
+            const display = buildWith(100, 87.5, yesterdayText())
             const plan = planOf(display)
             compare(plan.usedPercent, 13)
             compare(plan.usedText, "¥12.50")
             compare(plan.totalText, "¥100.00")
             verify(plan.extraText.indexOf("剩余 ¥87.50") >= 0)
-            verify(plan.extraText.indexOf("充值 08-01") >= 0)
+            verify(plan.extraText.indexOf("充值 " + yesterdayText().substring(5)) >= 0)
             verify(plan.extraText.indexOf("自充值以来已用 ¥12.50") >= 0)
         }
 
         function test_remainingAboveTopUpIsUnconsumed() {
-            const display = buildWith(100, 120, "2026-08-01")
+            const display = buildWith(100, 120, yesterdayText())
             const plan = planOf(display)
             compare(plan.usedPercent, 0)
             compare(plan.usedText, "¥0.00")

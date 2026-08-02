@@ -100,6 +100,17 @@ if(BUILD_TESTING)
     target_link_libraries(tst_deepseekresponseparser PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME deepseek-response-parser COMMAND tst_deepseekresponseparser)
 
+    add_executable(tst_deepseekclient
+        tests/cpp/tst_deepseekclient.cpp
+        src/deepseekclient.cpp
+        src/deepseekclient.h
+        src/deepseekresponseparser.cpp
+        src/deepseekresponseparser.h
+    )
+    target_include_directories(tst_deepseekclient PRIVATE src)
+    target_link_libraries(tst_deepseekclient PRIVATE Qt6::Core Qt6::Network Qt6::Test KF6::Wallet)
+    add_test(NAME deepseek-client-contract COMMAND tst_deepseekclient)
+
     add_executable(tst_javascripthighlighter
         tests/cpp/tst_javascripthighlighter.cpp
         src/javascripthighlighter.cpp

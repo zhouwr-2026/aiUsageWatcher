@@ -14,7 +14,7 @@
 namespace
 {
 constexpr qsizetype maximumResponseBytes = 1024 * 1024;
-const QString walletFolder = QStringLiteral("quota-pilot");
+const QString walletFolder = QStringLiteral("AIQuotaPilot");
 const QString deepSeekWalletEntry = QStringLiteral("deepseek-api-key");
 
 QVariantMap emptySnapshot(const QString &status, const QString &error = {})
@@ -27,12 +27,27 @@ QVariantMap emptySnapshot(const QString &status, const QString &error = {})
     };
 }
 
-QString unitForCurrency(const QString &currency)
+QString planUnit(const QString &currency)
 {
-    if (currency == QLatin1String("CNY")) {
-        return QStringLiteral("元");
-    }
-    return currency;
+    return currency == QStringLiteral("CNY") ? QStringLiteral("元") : currency;
+}
+
+QVariantMap balanceToPlan(const DeepSeekBalance &balance)
+{
+    const bool available = balance.isAvailable;
+    return QVariantMap{
+        {QStringLiteral("planId"), QStringLiteral("balance")},
+        {QStringLiteral("planName"), QStringLiteral("账户余额")},
+        {QStringLiteral("used"), -1},
+        {QStringLiteral("total"), -1},
+        {QStringLiteral("remaining"), balance.totalBalance},
+        {QStringLiteral("unit"), planUnit(balance.currency)},
+        {QStringLiteral("resetText"), QString()},
+        {QStringLiteral("resetAt"), 0},
+        {QStringLiteral("extraText"), QString()},
+        {QStringLiteral("isValid"), available},
+        {QStringLiteral("invalidReason"), available ? QString() : QStringLiteral("余额不足")},
+    };
 }
 }
 
@@ -96,8 +111,9 @@ QUrl DeepSeekClient::balanceEndpoint()
 QNetworkRequest DeepSeekClient::createRequest(const QUrl &url, QByteArrayView apiKey)
 {
     QNetworkRequest request(url);
-    request.setRawHeader("Authorization", QByteArray("Bearer ") + apiKey.toByteArray());
-    request.setRawHeader("Accept", QByteArray("application/json"));
+    request.setRawHeader("Authorization", QByteArrayLiteral("Bearer ") + apiKey.toByteArray());
+    request.setRawHeader("Accept", QByteArrayLiteral("application/json"));
+    request.setRawHeader("User-Agent", "AIUsageWatcher/0.1");
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::SameOriginRedirectPolicy);
     return request;
@@ -121,13 +137,13 @@ void DeepSeekClient::refresh()
     m_activeApiKey.fill('\0');
     m_activeApiKey = apiKey;
     apiKey.fill('\0');
-    m_lastRequestError.clear();
     setLoading(true);
+    m_lastRequestError.clear();
 
     QNetworkReply *reply = m_network->get(createRequest(balanceEndpoint(), m_activeApiKey));
     m_reply = reply;
 
-    QTimer::singleShot(15000, reply, [reply]() {
+    QTimer::singleShot(10000, reply, [reply]() {
         if (reply->isRunning()) {
             reply->setProperty("aiUsageWatcherTimedOut", true);
             reply->abort();
@@ -146,55 +162,51 @@ void DeepSeekClient::refresh()
         const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         const bool timedOut = reply->property("aiUsageWatcherTimedOut").toBool();
         const bool responseTooLarge = reply->property("aiUsageWatcherResponseTooLarge").toBool();
+        const QNetworkReply::NetworkError transportError = reply->error();
 
         if (timedOut) {
-            setError(QStringLiteral("DeepSeek 请求超时"));
+            m_lastRequestError = QStringLiteral("DeepSeek 请求超时");
         } else if (responseTooLarge) {
-            setError(QStringLiteral("DeepSeek 响应过大，已拒绝处理"));
-        } else if (httpStatus == 401 || httpStatus == 403) {
-            setError(QStringLiteral("DeepSeek Key 无效或已过期"));
-        } else if (reply->error() != QNetworkReply::NoError || httpStatus < 200 || httpStatus >= 300) {
-            setError(QStringLiteral("无法连接 DeepSeek 服务"));
+            m_lastRequestError = QStringLiteral("DeepSeek 响应过大，已拒绝处理");
+        } else if (transportError != QNetworkReply::NoError) {
+            m_lastRequestError = transportError == QNetworkReply::TimeoutError
+                ? QStringLiteral("DeepSeek 请求超时")
+                : QStringLiteral("无法连接 DeepSeek 服务");
         } else {
             const QByteArray payload = reply->read(maximumResponseBytes + 1);
             if (payload.size() > maximumResponseBytes) {
-                setError(QStringLiteral("DeepSeek 响应过大，已拒绝处理"));
+                m_lastRequestError = QStringLiteral("DeepSeek 响应过大，已拒绝处理");
             } else {
                 const DeepSeekParseResult result = DeepSeekResponseParser::parse(payload, httpStatus);
                 if (result.ok) {
                     if (result.balances.isEmpty()) {
                         setSnapshot(emptySnapshot(QStringLiteral("暂无数据")));
                     } else {
-                        const DeepSeekBalance &balance = result.balances.first();
-                        const QString unit = unitForCurrency(balance.currency);
-                        QVariantMap plan;
-                        plan.insert(QStringLiteral("planId"), QStringLiteral("balance"));
-                        plan.insert(QStringLiteral("planName"), QStringLiteral("账户余额"));
-                        plan.insert(QStringLiteral("used"), -1);
-                        plan.insert(QStringLiteral("total"), -1);
-                        plan.insert(QStringLiteral("remaining"), balance.totalBalance);
-                        plan.insert(QStringLiteral("unit"), unit);
-                        plan.insert(QStringLiteral("resetText"), QString());
-                        plan.insert(QStringLiteral("resetAt"), 0);
-                        plan.insert(QStringLiteral("extraText"), QString());
-                        plan.insert(QStringLiteral("isValid"), balance.isAvailable);
-                        plan.insert(QStringLiteral("invalidReason"),
-                                   balance.isAvailable ? QString() : QStringLiteral("余额不足"));
-
-                        QVariantMap snapshot;
-                        snapshot.insert(QStringLiteral("providerId"), QStringLiteral("deepseek"));
-                        snapshot.insert(QStringLiteral("statusLabel"), QStringLiteral("已同步"));
-                        snapshot.insert(QStringLiteral("errorText"), QString());
-                        snapshot.insert(QStringLiteral("plans"), QVariantList{plan});
+                        QVariantList plans;
+                        plans.reserve(result.balances.size());
+                        for (const DeepSeekBalance &balance : result.balances) {
+                            plans.push_back(balanceToPlan(balance));
+                        }
+                        QVariantMap snapshot{
+                            {QStringLiteral("providerId"), QStringLiteral("deepseek")},
+                            {QStringLiteral("statusLabel"), QStringLiteral("已刷新")},
+                            {QStringLiteral("errorText"), QString()},
+                            {QStringLiteral("plans"), plans},
+                        };
                         setSnapshot(snapshot);
                     }
-                } else {
-                    setError(result.errorMessage);
+                    reply->deleteLater();
+                    finishRefresh();
+                    return;
                 }
+                m_lastRequestError = result.errorMessage;
             }
         }
 
         reply->deleteLater();
+        setError(m_lastRequestError.isEmpty()
+                     ? QStringLiteral("无法连接 DeepSeek 服务")
+                     : m_lastRequestError);
         finishRefresh();
     });
 }

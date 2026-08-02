@@ -1,7 +1,9 @@
 import QtQuick
 import QtTest
 import "../package/contents/ui"
-import "../package/contents/js/mockData.js" as MockData
+import "../package/contents/js/providerNormalize.js" as ProviderNormalize
+import "../package/contents/js/displayProvider.js" as DisplayProvider
+import "../package/contents/js/providerCatalog.js" as ProviderCatalog
 
 Item {
     id: host
@@ -10,12 +12,27 @@ Item {
     height: 520
 
     property string configuredCompactStyle: "bar"
-    property var testProviders: MockData.buildDisplayProviders(
-                                    MockData.SEED_PROVIDER_DEFINITIONS,
+
+    function tokenHubDefinitions() {
+        return [
+            ProviderCatalog.definitionFor("minimax"),
+            {
+                id: "token-hub",
+                providerName: "Token Hub",
+                template: "%1 限额  %2/%3  重置于 %4",
+                plans: []
+            },
+            ProviderCatalog.definitionFor("codex")
+        ]
+    }
+
+    property var testProviders: DisplayProvider.buildDisplay(
+                                    tokenHubDefinitions(),
                                     liveSnapshots())
 
     function liveSnapshots() {
-        let snapshots = MockData.replaceSnapshot(MockData.SEED_RUNTIME_SNAPSHOTS, {
+        let snapshots = []
+        snapshots = ProviderNormalize.replaceSnapshot([], {
             providerId: "minimax",
             statusLabel: "可用",
             errorText: "",
@@ -41,7 +58,7 @@ Item {
                 invalidReason: ""
             }]
         })
-        snapshots = MockData.replaceSnapshot(snapshots, {
+        snapshots = ProviderNormalize.replaceSnapshot(snapshots, {
             providerId: "token-hub",
             statusLabel: "可用",
             errorText: "",
@@ -56,7 +73,7 @@ Item {
                 unit: "", resetText: "", isValid: true
             }]
         })
-        return MockData.replaceSnapshot(snapshots, {
+        return ProviderNormalize.replaceSnapshot(snapshots, {
             providerId: "codex",
             statusLabel: "可用",
             errorText: "",
@@ -99,6 +116,12 @@ Item {
         signalName: "keepOpenChanged"
     }
 
+    SignalSpy {
+        id: sortModeSpy
+        target: fullView
+        signalName: "sortModeRequested"
+    }
+
     TestCase {
         name: "FullView"
         when: windowShown
@@ -121,12 +144,14 @@ Item {
         function init() {
             host.width = 320
             host.configuredCompactStyle = "bar"
-            host.testProviders = MockData.buildDisplayProviders(
-                                    MockData.SEED_PROVIDER_DEFINITIONS,
+            fullView.sortMode = "default"
+            host.testProviders = DisplayProvider.buildDisplay(
+                                    host.tokenHubDefinitions(),
                                     host.liveSnapshots())
             refreshSpy.clear()
             configureSpy.clear()
             keepOpenSpy.clear()
+            sortModeSpy.clear()
             closeSpy.clear()
             wait(0)
         }
@@ -164,12 +189,33 @@ Item {
             compare(closeSpy.count, 1)
         }
 
+        function test_sort_button_cycles_through_every_mode() {
+            const sortButton = findChild(fullView, "sortButton")
+            const expectedModes = [
+                "alphabetical", "usedPercent", "remainingPercent",
+                "nextReset", "custom", "default"
+            ]
+
+            verify(sortButton !== null)
+            for (let i = 0; i < expectedModes.length; ++i) {
+                mouseClick(sortButton)
+                compare(sortModeSpy.count, i + 1)
+                compare(sortModeSpy.signalArguments[i][0], expectedModes[i])
+                fullView.sortMode = expectedModes[i]
+            }
+        }
+
 
         function test_pie_panel_renders_models_and_windows() {
             host.configuredCompactStyle = "pie"
             wait(0)
 
-            compare(descendantsNamed(fullView, "providerGroup").length, 0)
+            const providerScroll = findChild(fullView, "providerScroll")
+            const pieScroll = findChild(fullView, "pieScroll")
+            verify(providerScroll !== null)
+            verify(pieScroll !== null)
+            compare(providerScroll.visible, false)
+            compare(pieScroll.visible, true)
             compare(descendantsNamed(fullView, "panelPieProvider").length, 3)
             compare(descendantsNamed(fullView, "panelPiePlan").length, 6)
         }
@@ -180,7 +226,7 @@ Item {
 
             const detail = findChild(bars[5], "templateTextLabel")
             verify(detail !== null)
-            compare(detail.text, "周限额 限额  503/750  重置于 周日 00:00")
+            compare(detail.text, "周限额  503/750  重置于 周日 00:00")
         }
 
         function test_bar_keeps_visible_unused_track() {
@@ -193,6 +239,87 @@ Item {
             verify(track.opacity > 0)
             verify(legend !== null)
             compare(legend.text, "图表说明：高亮为已使用，灰色为剩余额度")
+        }
+
+        function test_usage_segments_render_in_popup_progress_bar() {
+            host.testProviders = [{
+                id: "codexzh",
+                providerName: "CodexZH",
+                statusLabel: "可用",
+                errorText: "",
+                ledClass: "led-green",
+                plans: [{
+                    planName: "周限额", usedPercent: 50, usedPercentLabel: "50%",
+                    barClass: "bar-green", usedText: "50", totalText: "100",
+                    templateText: "%1 限额  %2/%3  重置于 %4", resetText: "周一 00:00",
+                    unitText: "USD", extraText: "",
+                    usageSegments: [{
+                        kind: "previous", used: 20, usedPercent: 20, formattedUsed: "$20.00"
+                    }, {
+                        kind: "today", used: 30, usedPercent: 30, formattedUsed: "$30.00"
+                    }]
+                }]
+            }]
+            wait(0)
+
+            const bar = descendantsNamed(fullView, "planBar")[0]
+            const previous = findChild(bar, "usagePreviousSegment")
+            const current = findChild(bar, "usageCurrentSegment")
+            verify(previous !== null)
+            verify(current !== null)
+            compare(previous.width, findChild(bar, "planProgressBar").width * 0.2)
+            compare(current.width, findChild(bar, "planProgressBar").width * 0.5)
+            compare(current.radius, current.height / 2)
+            compare(previous.Accessible.name, "此前使用 · 20% · $20.00")
+            compare(current.Accessible.name, "今日使用 · 30% · $30.00")
+        }
+
+        function test_progress_bar_accepts_cpp_array_like_segments() {
+            host.testProviders = [{
+                id: "codexzh", providerName: "CodexZH", statusLabel: "可用",
+                errorText: "", ledClass: "led-green",
+                plans: [{
+                    planName: "周限额", usedPercent: 50, usedPercentLabel: "50%",
+                    barClass: "bar-green", usedText: "50", totalText: "100",
+                    usageSegments: {
+                        0: { kind: "previous", used: 20, usedPercent: 20, formattedUsed: "$20.00" },
+                        1: { kind: "today", used: 30, usedPercent: 30, formattedUsed: "$30.00" },
+                        length: 2
+                    }
+                }]
+            }]
+            wait(0)
+
+            const bar = descendantsNamed(fullView, "planBar")[0]
+            verify(findChild(bar, "usagePreviousSegment") !== null)
+        }
+
+        function test_usage_segments_are_hit_in_popup_pie() {
+            host.configuredCompactStyle = "pie"
+            host.testProviders = [{
+                id: "codexzh", providerName: "CodexZH", statusLabel: "可用",
+                errorText: "", ledClass: "led-green",
+                plans: [{
+                    planName: "周限额", usedPercent: 50, usedPercentLabel: "50%",
+                    barClass: "bar-green", usageSegments: [{
+                        kind: "previous", used: 20, usedPercent: 20, formattedUsed: "$20.00"
+                    }, {
+                        kind: "today", used: 30, usedPercent: 30, formattedUsed: "$30.00"
+                    }]
+                }]
+            }]
+            wait(50)
+
+            const pie = findChild(fullView, "panelPieChart")
+            verify(pie !== null)
+            verify(pie.outerRadius > 0)
+            verify(pie.hasUsageSegments)
+            const radius = pie.outerRadius - pie.ringThickness / 2
+            compare(pie.usageSegmentAt(pie.width / 2, pie.height / 2 - radius), 0)
+            compare(pie.usageSegmentAt(pie.width / 2 + Math.sin(Math.PI * 0.6) * radius,
+                                       pie.height / 2 - Math.cos(Math.PI * 0.6) * radius), 1)
+            compare(pie.usageSegmentAt(pie.width / 2, pie.height / 2), -1)
+            compare(pie.usageSegmentAt(0, 0), -1)
         }
 
         function test_header_uses_chinese_product_name() {
@@ -232,6 +359,30 @@ Item {
             const actionsPosition = actions.mapToItem(fullView, 0, 0)
             verify(titlePosition.x + title.width <= actionsPosition.x)
             verify(actionsPosition.x + actions.width <= fullView.width)
+        }
+
+        function test_price_and_total_visible() {
+            const defs = host.tokenHubDefinitions()
+            defs[0].price = 30                       // minimax
+            host.testProviders = DisplayProvider.buildDisplay(
+                defs, host.liveSnapshots(), { sortMode: "default" })
+            wait(0)
+
+            const priceLabels = descendantsNamed(fullView, "providerPriceLabel")
+            const totalLabel = findChild(fullView, "totalPriceLabel")
+            verify(priceLabels.length >= 1)
+            compare(priceLabels[0].text, "¥30.00")
+            verify(totalLabel !== null)
+            compare(totalLabel.text, "总价 ¥30.00")
+        }
+
+        function test_total_hidden_without_prices() {
+            host.testProviders = DisplayProvider.buildDisplay(
+                host.tokenHubDefinitions(), host.liveSnapshots(), { sortMode: "default" })
+            wait(0)
+
+            const totalLabel = findChild(fullView, "totalPriceLabel")
+            verify(totalLabel === null || !totalLabel.visible)
         }
     }
 }

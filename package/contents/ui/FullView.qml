@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents
 import "../js/providerNormalize.js" as ProviderNormalize
+import "../js/displayProvider.js" as DisplayProvider
 
 Item {
     id: root
@@ -53,6 +54,10 @@ Item {
                 ? status + qsTr(" · %1 个异常供应商").arg(errorProviderCount)
                 : status
     }
+    readonly property string totalPriceText: {
+        const total = DisplayProvider.totalPrice(root.providers)
+        return total > 0 ? "总价 ¥" + total.toFixed(2) : ""
+    }
 
     function sortModeText() {
         switch (root.sortMode) {
@@ -69,6 +74,7 @@ Item {
     signal configureRequested()
     signal keepOpenChanged(bool keepOpen)
     signal closeRequested()
+    signal sortModeRequested(string mode)
 
     Layout.minimumWidth: Kirigami.Units.gridUnit * 16
     Layout.minimumHeight: Kirigami.Units.gridUnit * 12
@@ -142,14 +148,14 @@ Item {
 
                     focusPolicy: Qt.StrongFocus
                     icon.name: "view-sort"
-                    Accessible.name: qsTr("排序：%1").arg(sortMode)
+                    Accessible.name: qsTr("排序：%1").arg(root.sortModeText())
                     PlasmaComponents.ToolTip.text: Accessible.name
                     PlasmaComponents.ToolTip.visible: hovered
                     onClicked: {
                         const currentIndex = sortModes.indexOf(root.sortMode)
                         const nextIndex = (currentIndex + 1) % sortModes.length
                         const nextMode = sortModes[nextIndex]
-                        root.sortModeChanged(nextMode)
+                        root.sortModeRequested(nextMode)
                     }
                 }
 
@@ -226,6 +232,8 @@ Item {
                     plans: modelData.plans || []
                     errorText: modelData.errorText || ""
                     templateText: modelData.template || ""
+                    priceText: (typeof modelData.price === "number" && modelData.price > 0)
+                        ? "¥" + modelData.price.toFixed(2) : ""
                 }
             }
         }
@@ -261,10 +269,22 @@ Item {
         }
 
         PlasmaComponents.Label {
+            objectName: "totalPriceLabel"
+
+            Layout.fillWidth: true
+            visible: root.totalPriceText.length > 0
+            text: root.totalPriceText
+            color: Kirigami.Theme.textColor          // 中性色，与状态色语义隔离
+            font.pixelSize: Kirigami.Theme.smallFont.pixelSize
+            font.bold: true
+            elide: Text.ElideRight
+        }
+
+        PlasmaComponents.Label {
             objectName: "statusLabel"
 
             Layout.fillWidth: true
-            text: root.statusText + qsTr(" · 排序：%1").arg(sortModeText())
+            text: root.statusText + qsTr(" · 排序：%1").arg(root.sortModeText())
             color: Kirigami.Theme.disabledTextColor
             font: Kirigami.Theme.smallFont
             elide: Text.ElideRight

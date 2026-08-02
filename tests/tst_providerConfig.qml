@@ -13,6 +13,22 @@ Item {
     readonly property url providersConfigUrl: Qt.resolvedUrl(
         "../package/contents/ui/config/ProvidersConfig.qml")
 
+    QtObject {
+        id: sharedBackendMock
+
+        property string sharedProviders: ""
+        property var codexAccounts: []
+        property int saveCalls: 0
+        property string savedProviders: ""
+
+        function saveSharedProviders(providers) {
+            ++saveCalls
+            savedProviders = providers
+            sharedProviders = providers
+            return true
+        }
+    }
+
     TestCase {
         name: "ProviderConfig"
         when: windowShown
@@ -39,14 +55,33 @@ Item {
             }
         }
 
-        function createPage(definitions) {
+        function createPage(definitions, sharedProviders) {
+            sharedBackendMock.sharedProviders = sharedProviders || ""
+            sharedBackendMock.codexAccounts = []
+            sharedBackendMock.saveCalls = 0
+            sharedBackendMock.savedProviders = ""
             const component = Qt.createComponent(host.providersConfigUrl)
             compare(component.status, Component.Ready, component.errorString())
             const page = component.createObject(host, {
-                cfg_providers: JSON.stringify(definitions)
+                cfg_providers: JSON.stringify(definitions),
+                backendOverride: sharedBackendMock
             })
             verify(page !== null, component.errorString())
             return page
+        }
+
+        function test_shared_providers_override_local_and_are_saved() {
+            const page = createPage(
+                [provider("local", "Local")],
+                JSON.stringify([provider("shared", "Shared")]))
+
+            compare(page.workingCount, 1)
+            verify(page.beginEdit("shared"))
+            verify(page.saveConfig())
+            compare(sharedBackendMock.saveCalls, 1)
+            compare(ProviderConfig.parseWorkingDefinitions(
+                        sharedBackendMock.savedProviders)[0].providerName, "Shared")
+            page.destroy()
         }
 
         function test_rejects_empty_provider_name() {
@@ -63,7 +98,7 @@ Item {
 
         function test_catalog_has_requested_fixed_providers_and_custom_last() {
             const options = ProviderCatalog.providerOptions()
-            compare(options.length, 9)
+            compare(options.length, 10)
             compare(options[0].text, "Codex")
             compare(options[1].text, "Claude Code")
             compare(options[2].text, "OpenCode Go")
@@ -72,7 +107,8 @@ Item {
             compare(options[5].text, "Kimi For Coding")
             compare(options[6].text, "硅基流动")
             compare(options[7].text, "CodexZH")
-            compare(options[8].value, "custom")
+            compare(options[8].text, "DeepSeek")
+            compare(options[9].value, "custom")
         }
 
         function test_fixed_provider_definition_is_canonical() {
@@ -427,6 +463,7 @@ Item {
             const definitions = ProviderConfig.parseWorkingDefinitions(page.cfg_providers)
             compare(definitions[0].id, "beta")
             compare(definitions[1].id, "alpha")
+            compare(page.cfg_customOrder, JSON.stringify(["beta", "alpha"]))
             verify(!page.moveProvider("beta", -1))
             page.destroy()
         }
@@ -448,6 +485,19 @@ Item {
             compare(field.text, "")
             verify(page.cfg_providers.indexOf("secret-must-not-enter-config") < 0)
             page.cancelEditor()
+            page.destroy()
+        }
+
+        function test_codexzh_clear_does_not_clear_minimax_key() {
+            const page = createPage([
+                ProviderCatalog.definitionFor("minimax"),
+                ProviderCatalog.definitionFor("codexzh")
+            ])
+
+            compare(page.credentialBackendMethod("codexzh", "clear"),
+                    "clearCodexZhApiKey")
+            compare(page.credentialBackendMethod("minimax", "clear"),
+                    "clearMiniMaxApiKey")
             page.destroy()
         }
 
@@ -482,6 +532,26 @@ Item {
             verify(browserButton.enabled)
             verify(codeField.visible)
             compare(codeField.text, "K58J-YY9PL")
+            page.destroy()
+        }
+
+        function test_codex_accounts_accept_qvariantlist_like_values() {
+            const page = createPage([ProviderCatalog.definitionFor("codex")])
+            sharedBackendMock.codexAccounts = {
+                0: {
+                    profileId: "profile-1234",
+                    accountId: "account-123",
+                    login: "user@example.com",
+                    isDefault: true
+                },
+                length: 1
+            }
+
+            page.syncCodexLoginState()
+            compare(page.codexAccounts.length, 1)
+            verify(page.beginEdit("codex"))
+            verify(findChild(page, "codexAccountRow") !== null)
+            verify(findChild(page, "removeCodexAccountButton") !== null)
             page.destroy()
         }
     }

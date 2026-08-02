@@ -34,7 +34,7 @@ echo "[smoke] 构建并安装 QML 包与 C++ 后端"
 /usr/bin/cmake --build "$tmp_dir/build" -j2
 /usr/bin/cmake --install "$tmp_dir/build"
 
-plugin_path="$user_install_prefix/lib/qt6/plugins/plasma/applets/aiUsageWatcher.so"
+plugin_path="$user_install_prefix/lib/qt6/plugins/plasma/applets/org.kde.plasma.AIQuotaPilot.so"
 worker_path="$user_install_prefix/libexec/quota-pilot-script-worker"
 if [[ ! -f "$plugin_path" ]]; then
     echo "原生插件未安装到预期位置: $plugin_path" >&2
@@ -45,7 +45,7 @@ if [[ ! -x "$worker_path" ]]; then
     exit 1
 fi
 
-package_info="$(/usr/bin/kpackagetool6 --type Plasma/Applet --show aiUsageWatcher)"
+package_info="$(/usr/bin/kpackagetool6 --type Plasma/Applet --show org.kde.plasma.AIQuotaPilot)"
 installed_dir="$(printf '%s\n' "$package_info" \
     | sed -n \
         -e 's/^[[:space:]]*Path[[:space:]]*:[[:space:]]*//p' \
@@ -57,7 +57,7 @@ if [[ -z "$installed_dir" || ! -d "$installed_dir" ]]; then
     echo "无法从 kpackagetool6 --show 解析安装目录" >&2
     exit 1
 fi
-if [[ "$(basename -- "$installed_dir")" != "aiUsageWatcher" ]]; then
+if [[ "$(basename -- "$installed_dir")" != "org.kde.plasma.AIQuotaPilot" ]]; then
     echo "安装目录 ID 不一致: $installed_dir" >&2
     exit 1
 fi
@@ -76,6 +76,10 @@ echo "[smoke] 可见组件证据: tst_fullView 断言 3 provider / 6 PlanBar"
     tests/tst_fullView.qml
 QT_QPA_PLATFORM=offscreen "$qmltestrunner" \
     -input tests/tst_fullView.qml \
+    -import package/contents/ui
+
+QT_QPA_PLATFORM=offscreen "$qmltestrunner" \
+    -input tests/tst_displayProvider.qml \
     -import package/contents/ui
 
 echo "[smoke] 原生插件依赖"

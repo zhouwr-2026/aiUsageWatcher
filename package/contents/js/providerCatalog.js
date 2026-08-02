@@ -99,10 +99,21 @@ var PRESETS = [{
     "vendor": "CodexZH",
     "website": "https://codexzh.com/",
     "sourceLabel": "套餐",
+    "template": "%1 限额  %2/%3",
     "plans": [
         { "id": "daily", "planName": "日限额", "unit": "%" },
         { "id": "monthly", "planName": "月限额", "unit": "%" }
     ]
+}, {
+    "catalogId": "deepseek",
+    "label": "DeepSeek",
+    "id": "deepseek",
+    "providerName": "DeepSeek",
+    "vendor": "DeepSeek",
+    "website": "https://platform.deepseek.com/",
+    "sourceLabel": "余额",
+    "template": "%1 限额  %2/%3",
+    "plans": [{ "id": "balance", "planName": "账户余额", "unit": "元" }]
 }];
 
 function _copy(value) {
@@ -115,6 +126,10 @@ function providerOptions() {
     });
     options.push({ "text": "自定义", "value": CUSTOM_ID });
     return options;
+}
+
+function defaultDefinitions() {
+    return PRESETS.map(function(preset) { return definitionFor(preset.catalogId); });
 }
 
 function presetFor(catalogId) {
@@ -147,7 +162,7 @@ function definitionFor(catalogId) {
         "vendor": preset.vendor,
         "sourceLabel": preset.sourceLabel,
         "trustMode": "strict",
-        "template": DEFAULT_TEMPLATE,
+        "template": preset.template || DEFAULT_TEMPLATE,
         "script": "",
         "logoPath": logoAsset,
         "plans": preset.plans.map(function(plan) {

@@ -28,27 +28,30 @@ function normalizeDefinitions(raw) {
         try {
             definitions = JSON.parse(definitions);
         } catch (error) {
-            return DisplayProvider.filterEnabled([]);
+            return ProviderCatalog.defaultDefinitions();
         }
     }
     if (!Array.isArray(definitions))
-        return DisplayProvider.filterEnabled([]);
+        return ProviderCatalog.defaultDefinitions();
 
     for (var i = 0; i < definitions.length; ++i) {
         if (!definitions[i] || typeof definitions[i] !== "object"
                 || !Array.isArray(definitions[i].plans))
-            return DisplayProvider.filterEnabled([]);
+            return ProviderCatalog.defaultDefinitions();
     }
 
     return DisplayProvider.filterEnabled(definitions.map(function(definition, providerIndex) {
         var catalogId = ProviderCatalog.catalogIdForLegacy(definition);
         var fixedDefinition = ProviderCatalog.definitionFor(catalogId);
         if (fixedDefinition) {
-            // 内置 catalog 用预设，但保留用户的 enabled / logoPath 状态
+            // 内置 catalog 用预设，但保留用户的 enabled / logoPath / 价格与充值字段
             return Object.assign({}, fixedDefinition, {
                 "enabled": definition.enabled !== false,
                 "logoPath": (typeof definition.logoPath === "string" && definition.logoPath.length > 0)
-                    ? definition.logoPath : fixedDefinition.logoPath || ""
+                    ? definition.logoPath : fixedDefinition.logoPath || "",
+                "price": _isFiniteNumber(definition.price) ? definition.price : 0,
+                "topUpAmount": _isFiniteNumber(definition.topUpAmount) ? definition.topUpAmount : 0,
+                "topUpDate": typeof definition.topUpDate === "string" ? definition.topUpDate : ""
             });
         }
         var providerScript = typeof definition.script === "string" && definition.script
@@ -83,6 +86,9 @@ function normalizeDefinitions(raw) {
             "script": providerScript,
             "enabled": definition.enabled !== false,
             "logoPath": typeof definition.logoPath === "string" ? definition.logoPath : "",
+            "price": _isFiniteNumber(definition.price) ? definition.price : 0,
+            "topUpAmount": _isFiniteNumber(definition.topUpAmount) ? definition.topUpAmount : 0,
+            "topUpDate": typeof definition.topUpDate === "string" ? definition.topUpDate : "",
             "plans": definition.plans.map(function(plan, planIndex) {
                 plan = plan && typeof plan === "object" ? plan : {};
                 return {
@@ -148,20 +154,33 @@ function createSeedSnapshots(definitions) {
     return snapshots;
 }
 
+function _arrayCopy(value) {
+    if (!value || typeof value.length !== "number")
+        return [];
+    var result = [];
+    for (var i = 0; i < value.length; ++i)
+        result.push(value[i]);
+    return result;
+}
+
 function replaceSnapshot(snapshots, replacement) {
     snapshots = Array.isArray(snapshots) ? snapshots : [];
     if (!replacement || typeof replacement !== "object")
         return snapshots.slice();
 
+    var normalized = Object.assign({}, replacement, {
+        "plans": _arrayCopy(replacement.plans)
+    });
+
     var found = false;
     var result = snapshots.map(function(snapshot) {
-        if (!snapshot || snapshot.providerId !== replacement.providerId)
+        if (!snapshot || snapshot.providerId !== normalized.providerId)
             return snapshot;
         found = true;
-        return replacement;
+        return normalized;
     });
     if (!found)
-        result.push(replacement);
+        result.push(normalized);
     return result;
 }
 

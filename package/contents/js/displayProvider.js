@@ -48,8 +48,8 @@ function firstCharFallback(name) {
 }
 
 function _compareAlphabetical(a, b) {
-    var aName = (a.providerName || "")
-    var bName = (b.providerName || "")
+    var aName = (a.providerName || "").toUpperCase()
+    var bName = (b.providerName || "").toUpperCase()
     if (aName < bName) return -1
     if (aName > bName) return 1
     return 0
@@ -72,8 +72,10 @@ function _compareRemainingPercent(a, b) {
 }
 
 function _compareNextReset(a, b) {
-    var aNext = _isFiniteNumber(a.nextResetAt) ? a.nextResetAt : Number.MAX_SAFE_INTEGER
-    var bNext = _isFiniteNumber(b.nextResetAt) ? b.nextResetAt : Number.MAX_SAFE_INTEGER
+    var aNext = _isFiniteNumber(a.nextResetAt) && a.nextResetAt > 0
+        ? a.nextResetAt : Number.MAX_SAFE_INTEGER
+    var bNext = _isFiniteNumber(b.nextResetAt) && b.nextResetAt > 0
+        ? b.nextResetAt : Number.MAX_SAFE_INTEGER
     return aNext - bNext
 }
 
@@ -153,6 +155,35 @@ function _definitionPlan(definition, planId) {
     return {}
 }
 
+function _usageSegments(definition, snapshotPlan) {
+    if (!definition || definition.id !== "codexzh" || snapshotPlan.planId !== "weekly"
+            || !snapshotPlan.usageSegments
+            || typeof snapshotPlan.usageSegments.length !== "number")
+        return undefined
+    var segments = snapshotPlan.usageSegments
+    if (segments.length === 0 || segments.length > 2)
+        return undefined
+    var copied = []
+    var hasToday = false
+    for (var i = 0; i < segments.length; ++i) {
+        var segment = segments[i]
+        if (!segment || (segment.kind !== "previous" && segment.kind !== "today")
+                || (segment.kind === "previous" && (i !== 0 || hasToday))
+                || (segment.kind === "today" && hasToday)
+                || !_isFiniteNumber(segment.used) || segment.used <= 0
+                || !_isFiniteNumber(segment.usedPercent) || segment.usedPercent <= 0)
+            return undefined
+        hasToday = hasToday || segment.kind === "today"
+        copied.push({
+            kind: segment.kind,
+            used: segment.used,
+            usedPercent: segment.usedPercent,
+            formattedUsed: typeof segment.formattedUsed === "string" ? segment.formattedUsed : ""
+        })
+    }
+    return copied
+}
+
 function _displayPlan(definition, snapshotPlan) {
     var planDefinition = _definitionPlan(definition, snapshotPlan.planId)
     var valid = snapshotPlan.isValid !== false
@@ -165,7 +196,7 @@ function _displayPlan(definition, snapshotPlan) {
     var unit = typeof snapshotPlan.unit === "string"
         ? snapshotPlan.unit : (planDefinition.unit || "")
     var compactUnit = unit.length <= 8 && !/\s/.test(unit)
-    return {
+    var displayPlan = {
         planId: snapshotPlan.planId,
         planName: snapshotPlan.planName || planDefinition.planName || "",
         usedPercent: percent,
@@ -175,12 +206,57 @@ function _displayPlan(definition, snapshotPlan) {
         unitText: compactUnit ? unit : "",
         unitOverflow: compactUnit ? "" : unit,
         resetText: snapshotPlan.resetText || "",
+        resetAt: _isFiniteNumber(snapshotPlan.resetAt) && snapshotPlan.resetAt > 0
+            ? snapshotPlan.resetAt : -1,
         extraText: snapshotPlan.extraText || "",
         templateText: (definition && definition.template) || DEFAULT_TEMPLATE,
         isInvalid: !valid,
         invalidReason: snapshotPlan.invalidReason || "",
         barClass: _usageClass(percent)
     }
+    if (definition.catalogId === "deepseek" && snapshotPlan.planId === "balance") {
+        var remaining = _isFiniteNumber(snapshotPlan.remaining) ? snapshotPlan.remaining : -1
+        var topUp = _isFiniteNumber(definition.topUpAmount) ? definition.topUpAmount : 0
+        if (topUp > 0 && remaining >= 0) {
+            var used = Math.max(0, Math.min(topUp, topUp - remaining))
+            var percentPayg = Math.round(used / topUp * 100)
+            displayPlan.usedPercent = percentPayg
+            displayPlan.usedPercentLabel = percentPayg + "%"
+            displayPlan.usedText = "¥" + used.toFixed(2)
+            displayPlan.totalText = "¥" + topUp.toFixed(2)
+            displayPlan.isInvalid = false
+            displayPlan.barClass = _usageClass(percentPayg)
+            var paygSegments = []
+            if (used > 0) {
+                var dateText = typeof definition.topUpDate === "string" ? definition.topUpDate : ""
+                var today = new Date()
+                var todayMonth = today.getMonth() + 1
+                var todayDay = today.getDate()
+                var todayText = today.getFullYear() + "-"
+                    + (todayMonth < 10 ? "0" + todayMonth : todayMonth) + "-"
+                    + (todayDay < 10 ? "0" + todayDay : todayDay)
+                var usedLabel = dateText === todayText
+                    ? "今日已用 ¥" + used.toFixed(2)
+                    : "自充值以来已用 ¥" + used.toFixed(2)
+                paygSegments.push("剩余 ¥" + remaining.toFixed(2))
+                if (dateText)
+                    paygSegments.push("充值 " + dateText.substring(5))
+                paygSegments.push(usedLabel)
+            } else {
+                paygSegments.push("剩余 ¥" + remaining.toFixed(2))
+                if (typeof definition.topUpDate === "string" && definition.topUpDate)
+                    paygSegments.push("充值 " + definition.topUpDate.substring(5))
+                paygSegments.push("本次充值未消耗")
+            }
+            displayPlan.extraText = paygSegments.join(" | ")
+        } else if (remaining >= 0) {
+            displayPlan.extraText = "余额 ¥" + remaining.toFixed(2)
+        }
+    }
+    var segments = _usageSegments(definition, snapshotPlan)
+    if (segments !== undefined)
+        displayPlan.usageSegments = segments
+    return displayPlan
 }
 
 function _usageClass(percent) {
@@ -193,15 +269,16 @@ function _usageClass(percent) {
     return "bar-red"
 }
 
-function _nextResetAt(definition) {
-    if (!definition)
+function _nextResetAt(plans) {
+    var earliest = Number.MAX_SAFE_INTEGER
+    if (!Array.isArray(plans))
         return -1
-    var period = _isFiniteNumber(definition.resetPeriodSec) ? definition.resetPeriodSec : 0
-    if (period <= 0)
-        return -1
-    var nowMs = new Date().getTime()
-    var started = Math.floor(nowMs / 1000) - (Math.floor(nowMs / 1000) % period)
-    return (started + period) * 1000
+    for (var i = 0; i < plans.length; ++i) {
+        var resetAt = plans[i].resetAt
+        if (_isFiniteNumber(resetAt) && resetAt > 0 && resetAt < earliest)
+            earliest = resetAt
+    }
+    return earliest === Number.MAX_SAFE_INTEGER ? -1 : earliest
 }
 
 function _tightestForProvider(display) {
@@ -255,7 +332,10 @@ function buildDisplay(definitions, snapshots, options) {
             ledClass: _usageClass(tight.percent).replace("bar-", "led-"),
             tightestPercent: tight.percent,
             tightestRemaining: tight.remaining,
-            nextResetAt: _nextResetAt(definition)
+            nextResetAt: _nextResetAt(plans),
+            price: _isFiniteNumber(definition.price) ? definition.price : undefined,
+            topUpAmount: _isFiniteNumber(definition.topUpAmount) ? definition.topUpAmount : undefined,
+            topUpDate: typeof definition.topUpDate === "string" ? definition.topUpDate : undefined
         }
     })
     return sortProviders(builds, options.sortMode || "default", order)
@@ -314,4 +394,20 @@ function nextProviderIndexWithUsage(displayProviders, providerIndex) {
     var currentIndex = ((numericIndex % displayProviders.length) + displayProviders.length)
         % displayProviders.length
     return (currentIndex + 1) % displayProviders.length
+}
+
+function totalPrice(displayProviders) {
+    if (!Array.isArray(displayProviders))
+        return 0
+    var total = 0
+    for (var i = 0; i < displayProviders.length; ++i) {
+        var provider = displayProviders[i]
+        if (!provider || provider.enabled === false)
+            continue
+        if (_isFiniteNumber(provider.price) && provider.price > 0)
+            total += provider.price
+        else if (_isFiniteNumber(provider.topUpAmount) && provider.topUpAmount > 0)
+            total += provider.topUpAmount
+    }
+    return Math.round(total * 100) / 100
 }

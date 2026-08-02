@@ -34,7 +34,11 @@ function validateProvider(candidate, siblings) {
     var catalogId = ProviderCatalog.catalogIdForLegacy(candidate)
     if (catalogId !== ProviderCatalog.CUSTOM_ID) {
         var preset = ProviderCatalog.definitionFor(catalogId)
-        if (!preset || JSON.stringify(candidate) !== JSON.stringify(preset))
+        var candidateForCompare = JSON.parse(JSON.stringify(candidate))
+        delete candidateForCompare.price
+        delete candidateForCompare.topUpAmount
+        delete candidateForCompare.topUpDate
+        if (!preset || JSON.stringify(candidateForCompare) !== JSON.stringify(preset))
             return { valid: false, message: "固定厂商信息必须使用内置预设" }
         return { valid: true, message: "" }
     }
@@ -65,6 +69,18 @@ function validateProvider(candidate, siblings) {
             return { valid: false, message: "到期时间变量必须使用 ${name} 格式" }
         planNames.push(planName)
     }
+
+    var price = typeof candidate.price === "number" ? candidate.price : NaN
+    if (candidate.price !== undefined && candidate.price !== null
+            && (!isFinite(price) || price < 0))
+        return { valid: false, message: "套餐价格必须为非负数字或留空" }
+    var topUpAmount = typeof candidate.topUpAmount === "number" ? candidate.topUpAmount : NaN
+    if (candidate.topUpAmount !== undefined && candidate.topUpAmount !== null
+            && (!isFinite(topUpAmount) || topUpAmount < 0))
+        return { valid: false, message: "充值金额必须为非负数字或留空" }
+    var topUpDate = typeof candidate.topUpDate === "string" ? candidate.topUpDate.trim() : ""
+    if (topUpDate && !/^\d{4}-\d{2}-\d{2}$/.test(topUpDate))
+        return { valid: false, message: "充值时间必须使用 YYYY-MM-DD 格式" }
 
     var contract = ScriptTools.validateContract(candidate.script, candidate.plans)
     if (!contract.valid)

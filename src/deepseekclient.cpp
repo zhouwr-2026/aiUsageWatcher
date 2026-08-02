@@ -5,7 +5,6 @@
 #include "deepseekresponseparser.h"
 
 #include <KWallet>
-#include <QDateTime>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QTimer>
@@ -27,27 +26,46 @@ QVariantMap emptySnapshot(const QString &status, const QString &error = {})
     };
 }
 
-QString planUnit(const QString &currency)
-{
-    return currency == QStringLiteral("CNY") ? QStringLiteral("元") : currency;
-}
-
 QVariantMap balanceToPlan(const DeepSeekBalance &balance)
 {
-    const bool available = balance.isAvailable;
+    const QString unit = balance.currency == QStringLiteral("CNY")
+        ? QStringLiteral("元")
+        : balance.currency;
     return QVariantMap{
         {QStringLiteral("planId"), QStringLiteral("balance")},
         {QStringLiteral("planName"), QStringLiteral("账户余额")},
         {QStringLiteral("used"), -1},
         {QStringLiteral("total"), -1},
         {QStringLiteral("remaining"), balance.totalBalance},
-        {QStringLiteral("unit"), planUnit(balance.currency)},
+        {QStringLiteral("unit"), unit},
         {QStringLiteral("resetText"), QString()},
         {QStringLiteral("resetAt"), 0},
         {QStringLiteral("extraText"), QString()},
-        {QStringLiteral("isValid"), available},
-        {QStringLiteral("invalidReason"), available ? QString() : QStringLiteral("余额不足")},
+        {QStringLiteral("isValid"), balance.isAvailable},
+        {QStringLiteral("invalidReason"), balance.isAvailable ? QString() : QStringLiteral("余额不足")},
     };
+}
+
+QVariantMap toVariantMap(const QList<DeepSeekBalance> &balances)
+{
+    QVariantList plans;
+    if (!balances.isEmpty()) {
+        plans.push_back(balanceToPlan(balances.first()));
+    }
+    return {
+        {QStringLiteral("providerId"), QStringLiteral("deepseek")},
+        {QStringLiteral("statusLabel"), QStringLiteral("可用")},
+        {QStringLiteral("errorText"), QString()},
+        {QStringLiteral("plans"), plans},
+    };
+}
+
+QString transportErrorMessage(QNetworkReply::NetworkError error)
+{
+    if (error == QNetworkReply::TimeoutError) {
+        return QStringLiteral("DeepSeek 请求超时");
+    }
+    return QStringLiteral("无法连接 DeepSeek 服务");
 }
 }
 
@@ -112,8 +130,7 @@ QNetworkRequest DeepSeekClient::createRequest(const QUrl &url, QByteArrayView ap
 {
     QNetworkRequest request(url);
     request.setRawHeader("Authorization", QByteArrayLiteral("Bearer ") + apiKey.toByteArray());
-    request.setRawHeader("Accept", QByteArrayLiteral("application/json"));
-    request.setRawHeader("User-Agent", "AIUsageWatcher/0.1");
+    request.setRawHeader("Accept", "application/json");
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::SameOriginRedirectPolicy);
     return request;
@@ -137,13 +154,14 @@ void DeepSeekClient::refresh()
     m_activeApiKey.fill('\0');
     m_activeApiKey = apiKey;
     apiKey.fill('\0');
-    setLoading(true);
     m_lastRequestError.clear();
+    setLoading(true);
 
-    QNetworkReply *reply = m_network->get(createRequest(balanceEndpoint(), m_activeApiKey));
+    QNetworkReply *reply = m_network->get(
+        createRequest(balanceEndpoint(), m_activeApiKey));
     m_reply = reply;
 
-    QTimer::singleShot(10000, reply, [reply]() {
+    QTimer::singleShot(15000, reply, [reply]() {
         if (reply->isRunning()) {
             reply->setProperty("aiUsageWatcherTimedOut", true);
             reply->abort();
@@ -160,18 +178,18 @@ void DeepSeekClient::refresh()
             m_reply = nullptr;
         }
         const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const bool hasHttpStatus = httpStatus >= 100 && httpStatus < 700;
+        const QNetworkReply::NetworkError transportError = reply->error();
         const bool timedOut = reply->property("aiUsageWatcherTimedOut").toBool();
         const bool responseTooLarge = reply->property("aiUsageWatcherResponseTooLarge").toBool();
-        const QNetworkReply::NetworkError transportError = reply->error();
 
+        bool succeeded = false;
         if (timedOut) {
             m_lastRequestError = QStringLiteral("DeepSeek 请求超时");
         } else if (responseTooLarge) {
             m_lastRequestError = QStringLiteral("DeepSeek 响应过大，已拒绝处理");
-        } else if (transportError != QNetworkReply::NoError) {
-            m_lastRequestError = transportError == QNetworkReply::TimeoutError
-                ? QStringLiteral("DeepSeek 请求超时")
-                : QStringLiteral("无法连接 DeepSeek 服务");
+        } else if (!hasHttpStatus) {
+            m_lastRequestError = transportErrorMessage(transportError);
         } else {
             const QByteArray payload = reply->read(maximumResponseBytes + 1);
             if (payload.size() > maximumResponseBytes) {
@@ -182,32 +200,22 @@ void DeepSeekClient::refresh()
                     if (result.balances.isEmpty()) {
                         setSnapshot(emptySnapshot(QStringLiteral("暂无数据")));
                     } else {
-                        QVariantList plans;
-                        plans.reserve(result.balances.size());
-                        for (const DeepSeekBalance &balance : result.balances) {
-                            plans.push_back(balanceToPlan(balance));
-                        }
-                        QVariantMap snapshot{
-                            {QStringLiteral("providerId"), QStringLiteral("deepseek")},
-                            {QStringLiteral("statusLabel"), QStringLiteral("已刷新")},
-                            {QStringLiteral("errorText"), QString()},
-                            {QStringLiteral("plans"), plans},
-                        };
-                        setSnapshot(snapshot);
+                        setSnapshot(toVariantMap(result.balances));
                     }
-                    reply->deleteLater();
-                    finishRefresh();
-                    return;
+                    succeeded = true;
+                } else {
+                    m_lastRequestError = result.errorMessage;
                 }
-                m_lastRequestError = result.errorMessage;
             }
         }
 
         reply->deleteLater();
-        setError(m_lastRequestError.isEmpty()
-                     ? QStringLiteral("无法连接 DeepSeek 服务")
-                     : m_lastRequestError);
-        finishRefresh();
+        if (succeeded) {
+            finishRefresh();
+        } else {
+            setError(m_lastRequestError);
+            finishRefresh();
+        }
     });
 }
 

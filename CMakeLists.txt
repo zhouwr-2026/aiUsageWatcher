@@ -42,6 +42,12 @@ kcoreaddons_add_plugin(org.kde.plasma.AIQuotaPilot
         src/codexzhclient.h
         src/codexzhresponseparser.cpp
         src/codexzhresponseparser.h
+        src/deepseekclient.cpp
+        src/deepseekclient.h
+        src/deepseekresponseparser.cpp
+        src/deepseekresponseparser.h
+        src/sharedproviderconfig.cpp
+        src/sharedproviderconfig.h
     INSTALL_NAMESPACE "plasma/applets"
 )
 target_link_libraries(org.kde.plasma.AIQuotaPilot

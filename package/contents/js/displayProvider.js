@@ -224,7 +224,8 @@ function _displayPlan(definition, snapshotPlan) {
             displayPlan.usedPercentLabel = percentPayg + "%"
             displayPlan.usedText = "¥" + used.toFixed(2)
             displayPlan.totalText = "¥" + topUp.toFixed(2)
-            displayPlan.isInvalid = false
+            if (snapshotPlan.isValid !== false)
+                displayPlan.isInvalid = false      // is_available=false 时保留「余额不足」标记
             displayPlan.barClass = _usageClass(percentPayg)
             var paygSegments = []
             if (used > 0) {
@@ -404,10 +405,13 @@ function totalPrice(displayProviders) {
         var provider = displayProviders[i]
         if (!provider || provider.enabled === false)
             continue
-        if (_isFiniteNumber(provider.price) && provider.price > 0)
+        // 按量计费厂商（deepseek）用充值金额参与累计；套餐厂商用价格
+        if (provider.catalogId === "deepseek") {
+            if (_isFiniteNumber(provider.topUpAmount) && provider.topUpAmount > 0)
+                total += provider.topUpAmount
+        } else if (_isFiniteNumber(provider.price) && provider.price > 0) {
             total += provider.price
-        else if (_isFiniteNumber(provider.topUpAmount) && provider.topUpAmount > 0)
-            total += provider.topUpAmount
+        }
     }
     return Math.round(total * 100) / 100
 }

@@ -52,9 +52,11 @@ QVariantMap toVariantMap(const QList<DeepSeekBalance> &balances)
     if (!balances.isEmpty()) {
         plans.push_back(balanceToPlan(balances.first()));
     }
+    const bool available = !balances.isEmpty() && balances.first().isAvailable;
     return {
         {QStringLiteral("providerId"), QStringLiteral("deepseek")},
-        {QStringLiteral("statusLabel"), QStringLiteral("可用")},
+        {QStringLiteral("statusLabel"), available
+             ? QStringLiteral("可用") : QStringLiteral("余额不足")},
         {QStringLiteral("errorText"), QString()},
         {QStringLiteral("plans"), plans},
     };

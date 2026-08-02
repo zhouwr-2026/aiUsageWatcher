@@ -82,6 +82,16 @@ QT_QPA_PLATFORM=offscreen "$qmltestrunner" \
     -input tests/tst_displayProvider.qml \
     -import package/contents/ui
 
+echo "[smoke] 原生插件可加载（dlopen RTLD_NOW 检查未定义符号）"
+/usr/bin/python3 - "$plugin_path" <<'PYEOF'
+import ctypes, os, sys
+try:
+    ctypes.CDLL(sys.argv[1], mode=os.RTLD_NOW)
+except OSError as e:
+    print("插件加载失败:", e)
+    sys.exit(1)
+PYEOF
+
 echo "[smoke] 原生插件依赖"
 if /usr/bin/ldd "$plugin_path" | /usr/bin/rg -n 'not found'; then
     echo "原生插件存在缺失依赖" >&2

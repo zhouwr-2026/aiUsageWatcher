@@ -79,8 +79,14 @@ function validateProvider(candidate, siblings) {
             && (!isFinite(topUpAmount) || topUpAmount < 0))
         return { valid: false, message: "充值金额必须为非负数字或留空" }
     var topUpDate = typeof candidate.topUpDate === "string" ? candidate.topUpDate.trim() : ""
-    if (topUpDate && !/^\d{4}-\d{2}-\d{2}$/.test(topUpDate))
-        return { valid: false, message: "充值时间必须使用 YYYY-MM-DD 格式" }
+    if (topUpDate) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(topUpDate))
+            return { valid: false, message: "充值时间必须使用 YYYY-MM-DD 格式" }
+        var dateMonth = parseInt(topUpDate.substring(5, 7), 10)
+        var dateDay = parseInt(topUpDate.substring(8, 10), 10)
+        if (dateMonth < 1 || dateMonth > 12 || dateDay < 1 || dateDay > 31)
+            return { valid: false, message: "充值时间必须是有效日期" }
+    }
 
     var contract = ScriptTools.validateContract(candidate.script, candidate.plans)
     if (!contract.valid)

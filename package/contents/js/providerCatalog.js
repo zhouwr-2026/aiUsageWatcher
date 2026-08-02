@@ -13,7 +13,8 @@ var _LOGO_ASSETS = {
     "kimi-for-coding": "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/kimi-for-coding.png",
     siliconflow: "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/siliconflow.svg",
     codexzh: "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/codexzh-icon.png",
-    "opencode-go": "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/opencode-go.svg"
+    "opencode-go": "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/opencode-go.svg",
+    deepseek: "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/deepseek.svg"
 };
 
 var PRESETS = [{

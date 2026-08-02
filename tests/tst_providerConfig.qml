@@ -225,6 +225,16 @@ Item {
                        ProviderCatalog.definitionFor("minimax"), []).valid)
         }
 
+        function test_fixed_provider_from_config_with_price_validates() {
+            // 模拟配置加载形态：preset + 用户可配置字段（enabled/logoPath/price），
+            // 键顺序与预设一致。此场景此前因未剔除 enabled 导致校验失败、保存被拒。
+            const configured = JSON.parse(JSON.stringify(ProviderCatalog.definitionFor("minimax")))
+            configured.enabled = true
+            configured.price = 30
+            configured.logoPath = "file:///custom/logo.png"
+            verify(ProviderConfig.validateProvider(configured, []).valid)
+        }
+
         function test_parse_and_serialize_keep_only_definition_fields() {
             const legacy = provider("alpha", "Alpha")
             legacy.usedPercent = 65

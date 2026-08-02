@@ -34,11 +34,19 @@ function validateProvider(candidate, siblings) {
     var catalogId = ProviderCatalog.catalogIdForLegacy(candidate)
     if (catalogId !== ProviderCatalog.CUSTOM_ID) {
         var preset = ProviderCatalog.definitionFor(catalogId)
+        // 两侧对称剔除用户可配置字段（与 normalizeDefinitions 保留的字段集合一致）：
+        // enabled/logoPath/price/topUp* 随配置持久化。只剔一侧会导致
+        // stringify 不等（如 logoPath），配置加载形态的固定厂商（如 MiniMax
+        // 填价格后）校验失败、保存被拒。
         var candidateForCompare = JSON.parse(JSON.stringify(candidate))
+        var presetForCompare = JSON.parse(JSON.stringify(preset))
         delete candidateForCompare.price
         delete candidateForCompare.topUpAmount
         delete candidateForCompare.topUpDate
-        if (!preset || JSON.stringify(candidateForCompare) !== JSON.stringify(preset))
+        delete candidateForCompare.enabled
+        delete candidateForCompare.logoPath
+        delete presetForCompare.logoPath
+        if (!preset || JSON.stringify(candidateForCompare) !== JSON.stringify(presetForCompare))
             return { valid: false, message: "固定厂商信息必须使用内置预设" }
         return { valid: true, message: "" }
     }

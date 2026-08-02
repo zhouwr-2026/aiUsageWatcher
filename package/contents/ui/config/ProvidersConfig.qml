@@ -308,6 +308,9 @@ KCM.SimpleKCM {
             if (catalogId === "codexzh") {
                 zhCredentialError = true
                 zhCredentialStatus = qsTr("CodexZH 凭据后端未加载，请重启 Plasma 后重试")
+            } else if (catalogId === "deepseek") {
+                deepseekCredentialError = true
+                deepseekCredentialStatus = qsTr("DeepSeek 凭据后端未加载，请重启 Plasma 后重试")
             } else {
                 miniMaxCredentialError = true
                 miniMaxCredentialStatus = qsTr("MiniMax 凭据后端未加载，请重启 Plasma 后重试")
@@ -360,7 +363,7 @@ KCM.SimpleKCM {
         const snapshot = usageBackend[prefix + "Snapshot"]
         deepseekCredentialStatus = typeof status === "string" && status.length > 0
             ? status : qsTr("尚未保存 API Key")
-        deepseekUsageLoading = usageBackend[prefix + "UsageLoading"] === true
+        deepseekUsageLoading = usageBackend[prefix + "Loading"] === true
         deepseekUsageStatus = snapshot && typeof snapshot.statusLabel === "string"
             ? snapshot.statusLabel : qsTr("未配置")
         deepseekUsageError = snapshot && typeof snapshot.errorText === "string"
@@ -372,7 +375,7 @@ KCM.SimpleKCM {
         const suffixes = [
             "CredentialConfiguredChanged", "CredentialStatusChanged",
             "CredentialBusyChanged", "CredentialErrorChanged",
-            "SnapshotChanged", "UsageLoadingChanged"
+            "SnapshotChanged", "LoadingChanged"
         ]
         for (let i = 0; i < suffixes.length; ++i) {
             const signal = usageBackend[prefix + suffixes[i]]
@@ -471,7 +474,7 @@ KCM.SimpleKCM {
         function onDeepseekCredentialBusyChanged() { root.syncDeepSeekState() }
         function onDeepseekCredentialErrorChanged() { root.syncDeepSeekState() }
         function onDeepseekSnapshotChanged() { root.syncDeepSeekState() }
-        function onDeepseekUsageLoadingChanged() { root.syncDeepSeekState() }
+        function onDeepseekLoadingChanged() { root.syncDeepSeekState() }
     }
 
     ListModel {

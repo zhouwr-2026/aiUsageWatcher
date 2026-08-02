@@ -91,6 +91,15 @@ if(BUILD_TESTING)
     target_link_libraries(tst_minimaxclient PRIVATE Qt6::Core Qt6::Network Qt6::Test KF6::Wallet)
     add_test(NAME minimax-client-contract COMMAND tst_minimaxclient)
 
+    add_executable(tst_deepseekresponseparser
+        tests/cpp/tst_deepseekresponseparser.cpp
+        src/deepseekresponseparser.cpp
+        src/deepseekresponseparser.h
+    )
+    target_include_directories(tst_deepseekresponseparser PRIVATE src)
+    target_link_libraries(tst_deepseekresponseparser PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME deepseek-response-parser COMMAND tst_deepseekresponseparser)
+
     add_executable(tst_javascripthighlighter
         tests/cpp/tst_javascripthighlighter.cpp
         src/javascripthighlighter.cpp

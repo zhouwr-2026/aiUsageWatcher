@@ -1044,8 +1044,32 @@ git commit -m "feat: add pricing and payg inference to data layer"
                 Layout.maximumWidth: root.fieldWidth
                 placeholderText: qsTr("YYYY-MM-DD")
                 text: (typeof root.candidate.topUpDate === "string") ? root.candidate.topUpDate : ""
+                validator: QRegularExpressionValidator {
+                    regularExpression: /^\d{4}-\d{2}-\d{2}$/
+                }
                 onTextChanged: root.updateField("topUpDate", text.trim())
+                // 即时反馈：失焦时非空但格式非法 → 显示提示（保存时 validateProvider 兜底）
+                onEditingFinished: {
+                    if (text.trim().length > 0 && !/^\d{4}-\d{2}-\d{2}$/.test(text.trim())) {
+                        topUpDateHint.visible = true
+                        topUpDateHint.text = qsTr("格式应为 YYYY-MM-DD，如 2026-08-01")
+                    } else {
+                        topUpDateHint.visible = false
+                    }
+                }
             }
+        }
+
+        Kirigami.InlineMessage {
+            id: topUpDateHint
+
+            objectName: "topUpDateHint"
+            visible: false
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: root.formWidth
+            Layout.maximumWidth: root.formWidth
+            text: qsTr("格式应为 YYYY-MM-DD，如 2026-08-01")
+            type: Kirigami.MessageType.Warning
         }
 ```
 
@@ -1101,9 +1125,11 @@ git commit -m "feat: add price, topup and DeepSeek credential fields to config p
                     objectName: "providerPriceLabel"
                     visible: root.priceText.length > 0
                     text: root.priceText
-                    color: Kirigami.Theme.positiveTextColor
+                    color: Kirigami.Theme.textColor      // 中性色，避免与 LED 状态色混淆
                     font: Kirigami.Theme.smallFont
                     font.bold: true
+                    Layout.maximumWidth: Kirigami.Units.gridUnit * 4
+                    elide: Text.ElideRight                // 长价格不挤压厂商名称
                 }
 ```
 
@@ -1135,9 +1161,10 @@ git commit -m "feat: add price, topup and DeepSeek credential fields to config p
             Layout.fillWidth: true
             visible: root.totalPriceText.length > 0
             text: root.totalPriceText
-            color: Kirigami.Theme.positiveTextColor
+            color: Kirigami.Theme.textColor          // 中性色，与状态色语义隔离
             font: Kirigami.Theme.smallFont
             font.bold: true
+            elide: Text.ElideRight
         }
 ```
 
@@ -1173,6 +1200,18 @@ git commit -m "feat: show provider price and panel total price"
 
 ---
 
+## 交互状态覆盖（设计评审 Pass 2 输出）
+
+```
+  FEATURE              | LOADING                       | EMPTY                              | ERROR                                          | SUCCESS                     | PARTIAL
+  ---------------------|------------------------------|------------------------------------|------------------------------------------------|-----------------------------|------------------------------
+  DeepSeek 余额查询    | 保持上次 snapshot（keep-last- | 未保存 API Key → 状态「未配置」；   | errorText 透出（鉴权失败/接口错误），statusLabel | 余额/已用/充值信息完整显示   | 有余额无充值金额 → 仅「余额 ¥x」；
+                       | good），刷新按钮转圈          | 无余额数据 → 「暂无数据」          | 显示错误文案（红色）                            |                             | is_available=false → plan「余额不足」
+  厂商价格             | —                            | 无 price → 标签隐藏               | —                                              | 名称右侧 ¥xx                | —
+  底部总价             | —                            | 合计 = 0 → 标签隐藏               | —                                              | 「总价 ¥xx」                | —
+  充值时间输入         | —                            | 空 → 可保存（非必填）              | 格式非法 → 失焦 InlineMessage 警告 + 保存兜底    | 合法 → 无提示               | —
+```
+
 ## 验证清单（全部完成后）
 
 ```bash
@@ -1187,3 +1226,5 @@ Expected: 全部 C++ 测试 PASS + smoke PASS
 2. 厂商价格填入 → 面板名称右侧 ¥xx、底部「总价 ¥xx」随 DeepSeek 充值金额累加
 3. 紧凑视图两种样式（bar/pie）均正常轮播 DeepSeek（有充值显示百分比，无充值显示 —）
 4. 删除 DeepSeek API Key → 面板「未配置」，无崩溃
+5. 充值时间填 `2026/08/01`（非法格式）→ 失焦出现黄色 InlineMessage 提示，保存被拒
+6. 价格填超长数字（¥123456.78）→ 价格标签 elide，厂商名称不被挤压

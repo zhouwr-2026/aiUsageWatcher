@@ -9,7 +9,9 @@
 #include "codexloginoutputparser.h"
 #include "codexzhclient.h"
 #include "customusageclient.h"
+#include "deepseekclient.h"
 #include "minimaxclient.h"
+#include "sharedproviderconfig.h"
 
 class QQuickTextDocument;
 class QNetworkAccessManager;
@@ -26,6 +28,12 @@ class AiUsageWatcherApplet : public Plasma::Applet
     Q_PROPERTY(QString miniMaxCredentialStatus READ miniMaxCredentialStatus NOTIFY miniMaxCredentialStatusChanged)
     Q_PROPERTY(bool miniMaxCredentialBusy READ miniMaxCredentialBusy NOTIFY miniMaxCredentialBusyChanged)
     Q_PROPERTY(bool miniMaxCredentialError READ miniMaxCredentialError NOTIFY miniMaxCredentialErrorChanged)
+    Q_PROPERTY(QVariantMap deepseekSnapshot READ deepseekSnapshot NOTIFY deepseekSnapshotChanged)
+    Q_PROPERTY(bool deepseekLoading READ deepseekLoading NOTIFY deepseekLoadingChanged)
+    Q_PROPERTY(bool deepseekCredentialConfigured READ deepseekCredentialConfigured NOTIFY deepseekCredentialConfiguredChanged)
+    Q_PROPERTY(QString deepseekCredentialStatus READ deepseekCredentialStatus NOTIFY deepseekCredentialStatusChanged)
+    Q_PROPERTY(bool deepseekCredentialBusy READ deepseekCredentialBusy NOTIFY deepseekCredentialBusyChanged)
+    Q_PROPERTY(bool deepseekCredentialError READ deepseekCredentialError NOTIFY deepseekCredentialErrorChanged)
     Q_PROPERTY(QVariantMap codexSnapshot READ codexSnapshot NOTIFY codexSnapshotChanged)
     Q_PROPERTY(bool codexUsageLoading READ codexUsageLoading NOTIFY codexUsageLoadingChanged)
     Q_PROPERTY(bool codexLoggedIn READ codexLoggedIn NOTIFY codexLoggedInChanged)
@@ -43,6 +51,7 @@ class AiUsageWatcherApplet : public Plasma::Applet
     Q_PROPERTY(QString codexzhCredentialStatus READ codexzhCredentialStatus NOTIFY codexzhCredentialStatusChanged)
     Q_PROPERTY(bool codexzhCredentialBusy READ codexzhCredentialBusy NOTIFY codexzhCredentialBusyChanged)
     Q_PROPERTY(bool codexzhCredentialError READ codexzhCredentialError NOTIFY codexzhCredentialErrorChanged)
+    Q_PROPERTY(QString sharedProviders READ sharedProviders NOTIFY sharedProvidersChanged)
 
 public:
     AiUsageWatcherApplet(QObject *parent,
@@ -55,6 +64,12 @@ public:
     QString miniMaxCredentialStatus() const;
     bool miniMaxCredentialBusy() const;
     bool miniMaxCredentialError() const;
+    QVariantMap deepseekSnapshot() const;
+    bool deepseekLoading() const;
+    bool deepseekCredentialConfigured() const;
+    QString deepseekCredentialStatus() const;
+    bool deepseekCredentialBusy() const;
+    bool deepseekCredentialError() const;
     QVariantMap codexSnapshot() const;
     bool codexUsageLoading() const;
     bool codexLoggedIn() const;
@@ -72,10 +87,14 @@ public:
     QString codexzhCredentialStatus() const;
     bool codexzhCredentialBusy() const;
     bool codexzhCredentialError() const;
+    QString sharedProviders() const;
 
     Q_INVOKABLE void refreshMiniMax();
     Q_INVOKABLE void saveMiniMaxApiKey(const QString &apiKey);
     Q_INVOKABLE void clearMiniMaxApiKey();
+    Q_INVOKABLE void refreshDeepSeekUsage();
+    Q_INVOKABLE void saveDeepSeekApiKey(const QString &apiKey);
+    Q_INVOKABLE void clearDeepSeekApiKey();
     Q_INVOKABLE void refreshCodexUsage();
     Q_INVOKABLE void refreshCodexLoginStatus();
     Q_INVOKABLE void startCodexLogin();
@@ -86,6 +105,8 @@ public:
     Q_INVOKABLE void refreshCodexZhUsage();
     Q_INVOKABLE void saveCodexZhApiKey(const QString &apiKey);
     Q_INVOKABLE void clearCodexZhApiKey();
+    Q_INVOKABLE bool ensureSharedProviders(const QString &providers);
+    Q_INVOKABLE bool saveSharedProviders(const QString &providers);
     Q_INVOKABLE void attachJavaScriptHighlighter(QQuickTextDocument *document,
                                                  const QColor &keywordColor,
                                                  const QColor &stringColor,
@@ -100,6 +121,12 @@ Q_SIGNALS:
     void miniMaxCredentialStatusChanged();
     void miniMaxCredentialBusyChanged();
     void miniMaxCredentialErrorChanged();
+    void deepseekSnapshotChanged();
+    void deepseekLoadingChanged();
+    void deepseekCredentialConfiguredChanged();
+    void deepseekCredentialStatusChanged();
+    void deepseekCredentialBusyChanged();
+    void deepseekCredentialErrorChanged();
     void codexSnapshotChanged();
     void codexUsageLoadingChanged();
     void codexLoggedInChanged();
@@ -116,6 +143,7 @@ Q_SIGNALS:
     void codexzhCredentialStatusChanged();
     void codexzhCredentialBusyChanged();
     void codexzhCredentialErrorChanged();
+    void sharedProvidersChanged();
 
 private Q_SLOTS:
     void handleModelActivated(const QString &modelName);
@@ -146,7 +174,9 @@ private:
                             bool busy,
                             bool error);
 
+    SharedProviderConfig m_sharedProviderConfig;
     MiniMaxClient m_miniMaxClient;
+    DeepSeekClient m_deepSeekClient;
     CodexZhClient m_codexzhClient;
     CustomUsageClient m_customUsageClient;
     QNetworkAccessManager *m_codexNetwork = nullptr;

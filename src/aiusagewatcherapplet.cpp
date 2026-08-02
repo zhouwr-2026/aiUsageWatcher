@@ -3,6 +3,7 @@
 #include "aiusagewatcherapplet.h"
 #include "codexloginoutputparser.h"
 #include "javascripthighlighter.h"
+#include "sharedproviderconfig.h"
 
 #include <KPluginFactory>
 #include <QDBusConnection>
@@ -133,6 +134,8 @@ AiUsageWatcherApplet::AiUsageWatcherApplet(QObject *parent,
                                            const QVariantList &args)
     : Plasma::Applet(parent, data, args)
     , m_miniMaxClient(this)
+    , m_deepSeekClient(this)
+    , m_sharedProviderConfig(QStringLiteral("aiquotapilotrc"), this)
     , m_codexzhClient(this)
     , m_customUsageClient(this)
     , m_codexNetwork(new QNetworkAccessManager(this))
@@ -140,6 +143,10 @@ AiUsageWatcherApplet::AiUsageWatcherApplet(QObject *parent,
     , m_codexSnapshot(emptyCodexSnapshot(QStringLiteral("未登录")))
 {
     qInfo() << "aiUsageWatcher: native backend loaded";
+    connect(&m_sharedProviderConfig,
+            &SharedProviderConfig::providersChanged,
+            this,
+            &AiUsageWatcherApplet::sharedProvidersChanged);
     const bool eventConnected = QDBusConnection::sessionBus().connect(
         QString(),
         QStringLiteral("/QuotaPilot"),
@@ -174,6 +181,30 @@ AiUsageWatcherApplet::AiUsageWatcherApplet(QObject *parent,
             &MiniMaxClient::credentialErrorChanged,
             this,
             &AiUsageWatcherApplet::miniMaxCredentialErrorChanged);
+    connect(&m_deepSeekClient,
+            &DeepSeekClient::snapshotChanged,
+            this,
+            &AiUsageWatcherApplet::deepseekSnapshotChanged);
+    connect(&m_deepSeekClient,
+            &DeepSeekClient::loadingChanged,
+            this,
+            &AiUsageWatcherApplet::deepseekLoadingChanged);
+    connect(&m_deepSeekClient,
+            &DeepSeekClient::credentialConfiguredChanged,
+            this,
+            &AiUsageWatcherApplet::deepseekCredentialConfiguredChanged);
+    connect(&m_deepSeekClient,
+            &DeepSeekClient::credentialStatusChanged,
+            this,
+            &AiUsageWatcherApplet::deepseekCredentialStatusChanged);
+    connect(&m_deepSeekClient,
+            &DeepSeekClient::credentialBusyChanged,
+            this,
+            &AiUsageWatcherApplet::deepseekCredentialBusyChanged);
+    connect(&m_deepSeekClient,
+            &DeepSeekClient::credentialErrorChanged,
+            this,
+            &AiUsageWatcherApplet::deepseekCredentialErrorChanged);
     connect(&m_codexzhClient,
             &CodexZhClient::snapshotChanged,
             this,
@@ -252,6 +283,41 @@ bool AiUsageWatcherApplet::miniMaxCredentialBusy() const
 bool AiUsageWatcherApplet::miniMaxCredentialError() const
 {
     return m_miniMaxClient.credentialError();
+}
+
+QString AiUsageWatcherApplet::sharedProviders() const
+{
+    return m_sharedProviderConfig.providers();
+}
+
+QVariantMap AiUsageWatcherApplet::deepseekSnapshot() const
+{
+    return m_deepSeekClient.snapshot();
+}
+
+bool AiUsageWatcherApplet::deepseekLoading() const
+{
+    return m_deepSeekClient.loading();
+}
+
+bool AiUsageWatcherApplet::deepseekCredentialConfigured() const
+{
+    return m_deepSeekClient.credentialConfigured();
+}
+
+QString AiUsageWatcherApplet::deepseekCredentialStatus() const
+{
+    return m_deepSeekClient.credentialStatus();
+}
+
+bool AiUsageWatcherApplet::deepseekCredentialBusy() const
+{
+    return m_deepSeekClient.credentialBusy();
+}
+
+bool AiUsageWatcherApplet::deepseekCredentialError() const
+{
+    return m_deepSeekClient.credentialError();
 }
 
 QVariantMap AiUsageWatcherApplet::codexzhSnapshot() const
@@ -352,6 +418,31 @@ void AiUsageWatcherApplet::saveMiniMaxApiKey(const QString &apiKey)
 void AiUsageWatcherApplet::clearMiniMaxApiKey()
 {
     m_miniMaxClient.clearCredential();
+}
+
+bool AiUsageWatcherApplet::ensureSharedProviders(const QString &providers)
+{
+    return m_sharedProviderConfig.ensure(providers);
+}
+
+bool AiUsageWatcherApplet::saveSharedProviders(const QString &providers)
+{
+    return m_sharedProviderConfig.save(providers);
+}
+
+void AiUsageWatcherApplet::refreshDeepSeekUsage()
+{
+    m_deepSeekClient.refresh();
+}
+
+void AiUsageWatcherApplet::saveDeepSeekApiKey(const QString &apiKey)
+{
+    m_deepSeekClient.saveCredential(apiKey);
+}
+
+void AiUsageWatcherApplet::clearDeepSeekApiKey()
+{
+    m_deepSeekClient.clearCredential();
 }
 
 void AiUsageWatcherApplet::refreshCodexZhUsage()

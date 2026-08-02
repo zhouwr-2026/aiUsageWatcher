@@ -9,7 +9,13 @@ import "../js/displayProvider.js" as DisplayProvider
 PlasmoidItem {
     id: root
 
-    property var providerDefinitions: ProviderNormalize.normalizeDefinitions(Plasmoid.configuration.providers)
+    readonly property var usageBackend: Plasmoid
+    readonly property string sharedProvidersRaw:
+        typeof usageBackend["sharedProviders"] === "string"
+        ? usageBackend["sharedProviders"] : ""
+    property var providerDefinitions: ProviderNormalize.normalizeDefinitions(
+        sharedProvidersRaw.length > 0
+        ? sharedProvidersRaw : Plasmoid.configuration.providers)
     property var runtimeSnapshots: []
     readonly property string effectiveSortMode: Plasmoid.configuration.sortMode || "default"
     readonly property string customOrderRaw: Plasmoid.configuration.customOrder || ""
@@ -19,15 +25,24 @@ PlasmoidItem {
             customOrderRaw: root.customOrderRaw
         })
     Component.onCompleted: {
+        const ensureShared = usageBackend["ensureSharedProviders"]
+        if (sharedProvidersRaw.length === 0 && typeof ensureShared === "function") {
+            const localProviders = typeof Plasmoid.configuration.providers === "string"
+                && Plasmoid.configuration.providers.length > 0
+                ? Plasmoid.configuration.providers : JSON.stringify(providerDefinitions)
+            ensureShared.call(usageBackend, localProviders)
+        }
         console.log("[LOGO] count=", providers.length)
         for (var i = 0; i < providers.length; ++i) {
             console.log("[LOGO]", i, providers[i].providerName, "logoSource=", providers[i].logoSource, "logoIsSvg=", providers[i].logoIsSvg)
         }
         applyMiniMaxSnapshot()
+        applyDeepSeekSnapshot()
         applyCodexSnapshot()
         applyCodexZhSnapshot()
         applyCustomSnapshots()
         requestMiniMaxRefresh()
+        requestDeepSeekRefresh()
         requestCodexRefresh()
         requestCodexZhRefresh()
         requestCustomRefresh()
@@ -53,8 +68,6 @@ PlasmoidItem {
     // Plasma 6 exposes the concrete Plasma::Applet subclass through the
     // attached Plasmoid object. Bracket access below keeps the QML-only test
     // environment compatible when the native plugin is not instantiated.
-    readonly property var usageBackend: Plasmoid
-
     activationTogglesExpanded: true
     hideOnWindowDeactivate: !keepPanelOpen
 
@@ -62,6 +75,7 @@ PlasmoidItem {
         compactProviderIndex = 0
         runtimeSnapshots = ProviderNormalize.createSeedSnapshots(providerDefinitions)
         applyMiniMaxSnapshot()
+        applyDeepSeekSnapshot()
         applyCodexSnapshot()
         applyCodexZhSnapshot()
         applyCustomSnapshots()
@@ -81,6 +95,25 @@ PlasmoidItem {
 
     function requestMiniMaxRefresh() {
         const refreshFunction = usageBackend["refreshMiniMax"]
+        if (typeof refreshFunction !== "function")
+            return false
+        refreshFunction.call(usageBackend)
+        return true
+    }
+
+    function applyDeepSeekSnapshot() {
+        const snapshot = usageBackend["deepseekSnapshot"]
+        if (!snapshot || snapshot.providerId !== "deepseek"
+                || !snapshot.plans || typeof snapshot.plans.length !== "number")
+            return false
+
+        runtimeSnapshots = ProviderNormalize.replaceSnapshot(runtimeSnapshots, snapshot)
+        lastRefreshTime = new Date()
+        return true
+    }
+
+    function requestDeepSeekRefresh() {
+        const refreshFunction = usageBackend["refreshDeepSeekUsage"]
         if (typeof refreshFunction !== "function")
             return false
         refreshFunction.call(usageBackend)
@@ -149,11 +182,13 @@ PlasmoidItem {
     function refresh() {
         runtimeSnapshots = ProviderNormalize.createSeedSnapshots(providerDefinitions)
         applyMiniMaxSnapshot()
+        applyDeepSeekSnapshot()
         applyCodexSnapshot()
         applyCodexZhSnapshot()
         applyCustomSnapshots()
         lastRefreshTime = new Date()
         requestMiniMaxRefresh()
+        requestDeepSeekRefresh()
         requestCodexRefresh()
         requestCodexZhRefresh()
         requestCustomRefresh()
@@ -248,6 +283,9 @@ PlasmoidItem {
         function onMiniMaxSnapshotChanged() {
             root.applyMiniMaxSnapshot()
         }
+        function onDeepseekSnapshotChanged() {
+            root.applyDeepSeekSnapshot()
+        }
         function onCodexSnapshotChanged() {
             root.applyCodexSnapshot()
         }
@@ -278,10 +316,7 @@ PlasmoidItem {
         panelStyle: root.panelStyle
         lastRefreshTime: root.lastRefreshTime
         sortMode: root.effectiveSortMode
-        onSortModeChanged: mode => {
-            Plasmoid.configuration.sortMode = mode
-            Qt.callLater(root.refresh)  // 即时拉取 + restart timer
-        }
+        onSortModeRequested: mode => Plasmoid.configuration.sortMode = mode
         onRefreshRequested: root.refresh()
         onCloseRequested: root.expanded = false
         onConfigureRequested: root.openConfiguration()

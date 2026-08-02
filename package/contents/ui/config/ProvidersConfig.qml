@@ -38,7 +38,8 @@ KCM.SimpleKCM {
     property string cfg_customOrder: ""
     property string cfg_customOrderDefault: ""
     readonly property int workingCount: providersModel.count
-    readonly property var usageBackend: Plasmoid
+    property var backendOverride: null
+    readonly property var usageBackend: backendOverride || Plasmoid
     property string editingId: ""
     property bool creatingProvider: false
     property string pendingDeleteId: ""
@@ -50,6 +51,21 @@ KCM.SimpleKCM {
     property bool miniMaxUsageLoading: false
     property string miniMaxUsageStatus: qsTr("未配置")
     property string miniMaxUsageError: ""
+    property bool deepseekCredentialConfigured: false
+    property bool deepseekCredentialBusy: false
+    property bool deepseekCredentialError: false
+    property string deepseekCredentialStatus: ""
+
+    property bool deepseekUsageLoading: false
+    property string deepseekUsageStatus: ""
+    property string deepseekUsageError: ""
+    property bool zhCredentialConfigured: false
+    property bool zhCredentialBusy: false
+    property bool zhCredentialError: false
+    property string zhCredentialStatus: qsTr("尚未保存 API Key")
+    property bool zhUsageLoading: false
+    property string zhUsageStatus: qsTr("未配置")
+    property string zhUsageError: ""
     property bool codexLoggedIn: false
     property bool codexLoginBusy: false
     property bool codexLoginError: false
@@ -60,7 +76,7 @@ KCM.SimpleKCM {
     property bool codexUsageLoading: false
     property string codexUsageStatus: qsTr("未登录")
     property string codexUsageError: ""
-    property string cfg_sortMode: Plasmoid.configuration.sortMode || "default"
+    property string cfg_sortMode: "default"
     property string cfg_sortModeDefault: "default"
 
     function copy(value) {
@@ -111,7 +127,11 @@ KCM.SimpleKCM {
     }
 
     function syncWorkingValue() {
-        cfg_providers = ProviderConfig.serializeDefinitions(definitions())
+        const currentDefinitions = definitions()
+        cfg_providers = ProviderConfig.serializeDefinitions(currentDefinitions)
+        cfg_customOrder = JSON.stringify(currentDefinitions.map(function(definition) {
+            return definition.id
+        }))
     }
 
     function addProvider(candidate) {
@@ -119,7 +139,7 @@ KCM.SimpleKCM {
         if (!result.valid)
             return false
         providersModel.append(definitionRow(copy(candidate)))
-        Qt.callLater(root.syncWorkingValue)
+        syncWorkingValue()
         return true
     }
 
@@ -131,7 +151,7 @@ KCM.SimpleKCM {
             return false
         providersModel.set(index, definitionRow(copy(candidate)))
         editingId = candidate.id
-        Qt.callLater(root.syncWorkingValue)
+        syncWorkingValue()
         return true
     }
 
@@ -140,7 +160,7 @@ KCM.SimpleKCM {
         if (index < 0)
             return false
         providersModel.remove(index)
-        Qt.callLater(root.syncWorkingValue)
+        syncWorkingValue()
         return true
     }
 
@@ -150,7 +170,7 @@ KCM.SimpleKCM {
         if (index < 0 || destination < 0 || destination >= providersModel.count)
             return false
         providersModel.move(index, destination, 1)
-        Qt.callLater(root.syncWorkingValue)
+        syncWorkingValue()
         return true
     }
 
@@ -232,13 +252,18 @@ KCM.SimpleKCM {
     }
 
     function saveConfig() {
-        if (!editorVisible)
-            return true
-        const saved = syncEditorCandidate()
-        if (!saved)
+        if (editorVisible && !syncEditorCandidate()) {
             console.warn("AIQuotaPilot: provider save rejected:",
                          providerEditor.validation.message)
-        return saved
+            return false
+        }
+        syncWorkingValue()
+        const saveShared = usageBackend["saveSharedProviders"]
+        if (typeof saveShared !== "function") {
+            console.warn("AIQuotaPilot: shared provider backend is unavailable")
+            return false
+        }
+        return saveShared.call(usageBackend, cfg_providers) === true
     }
 
     function syncCredentialState() {
@@ -259,37 +284,103 @@ KCM.SimpleKCM {
             ? snapshot.errorText : ""
     }
 
-    function saveMiniMaxApiKey(apiKey) {
-        const saveFunction = usageBackend["saveMiniMaxApiKey"]
-        if (typeof saveFunction !== "function") {
-            miniMaxCredentialError = true
-            miniMaxCredentialStatus = qsTr("原生凭据后端未加载，请重启 Plasma 后重试")
-            return false
+    function credentialBackendMethod(catalogId, action) {
+        if (catalogId === "codexzh") {
+            if (action === "save") return "saveCodexZhApiKey"
+            if (action === "clear") return "clearCodexZhApiKey"
+            if (action === "refresh") return "refreshCodexZhUsage"
+        } else if (catalogId === "minimax") {
+            if (action === "save") return "saveMiniMaxApiKey"
+            if (action === "clear") return "clearMiniMaxApiKey"
+            if (action === "refresh") return "refreshMiniMax"
+        } else if (catalogId === "deepseek") {
+            if (action === "save") return "saveDeepSeekApiKey"
+            if (action === "clear") return "clearDeepSeekApiKey"
+            if (action === "refresh") return "refreshDeepSeekUsage"
         }
-        saveFunction.call(usageBackend, apiKey)
-        return true
+        return ""
     }
 
-    function clearMiniMaxApiKey() {
-        const clearFunction = usageBackend["clearMiniMaxApiKey"]
-        if (typeof clearFunction !== "function") {
-            miniMaxCredentialError = true
-            miniMaxCredentialStatus = qsTr("原生凭据后端未加载，请重启 Plasma 后重试")
-            return false
-        }
-        clearFunction.call(usageBackend)
-        return true
-    }
 
-    function refreshMiniMaxUsage() {
-        const operation = usageBackend["refreshMiniMax"]
+    function callCredentialBackend(catalogId, action, apiKey) {
+        const operation = usageBackend[credentialBackendMethod(catalogId, action)]
         if (typeof operation !== "function") {
-            miniMaxUsageError = qsTr("MiniMax 查询后端未加载，请重启 Plasma 后重试")
+            if (catalogId === "codexzh") {
+                zhCredentialError = true
+                zhCredentialStatus = qsTr("CodexZH 凭据后端未加载，请重启 Plasma 后重试")
+            } else {
+                miniMaxCredentialError = true
+                miniMaxCredentialStatus = qsTr("MiniMax 凭据后端未加载，请重启 Plasma 后重试")
+            }
             return false
         }
-        operation.call(usageBackend)
+        if (typeof apiKey === "string")
+            operation.call(usageBackend, apiKey)
+        else
+            operation.call(usageBackend)
         return true
     }
+
+    function syncCodexZhState() {
+        const prefix = "codexzh"
+        zhCredentialConfigured = usageBackend[prefix + "CredentialConfigured"] === true
+        zhCredentialBusy = usageBackend[prefix + "CredentialBusy"] === true
+        zhCredentialError = usageBackend[prefix + "CredentialError"] === true
+        const status = usageBackend[prefix + "CredentialStatus"]
+        const snapshot = usageBackend[prefix + "Snapshot"]
+        zhCredentialStatus = typeof status === "string" && status.length > 0
+            ? status : qsTr("尚未保存 API Key")
+        zhUsageLoading = usageBackend[prefix + "Loading"] === true
+        zhUsageStatus = snapshot && typeof snapshot.statusLabel === "string"
+            ? snapshot.statusLabel : qsTr("未配置")
+        zhUsageError = snapshot && typeof snapshot.errorText === "string"
+            ? snapshot.errorText : ""
+    }
+
+    function connectCodexZhSignals() {
+        const prefix = "codexzh"
+        const suffixes = [
+            "CredentialConfiguredChanged", "CredentialStatusChanged",
+            "CredentialBusyChanged", "CredentialErrorChanged",
+            "SnapshotChanged", "LoadingChanged"
+        ]
+        for (let i = 0; i < suffixes.length; ++i) {
+            const signal = usageBackend[prefix + suffixes[i]]
+            if (signal && typeof signal.connect === "function")
+                signal.connect(root.syncCodexZhState)
+        }
+    }
+
+    function syncDeepSeekState() {
+        const prefix = "deepseek"
+        deepseekCredentialConfigured = usageBackend[prefix + "CredentialConfigured"] === true
+        deepseekCredentialBusy = usageBackend[prefix + "CredentialBusy"] === true
+        deepseekCredentialError = usageBackend[prefix + "CredentialError"] === true
+        const status = usageBackend[prefix + "CredentialStatus"]
+        const snapshot = usageBackend[prefix + "Snapshot"]
+        deepseekCredentialStatus = typeof status === "string" && status.length > 0
+            ? status : qsTr("尚未保存 API Key")
+        deepseekUsageLoading = usageBackend[prefix + "UsageLoading"] === true
+        deepseekUsageStatus = snapshot && typeof snapshot.statusLabel === "string"
+            ? snapshot.statusLabel : qsTr("未配置")
+        deepseekUsageError = snapshot && typeof snapshot.errorText === "string"
+            ? snapshot.errorText : ""
+    }
+
+    function connectDeepSeekSignals() {
+        const prefix = "deepseek"
+        const suffixes = [
+            "CredentialConfiguredChanged", "CredentialStatusChanged",
+            "CredentialBusyChanged", "CredentialErrorChanged",
+            "SnapshotChanged", "UsageLoadingChanged"
+        ]
+        for (let i = 0; i < suffixes.length; ++i) {
+            const signal = usageBackend[prefix + suffixes[i]]
+            if (signal && typeof signal.connect === "function")
+                signal.connect(root.syncDeepSeekState)
+        }
+    }
+
 
     function syncCodexLoginState() {
         codexLoggedIn = usageBackend["codexLoggedIn"] === true
@@ -305,7 +396,12 @@ KCM.SimpleKCM {
         codexDeviceCode = typeof code === "string" ? code : ""
         codexDeviceUrl = typeof url === "string" && url.length > 0
             ? url : "https://auth.openai.com/codex/device"
-        codexAccounts = Array.isArray(accounts) ? accounts : []
+        const accountList = []
+        if (accounts && typeof accounts.length === "number") {
+            for (let index = 0; index < accounts.length; ++index)
+                accountList.push(accounts[index])
+        }
+        codexAccounts = accountList
         codexUsageLoading = usageBackend["codexUsageLoading"] === true
         codexUsageStatus = snapshot && typeof snapshot.statusLabel === "string"
             ? snapshot.statusLabel : qsTr("未登录")
@@ -335,11 +431,20 @@ KCM.SimpleKCM {
         return true
     }
 
+
+
     Component.onCompleted: {
+        const sharedProviders = usageBackend["sharedProviders"]
+        if (typeof sharedProviders === "string" && sharedProviders.length > 0)
+            cfg_providers = sharedProviders
         const parsed = ProviderConfig.parseWorkingDefinitions(cfg_providers)
         for (let i = 0; i < parsed.length; ++i)
             providersModel.append(definitionRow(parsed[i]))
         syncCredentialState()
+        syncCodexZhState()
+        connectCodexZhSignals()
+        syncDeepSeekState()
+        connectDeepSeekSignals()
         syncCodexLoginState()
     }
 
@@ -361,6 +466,12 @@ KCM.SimpleKCM {
         function onCodexAccountsChanged() { root.syncCodexLoginState() }
         function onCodexSnapshotChanged() { root.syncCodexLoginState() }
         function onCodexUsageLoadingChanged() { root.syncCodexLoginState() }
+        function onDeepseekCredentialConfiguredChanged() { root.syncDeepSeekState() }
+        function onDeepseekCredentialStatusChanged() { root.syncDeepSeekState() }
+        function onDeepseekCredentialBusyChanged() { root.syncDeepSeekState() }
+        function onDeepseekCredentialErrorChanged() { root.syncDeepSeekState() }
+        function onDeepseekSnapshotChanged() { root.syncDeepSeekState() }
+        function onDeepseekUsageLoadingChanged() { root.syncDeepSeekState() }
     }
 
     ListModel {
@@ -501,8 +612,8 @@ KCM.SimpleKCM {
                                 if (index < 0) return
                                 const def = JSON.parse(providersModel.get(index).definitionJson)
                                 def.enabled = checked
-                                providersModel.set(index, definitionRow(def))
-                                Qt.callLater(root.syncWorkingValue)
+                                providersModel.set(index, root.definitionRow(def))
+                                root.syncWorkingValue()
                             }
                         }
 
@@ -554,13 +665,35 @@ KCM.SimpleKCM {
 
                 Layout.fillWidth: true
                 highlighterBackend: root.usageBackend
-                credentialConfigured: root.miniMaxCredentialConfigured
-                credentialBusy: root.miniMaxCredentialBusy
-                credentialError: root.miniMaxCredentialError
-                credentialStatus: root.miniMaxCredentialStatus
+                credentialConfigured: providerEditor.isCodexZh
+                    ? root.zhCredentialConfigured
+                    : (providerEditor.isDeepSeek
+                       ? root.deepseekCredentialConfigured
+                       : root.miniMaxCredentialConfigured)
+                credentialBusy: providerEditor.isCodexZh
+                    ? root.zhCredentialBusy
+                    : (providerEditor.isDeepSeek
+                       ? root.deepseekCredentialBusy
+                       : root.miniMaxCredentialBusy)
+                credentialError: providerEditor.isCodexZh
+                    ? root.zhCredentialError
+                    : (providerEditor.isDeepSeek
+                       ? root.deepseekCredentialError
+                       : root.miniMaxCredentialError)
+                credentialStatus: providerEditor.isCodexZh
+                    ? root.zhCredentialStatus
+                    : (providerEditor.isDeepSeek
+                       ? root.deepseekCredentialStatus
+                       : root.miniMaxCredentialStatus)
                 miniMaxUsageLoading: root.miniMaxUsageLoading
                 miniMaxUsageStatus: root.miniMaxUsageStatus
                 miniMaxUsageError: root.miniMaxUsageError
+                codexzhUsageLoading: root.zhUsageLoading
+                codexzhUsageStatus: root.zhUsageStatus
+                codexzhUsageError: root.zhUsageError
+                deepseekUsageLoading: root.deepseekUsageLoading
+                deepseekUsageStatus: root.deepseekUsageStatus
+                deepseekUsageError: root.deepseekUsageError
                 codexLoggedIn: root.codexLoggedIn
                 codexLoginBusy: root.codexLoginBusy
                 codexLoginError: root.codexLoginError
@@ -572,9 +705,13 @@ KCM.SimpleKCM {
                 codexUsageStatus: root.codexUsageStatus
                 codexUsageError: root.codexUsageError
                 onCandidateChanged: root.syncEditorCandidate()
-                onSaveApiKeyRequested: apiKey => root.saveMiniMaxApiKey(apiKey)
-                onClearApiKeyRequested: root.clearMiniMaxApiKey()
-                onRefreshMiniMaxRequested: root.refreshMiniMaxUsage()
+                onSaveApiKeyRequested: apiKey => root.callCredentialBackend(
+                    providerEditor.candidate.catalogId, "save", apiKey)
+                onClearApiKeyRequested: root.callCredentialBackend(
+                    providerEditor.candidate.catalogId, "clear")
+                onRefreshMiniMaxRequested: root.callCredentialBackend("minimax", "refresh")
+                onRefreshCodexZhRequested: root.callCredentialBackend("codexzh", "refresh")
+                onRefreshDeepSeekRequested: root.callCredentialBackend("deepseek", "refresh")
                 onStartCodexLoginRequested: root.callCodexBackend("startCodexLogin")
                 onCancelCodexLoginRequested: root.callCodexBackend("cancelCodexLogin")
                 onOpenCodexLoginPageRequested: root.callCodexBackend("openCodexLoginPage")

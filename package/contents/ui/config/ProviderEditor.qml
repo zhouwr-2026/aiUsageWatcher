@@ -35,6 +35,9 @@ Item {
     property bool codexzhUsageLoading: false
     property string codexzhUsageStatus: qsTr("未配置")
     property string codexzhUsageError: ""
+    property bool deepseekUsageLoading: false
+    property string deepseekUsageStatus: qsTr("未配置")
+    property string deepseekUsageError: ""
     property bool codexLoggedIn: false
     property bool codexLoginBusy: false
     property bool codexLoginError: false
@@ -51,6 +54,7 @@ Item {
     readonly property bool isMiniMax: (candidate.catalogId || "") === "minimax"
     readonly property bool isCodex: (candidate.catalogId || "") === "codex"
     readonly property bool isCodexZh: (candidate.catalogId || "") === "codexzh"
+    readonly property bool isDeepSeek: (candidate.catalogId || "") === "deepseek"
     readonly property var validation: ProviderConfig.validateProvider(candidate, siblings)
     readonly property var providerOptions: ProviderCatalog.providerOptions()
     readonly property real fieldWidth: Kirigami.Units.gridUnit * 20
@@ -62,6 +66,7 @@ Item {
     signal clearApiKeyRequested()
     signal refreshMiniMaxRequested()
     signal refreshCodexZhRequested()
+    signal refreshDeepSeekRequested()
     signal startCodexLoginRequested()
     signal cancelCodexLoginRequested()
     signal openCodexLoginPageRequested()
@@ -375,10 +380,29 @@ Item {
                 onTextEdited: root.updateField("website", text)
             }
 
+            FieldLabel { text: qsTr("套餐/订阅价格：") }
+
+            QQC2.TextField {
+                objectName: "priceField"
+                Layout.preferredWidth: root.fieldWidth
+                Layout.maximumWidth: root.fieldWidth
+                placeholderText: qsTr("可选，单位 ¥，如 30 或 19.9")
+                text: (typeof root.candidate.price === "number" && root.candidate.price > 0)
+                    ? String(root.candidate.price) : ""
+                validator: DoubleValidator {
+                    bottom: 0
+                    decimals: 2
+                }
+                onTextChanged: {
+                    const parsed = text.trim() === "" ? 0 : Number(text)
+                    root.updateField("price", isFinite(parsed) ? parsed : 0)
+                }
+            }
+
         }
 
         Kirigami.InlineMessage {
-            visible: !root.isCustom && !root.isMiniMax && !root.isCodex && !root.isCodexZh
+            visible: !root.isCustom && !root.isMiniMax && !root.isCodex && !root.isCodexZh && !root.isDeepSeek
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: root.formWidth
             Layout.maximumWidth: root.formWidth
@@ -543,12 +567,80 @@ Item {
         }
 
         SectionHeading {
-            visible: root.isMiniMax || root.isCodexZh
-            text: qsTr("%1 API 凭据").arg(root.isCodexZh ? "CodexZH" : "MiniMax")
+            visible: root.isDeepSeek
+            text: qsTr("充值设置（可选）")
         }
 
         GridLayout {
-            visible: root.isMiniMax || root.isCodexZh
+            visible: root.isDeepSeek
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: root.formWidth
+            Layout.maximumWidth: root.formWidth
+            columns: 2
+            columnSpacing: Kirigami.Units.largeSpacing
+
+            FieldLabel { text: qsTr("充值金额：") }
+
+            QQC2.TextField {
+                objectName: "topUpAmountField"
+                Layout.preferredWidth: root.fieldWidth
+                Layout.maximumWidth: root.fieldWidth
+                placeholderText: qsTr("可选，最近一次充值金额，单位 ¥")
+                text: (typeof root.candidate.topUpAmount === "number" && root.candidate.topUpAmount > 0)
+                    ? String(root.candidate.topUpAmount) : ""
+                validator: DoubleValidator {
+                    bottom: 0
+                    decimals: 2
+                }
+                onTextChanged: {
+                    const parsed = text.trim() === "" ? 0 : Number(text)
+                    root.updateField("topUpAmount", isFinite(parsed) ? parsed : 0)
+                }
+            }
+
+            FieldLabel { text: qsTr("充值时间：") }
+
+            QQC2.TextField {
+                objectName: "topUpDateField"
+                Layout.preferredWidth: root.fieldWidth
+                Layout.maximumWidth: root.fieldWidth
+                placeholderText: qsTr("YYYY-MM-DD")
+                text: (typeof root.candidate.topUpDate === "string") ? root.candidate.topUpDate : ""
+                validator: RegularExpressionValidator {
+                    regularExpression: /^\d{4}-\d{2}-\d{2}$/
+                }
+                onTextChanged: root.updateField("topUpDate", text.trim())
+                // 即时反馈：失焦时非空但格式非法 → 显示提示（保存时 validateProvider 兜底）
+                onEditingFinished: {
+                    if (text.trim().length > 0 && !/^\d{4}-\d{2}-\d{2}$/.test(text.trim())) {
+                        topUpDateHint.visible = true
+                        topUpDateHint.text = qsTr("格式应为 YYYY-MM-DD，如 2026-08-01")
+                    } else {
+                        topUpDateHint.visible = false
+                    }
+                }
+            }
+        }
+
+        Kirigami.InlineMessage {
+            id: topUpDateHint
+
+            objectName: "topUpDateHint"
+            visible: false
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: root.formWidth
+            Layout.maximumWidth: root.formWidth
+            text: qsTr("格式应为 YYYY-MM-DD，如 2026-08-01")
+            type: Kirigami.MessageType.Warning
+        }
+
+        SectionHeading {
+            visible: root.isMiniMax || root.isCodexZh || root.isDeepSeek
+            text: qsTr("%1 API 凭据").arg(root.isCodexZh ? "CodexZH" : (root.isDeepSeek ? "DeepSeek" : "MiniMax"))
+        }
+
+        GridLayout {
+            visible: root.isMiniMax || root.isCodexZh || root.isDeepSeek
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: root.formWidth
             Layout.maximumWidth: root.formWidth
@@ -560,14 +652,17 @@ Item {
             QQC2.TextField {
                 id: apiKeyField
 
-                objectName: root.isCodexZh ? "codexzhApiKeyField" : "miniMaxApiKeyField"
+                objectName: root.isCodexZh ? "codexzhApiKeyField"
+                    : (root.isDeepSeek ? "deepseekApiKeyField" : "miniMaxApiKeyField")
                 Layout.preferredWidth: root.fieldWidth
                 Layout.maximumWidth: root.fieldWidth
                 placeholderText: root.credentialConfigured
                     ? qsTr("输入新 Key 以替换已保存凭据")
                     : (root.isCodexZh
                        ? qsTr("请输入 CodexZH API Key")
-                       : qsTr("请输入 MiniMax API Key"))
+                       : (root.isDeepSeek
+                          ? qsTr("请输入 DeepSeek API Key")
+                          : qsTr("请输入 MiniMax API Key")))
                 echoMode: TextInput.Password
                 passwordCharacter: "●"
                 enabled: !root.credentialBusy
@@ -584,13 +679,14 @@ Item {
         }
 
         RowLayout {
-            visible: root.isMiniMax || root.isCodexZh
+            visible: root.isMiniMax || root.isCodexZh || root.isDeepSeek
             Layout.fillWidth: true
 
             Item { Layout.fillWidth: true }
 
             QQC2.Button {
-                objectName: root.isCodexZh ? "saveCodexZhApiKeyButton" : "saveMiniMaxApiKeyButton"
+                objectName: root.isCodexZh ? "saveCodexZhApiKeyButton"
+                    : (root.isDeepSeek ? "saveDeepSeekApiKeyButton" : "saveMiniMaxApiKeyButton")
                 text: root.credentialConfigured ? qsTr("更新 API Key") : qsTr("保存 API Key")
                 icon.name: "document-save"
                 enabled: apiKeyField.text.trim().length > 0 && !root.credentialBusy
@@ -612,15 +708,19 @@ Item {
             QQC2.Button {
                 text: (root.isCodexZh && root.codexzhUsageLoading)
                     || (root.isMiniMax && root.miniMaxUsageLoading)
+                    || (root.isDeepSeek && root.deepseekUsageLoading)
                     ? qsTr("正在刷新…")
                     : qsTr("刷新额度")
                 icon.name: "view-refresh"
                 enabled: root.credentialConfigured
                        && !root.miniMaxUsageLoading
                        && !root.codexzhUsageLoading
+                       && !root.deepseekUsageLoading
                 onClicked: root.isCodexZh
                            ? root.refreshCodexZhRequested()
-                           : root.refreshMiniMaxRequested()
+                           : (root.isDeepSeek
+                              ? root.refreshDeepSeekRequested()
+                              : root.refreshMiniMaxRequested())
             }
 
             QQC2.BusyIndicator {
@@ -632,8 +732,9 @@ Item {
         }
 
         Kirigami.InlineMessage {
-            objectName: root.isCodexZh ? "codexzhCredentialMessage" : "miniMaxCredentialMessage"
-            visible: root.isMiniMax || root.isCodexZh
+            objectName: root.isCodexZh ? "codexzhCredentialMessage"
+                : (root.isDeepSeek ? "deepseekCredentialMessage" : "miniMaxCredentialMessage")
+            visible: root.isMiniMax || root.isCodexZh || root.isDeepSeek
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: root.formWidth
             Layout.maximumWidth: root.formWidth
@@ -647,7 +748,7 @@ Item {
 
 
         Kirigami.InlineMessage {
-            visible: (root.isMiniMax || root.isCodexZh) && root.credentialConfigured
+            visible: (root.isMiniMax || root.isCodexZh || root.isDeepSeek) && root.credentialConfigured
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: root.formWidth
             Layout.maximumWidth: root.formWidth
@@ -655,14 +756,21 @@ Item {
                 ? (root.codexzhUsageError.length > 0
                    ? qsTr("额度查询失败：%1").arg(root.codexzhUsageError)
                    : qsTr("额度查询：%1").arg(root.codexzhUsageStatus))
-                : (root.miniMaxUsageError.length > 0
-                   ? qsTr("额度查询失败：%1").arg(root.miniMaxUsageError)
-                   : qsTr("额度查询：%1").arg(root.miniMaxUsageStatus))
+                : (root.isDeepSeek
+                   ? (root.deepseekUsageError.length > 0
+                      ? qsTr("额度查询失败：%1").arg(root.deepseekUsageError)
+                      : qsTr("额度查询：%1").arg(root.deepseekUsageStatus))
+                   : (root.miniMaxUsageError.length > 0
+                      ? qsTr("额度查询失败：%1").arg(root.miniMaxUsageError)
+                      : qsTr("额度查询：%1").arg(root.miniMaxUsageStatus)))
             type: root.isCodexZh
                 ? (root.codexzhUsageError.length > 0
                    ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)
-                : (root.miniMaxUsageError.length > 0
-                   ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)
+                : (root.isDeepSeek
+                   ? (root.deepseekUsageError.length > 0
+                      ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)
+                   : (root.miniMaxUsageError.length > 0
+                      ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive))
         }
 
         SectionHeading {

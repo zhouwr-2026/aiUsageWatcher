@@ -2,6 +2,8 @@
 comet_change: codexzh-cpp-integration
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-07-26-codexzh-cpp-integration
+status: final
 ---
 
 # CodexZH C++ 原生插件集成 — Technical Design

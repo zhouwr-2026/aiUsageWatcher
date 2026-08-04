@@ -16,8 +16,13 @@ cmake --build build
 cmake --install build
 
 QT_PLUGIN_PATH="$HOME/.local/lib/qt6/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}" \
-  plasmawindowed aiUsageWatcher
+  plasmawindowed AIQuotaPilot
 ```
+
+## 本机部署
+
+- 生产代码修改完成后，先询问用户是否要重新编译、部署并重启 Plasma Shell；用户确认后必须使用项目内 `.agents/skills/plasma-local-deploy/SKILL.md`。
+- 该技能通过 `systemctl --user restart plasma-plasmashell.service` 重启 Shell；禁止用 DBus `refreshCurrentShell` 或终端后台运行 `plasmashell --replace`。
 
 ## KDE开发者网站
 
@@ -27,7 +32,7 @@ QT_PLUGIN_PATH="$HOME/.local/lib/qt6/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
 
 ```
 package/                          # 小部件包根目录
-├── metadata.json                 # KPlugin 元数据（Id: aiUsageWatcher）
+├── metadata.json                 # KPlugin 元数据（Id: org.kde.plasma.AIQuotaPilot）
 └── contents/
     ├── config/
     │   ├── config.qml            # KCM ConfigModel 入口

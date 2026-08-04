@@ -2,6 +2,7 @@
 change: codexzh-cpp-integration
 design-doc: docs/superpowers/specs/2026-07-26-codexzh-cpp-integration-design.md
 base-ref: c39855d025e853226db5b50c5436ca8bc2321c8d
+archived-with: 2026-07-26-codexzh-cpp-integration
 ---
 
 # CodexZH C++ 原生插件集成 — Implementation Plan

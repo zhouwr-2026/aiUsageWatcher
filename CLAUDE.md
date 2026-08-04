@@ -10,26 +10,26 @@ AI Usage Watcher — KDE Plasma 6 桌面小部件，实时监控各大模型厂�
 
 ```bash
 # 安装到本地 Plasma 小部件目录
-cp -r package ~/.local/share/plasma/plasmoids/org.kde.plasma.aiUsageWatcher/
+cp -r package ~/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/
 
 # 用 plasmawindowed 独立窗口运行（开发期，无需添加到面板）
-plasmawindowed aiUsageWatcher
+plasmawindowed AIQuotaPilot
 
 # 安装到面板（打包）
-kpackagetool6 --install aiUsageWatcher
+kpackagetool6 --install AIQuotaPilot
 
 # 卸载
-kpackagetool6 --remove aiUsageWatcher
+kpackagetool6 --remove AIQuotaPilot
 ```
 
 - 无需 C++ 编译（QML-only），CMakeLists.txt 仅用于包管理器识别
-- 验证：`plasmawindowed aiUsageWatcher` 启动后检查小图标（柱状图/饼图）显示、颜色语义、点击展开、Timer 刷新
+- 验证：`plasmawindowed AIQuotaPilot` 启动后检查小图标（柱状图/饼图）显示、颜色语义、点击展开、Timer 刷新
 
 ## 代码架构
 
 ```
 package/                          # 小部件包根目录
-├── metadata.json                 # KPlugin 元数据（Id: aiUsageWatcher）
+├── metadata.json                 # KPlugin 元数据（Id: org.kde.plasma.AIQuotaPilot）
 └── contents/
     ├── config/main.xml           # KConfig XT 配置文件（providerCount, opacityPercent, alwaysOnTop）
     ├── js/mockData.js            # 种子数据 + 波动函数（开发期 mock，Timer 驱动）

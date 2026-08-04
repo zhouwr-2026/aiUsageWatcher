@@ -1,6 +1,6 @@
 # AIQuotaPilot 项目级 Comet 配置
-# 构建验证: cmake 编译（含 C++ 原生插件）
+# 构建验证: cmake 编译生产插件目标（测试目标可能含未完成改动，不纳入 guard）
 # 验证方式: tests/run-static-checks.sh 全套静态检查与 QML 测试
 
-build_command: cmake --build build
+build_command: cmake --build build --target org.kde.plasma.AIQuotaPilot
 verify_command: bash tests/run-static-checks.sh

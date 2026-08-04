@@ -15,6 +15,8 @@ Item {
     property string panelStyle: "bar"
     property date lastRefreshTime: new Date()
     property string sortMode: "default"
+    // 手动面板高度（0 = 用默认固定高度）；点击自适应按钮时按内容高度计算后写入
+    property real customPanelHeight: 0
 
     readonly property int renderedPlanCount: {
         let count = 0
@@ -73,13 +75,19 @@ Item {
     signal refreshRequested()
     signal configureRequested()
     signal keepOpenChanged(bool keepOpen)
+    signal heightRequested(real height)
     signal closeRequested()
     signal sortModeRequested(string mode)
 
     Layout.minimumWidth: Kirigami.Units.gridUnit * 16
     Layout.minimumHeight: Kirigami.Units.gridUnit * 12
     Layout.preferredWidth: Kirigami.Units.gridUnit * 24
-    Layout.preferredHeight: Kirigami.Units.gridUnit * 24
+    // 默认固定高度；点击自适应按钮后 customPanelHeight 按内容高度计算
+    // implicitHeight 与 preferredHeight 同时设置，确保 Plasma popup 外壳响应尺寸变化
+    implicitHeight: root.customPanelHeight > 0
+        ? root.customPanelHeight
+        : Kirigami.Units.gridUnit * 24
+    Layout.preferredHeight: implicitHeight
 
     Rectangle {
         anchors.fill: parent
@@ -89,11 +97,15 @@ Item {
     }
 
     ColumnLayout {
+        id: mainColumn
+
         anchors.fill: parent
         anchors.margins: Kirigami.Units.largeSpacing
         spacing: Kirigami.Units.smallSpacing
 
         RowLayout {
+            id: headerRow
+
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
 
@@ -134,6 +146,39 @@ Item {
                         from: 0
                         to: 360
                         duration: 300
+                    }
+                }
+
+                PlasmaComponents.ToolButton {
+                    id: autoFitButton
+                    objectName: "autoFitButton"
+
+                    focusPolicy: Qt.StrongFocus
+                    icon.name: "view-fullscreen"
+                    Accessible.name: qsTr("面板高度自适应内容")
+                    PlasmaComponents.ToolTip.text: qsTr("面板高度自适应内容")
+                    // 只改变面板高度，不改内部布局：按内容高度计算并设置 customPanelHeight
+                    onClicked: {
+                        const spacing = Kirigami.Units.smallSpacing
+                        const content = root.panelStyle === "pie"
+                            ? pieContent.contentHeight
+                            : providerList.contentHeight
+                        let total = headerRow.implicitHeight + content
+                        if (root.providers.length === 0)
+                            total += Kirigami.Units.gridUnit * 2
+                        total += totalPriceLabel.visible ? totalPriceLabel.implicitHeight : 0
+                        total += statusLabel.implicitHeight
+                        total += usageLegendLabel.implicitHeight
+                        total += spacing * 6
+                        total += Kirigami.Units.largeSpacing * 2
+                        // 安全余量：分隔线高度 + 内容高度估算偏差，避免出现滚动条
+                        total += Kirigami.Units.gridUnit * 2
+                        root.customPanelHeight = Math.max(total, Kirigami.Units.gridUnit * 6)
+                        console.log("[AUTOFIT] content=", content,
+                                    "header=", headerRow.implicitHeight,
+                                    "total=", total,
+                                    "customPanelHeight=", root.customPanelHeight)
+                        root.heightRequested(root.customPanelHeight)
                     }
                 }
 
@@ -226,6 +271,8 @@ Item {
                     logoSource: modelData.logoSource || ""
                     logoChar: modelData.logoChar || ""
                     logoIsSvg: modelData.logoIsSvg === true
+                    logoBackdropColor: modelData.catalogId === "opencode-go"
+                        ? "white" : ""
                     ledClass: modelData.ledClass || "led-gray"
                     sourceLabel: modelData.sourceLabel || ""
                     statusLabel: modelData.statusLabel || ""
@@ -248,6 +295,7 @@ Item {
             visible: root.panelStyle === "pie"
 
             PanelPieView {
+                id: pieContent
                 objectName: "panelPieView"
                 width: pieScroll.width
                 providers: root.providers
@@ -269,6 +317,8 @@ Item {
         }
 
         PlasmaComponents.Label {
+            id: totalPriceLabel
+
             objectName: "totalPriceLabel"
 
             Layout.fillWidth: true
@@ -281,6 +331,8 @@ Item {
         }
 
         PlasmaComponents.Label {
+            id: statusLabel
+
             objectName: "statusLabel"
 
             Layout.fillWidth: true
@@ -291,6 +343,8 @@ Item {
         }
 
         PlasmaComponents.Label {
+            id: usageLegendLabel
+
             objectName: "usageLegendLabel"
 
             Layout.fillWidth: true

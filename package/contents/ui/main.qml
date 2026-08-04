@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Layouts
+import QtQuick.Window
 import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
 import "../js/providerNormalize.js" as ProviderNormalize
@@ -40,11 +42,13 @@ PlasmoidItem {
         applyDeepSeekSnapshot()
         applyCodexSnapshot()
         applyCodexZhSnapshot()
+        applyOpenCodeGoSnapshot()
         applyCustomSnapshots()
         requestMiniMaxRefresh()
         requestDeepSeekRefresh()
         requestCodexRefresh()
         requestCodexZhRefresh()
+        requestOpenCodeGoRefresh()
         requestCustomRefresh()
     }
     property int compactProviderIndex: 0
@@ -158,6 +162,25 @@ PlasmoidItem {
         return true
     }
 
+    function applyOpenCodeGoSnapshot() {
+        const snapshot = usageBackend["opencodeGoSnapshot"]
+        if (!snapshot || snapshot.providerId !== "opencode-go"
+                || !snapshot.plans || typeof snapshot.plans.length !== "number")
+            return false
+
+        runtimeSnapshots = ProviderNormalize.replaceSnapshot(runtimeSnapshots, snapshot)
+        lastRefreshTime = new Date()
+        return true
+    }
+
+    function requestOpenCodeGoRefresh() {
+        const refreshFunction = usageBackend["refreshOpenCodeGoUsage"]
+        if (typeof refreshFunction !== "function")
+            return false
+        refreshFunction.call(usageBackend)
+        return true
+    }
+
     function applyCustomSnapshots() {
         const snapshots = usageBackend["customUsageSnapshots"]
         if (!snapshots || typeof snapshots.length !== "number")
@@ -185,12 +208,14 @@ PlasmoidItem {
         applyDeepSeekSnapshot()
         applyCodexSnapshot()
         applyCodexZhSnapshot()
+        applyOpenCodeGoSnapshot()
         applyCustomSnapshots()
         lastRefreshTime = new Date()
         requestMiniMaxRefresh()
         requestDeepSeekRefresh()
         requestCodexRefresh()
         requestCodexZhRefresh()
+        requestOpenCodeGoRefresh()
         requestCustomRefresh()
         refreshTimer.restart()
     }
@@ -309,6 +334,21 @@ PlasmoidItem {
         plasmoidItem: root
     }
 
+    function setFullPanelHeight(height) {
+        // 持久化到 Plasma 记忆的 popup 尺寸键：下次打开面板沿用
+        Plasmoid.configuration.popupHeight = Math.round(height)
+        // 直接修改 popup 窗口高度（不重开面板）：fullRepresentationItem 的
+        // Window 即 Plasma 的 popup 窗口，改其 height 立即生效
+        const full = fullRepresentationItem
+        if (full) {
+            full.implicitHeight = height
+            full.Layout.preferredHeight = height
+            const popupWindow = full.Window.window
+            if (popupWindow)
+                popupWindow.height = height
+        }
+    }
+
     fullRepresentation: FullView {
         providers: root.providers
         opacityPercent: root.opacityPercent
@@ -320,6 +360,7 @@ PlasmoidItem {
         onRefreshRequested: root.refresh()
         onCloseRequested: root.expanded = false
         onConfigureRequested: root.openConfiguration()
+        onHeightRequested: height => root.setFullPanelHeight(height)
         onKeepOpenChanged: keepOpen => Plasmoid.configuration.keepPanelOpen = keepOpen
     }
 }

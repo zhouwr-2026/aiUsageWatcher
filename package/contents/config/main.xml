@@ -50,4 +50,11 @@
     <entry name="keepPanelOpen" type="bool">
         <default>false</default>
     </entry>
+    <!-- Plasma popup 记忆的悬浮面板尺寸（与 shell 同一配置键，自适应按钮可读写） -->
+    <entry name="popupHeight" type="int">
+        <default>0</default>
+    </entry>
+    <entry name="popupWidth" type="int">
+        <default>0</default>
+    </entry>
 </kcfg>

@@ -21,14 +21,20 @@
   刷新，登录凭据始终留在 C++ 后端和用户私有目录。
 - MiniMax 通过 C++ 后端查询，API Key 保存在 KDE Wallet；也兼容 `MINIMAX_API_KEY`，
   并自动尝试中国区/国际区的官方 Coding Plan 端点。
+- OpenCode Go 抓取官方控制台页面获取真实用量：`GET opencode.ai/workspace/{id}/go`
+  并携带浏览器登录后的 auth Cookie（社区通用方案，参考
+  github.com/ridho9/opencode-go-usage；官方 `/zen/go/v1/usage` 接口至今未上线），
+  解析页面内 SolidJS 序列化的服务端用量（5 小时 / 每周 / 每月百分比与重置倒计时）。
+  凭据（工作区 ID + Cookie）保存在 KDE Wallet，在供应商编辑页配置；Cookie 会
+  周期性失效，失效时提示更新。
 - 错误模型仍参与轮询，并在 compact 显示红色感叹号，不会继续展示失败前的旧额度。
 - 配置通过 KConfig XT 持久化，保存后由 Plasma 即时应用。
 
 HTTP+JS 已开放真实执行：网络请求由 C++ 负责，JavaScript 只在独立 worker 中解析
 `request` 和响应；非本机地址强制 HTTPS，并限制同源重定向、请求时间与响应大小。
 编辑器的“测试脚本”当前只做保存前契约校验，真实查询在应用设置或刷新后执行。本地 HTTP
-事件回调仍未开放。固定厂商中目前 Codex 和 MiniMax 已接通真实用量，其余预设未接入时
-显示暂无用量。
+事件回调仍未开放。固定厂商中目前 Codex、MiniMax 和 OpenCode Go 已接通真实用量，
+其余预设未接入时显示暂无用量。
 详细边界见 [需求基线](docs/requirements.md)、
 [KCM 与刷新链路设计](docs/superpowers/specs/2026-07-21-kcm-and-refresh-button-design.md) 和
 [脚本安全契约](docs/usage-script-spec.md)。

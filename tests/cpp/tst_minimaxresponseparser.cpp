@@ -20,6 +20,13 @@ private Q_SLOTS:
     void acceptsDecimalPercentAndMissingResetTime();
     void skipsInactiveWeeklyQuota();
     void acceptsResponseWithoutBaseStatus();
+    void acceptsGeneralWithMissingIntervalPercent();
+    void acceptsGeneralWithMissingWeeklyPercentButStatusOne();
+    void acceptsGeneralWithMissingWeeklyStatus();
+    void skipsWeeklyWhenStatusNotOne();
+    void skipsVideoModelEvenIfFirstItem();
+    void acceptsMissingModelRemainsAsUnsubscribed();
+    void rejectsBaseRespWithoutStatusCode();
 };
 
 void MiniMaxResponseParserTest::parsesPercentageResponse()
@@ -118,6 +125,8 @@ void MiniMaxResponseParserTest::rejectsApiError()
 
     QVERIFY(!result.ok);
     QCOMPARE(result.errorCode, QStringLiteral("api_error"));
+    QVERIFY2(result.errorMessage.contains(QStringLiteral("1004")),
+             qPrintable(QStringLiteral("error message should expose status_code 1004, got: ") + result.errorMessage));
 }
 
 void MiniMaxResponseParserTest::rejectsMalformedPayload()
@@ -142,8 +151,9 @@ void MiniMaxResponseParserTest::rejectsInvalidPercentage()
         "base_resp": {"status_code": 0, "status_msg": "success"}
     })json");
 
-    QVERIFY(!result.ok);
-    QCOMPARE(result.errorCode, QStringLiteral("invalid_response"));
+    QVERIFY(result.ok);
+    QCOMPARE(result.snapshot.statusLabel, QStringLiteral("未订阅"));
+    QVERIFY(result.snapshot.plans.isEmpty());
 }
 
 void MiniMaxResponseParserTest::rejectsIntegerOutsideQint64Range()
@@ -154,7 +164,7 @@ void MiniMaxResponseParserTest::rejectsIntegerOutsideQint64Range()
     })json");
 
     QVERIFY(!result.ok);
-    QCOMPARE(result.errorCode, QStringLiteral("invalid_response"));
+    QCOMPARE(result.errorCode, QStringLiteral("api_error"));
 }
 
 void MiniMaxResponseParserTest::ignoresUnrelatedModelPayloads()
@@ -221,6 +231,130 @@ void MiniMaxResponseParserTest::acceptsResponseWithoutBaseStatus()
     QVERIFY(result.ok);
     QCOMPARE(result.snapshot.plans.size(), 1);
     QCOMPARE(result.snapshot.plans.first().used, 20.0);
+}
+
+void MiniMaxResponseParserTest::acceptsGeneralWithMissingIntervalPercent()
+{
+    const auto result = MiniMaxResponseParser::parse(R"json({
+        "model_remains": [{
+            "model_name": "general",
+            "current_weekly_status": 1,
+            "current_weekly_remaining_percent": 80,
+            "weekly_end_time": 1785081600000
+        }],
+        "base_resp": {"status_code": 0}
+    })json");
+
+    QVERIFY(result.ok);
+    QCOMPARE(result.snapshot.plans.size(), 1);
+    QCOMPARE(result.snapshot.plans.first().planId, QStringLiteral("general-weekly"));
+    QCOMPARE(result.snapshot.plans.first().used, 20.0);
+    QCOMPARE(result.snapshot.plans.first().resetAtMs, 1785081600000LL);
+}
+
+void MiniMaxResponseParserTest::acceptsGeneralWithMissingWeeklyPercentButStatusOne()
+{
+    const auto result = MiniMaxResponseParser::parse(R"json({
+        "model_remains": [{
+            "model_name": "general",
+            "current_interval_remaining_percent": 50,
+            "end_time": 1784635200000,
+            "current_weekly_status": 1
+        }],
+        "base_resp": {"status_code": 0}
+    })json");
+
+    QVERIFY(result.ok);
+    QCOMPARE(result.snapshot.plans.size(), 1);
+    QCOMPARE(result.snapshot.plans.first().planId, QStringLiteral("general-interval"));
+    QCOMPARE(result.snapshot.plans.first().used, 50.0);
+    QCOMPARE(result.snapshot.plans.first().resetAtMs, 1784635200000LL);
+}
+
+void MiniMaxResponseParserTest::acceptsGeneralWithMissingWeeklyStatus()
+{
+    const auto result = MiniMaxResponseParser::parse(R"json({
+        "model_remains": [{
+            "model_name": "general",
+            "current_interval_remaining_percent": 60
+        }],
+        "base_resp": {"status_code": 0}
+    })json");
+
+    QVERIFY(result.ok);
+    QCOMPARE(result.snapshot.plans.size(), 1);
+    QCOMPARE(result.snapshot.plans.first().planId, QStringLiteral("general-interval"));
+}
+
+void MiniMaxResponseParserTest::skipsWeeklyWhenStatusNotOne()
+{
+    const auto result = MiniMaxResponseParser::parse(R"json({
+        "model_remains": [{
+            "model_name": "general",
+            "current_interval_remaining_percent": 60,
+            "current_weekly_status": 2,
+            "current_weekly_remaining_percent": 90
+        }],
+        "base_resp": {"status_code": 0}
+    })json");
+
+    QVERIFY(result.ok);
+    QCOMPARE(result.snapshot.plans.size(), 1);
+    QVERIFY(result.snapshot.plans.first().planId == QStringLiteral("general-interval"));
+}
+
+void MiniMaxResponseParserTest::skipsVideoModelEvenIfFirstItem()
+{
+    const auto result = MiniMaxResponseParser::parse(R"json({
+        "model_remains": [
+            {
+                "model_name": "video",
+                "current_interval_remaining_percent": 100,
+                "current_weekly_status": 1,
+                "current_weekly_remaining_percent": 100
+            },
+            {
+                "model_name": "general",
+                "current_interval_remaining_percent": 42,
+                "current_weekly_status": 1,
+                "current_weekly_remaining_percent": 80
+            }
+        ],
+        "base_resp": {"status_code": 0}
+    })json");
+
+    QVERIFY(result.ok);
+    QCOMPARE(result.snapshot.statusLabel, QStringLiteral("可用"));
+    QCOMPARE(result.snapshot.plans.size(), 2);
+    QCOMPARE(result.snapshot.plans.at(0).planId, QStringLiteral("general-interval"));
+    QCOMPARE(result.snapshot.plans.at(0).used, 58.0);
+    QCOMPARE(result.snapshot.plans.at(1).planId, QStringLiteral("general-weekly"));
+    QCOMPARE(result.snapshot.plans.at(1).used, 20.0);
+}
+
+void MiniMaxResponseParserTest::acceptsMissingModelRemainsAsUnsubscribed()
+{
+    const auto result = MiniMaxResponseParser::parse(R"json({
+        "base_resp": {"status_code": 0}
+    })json");
+
+    QVERIFY(result.ok);
+    QCOMPARE(result.snapshot.statusLabel, QStringLiteral("未订阅"));
+    QVERIFY(result.snapshot.plans.isEmpty());
+}
+
+void MiniMaxResponseParserTest::rejectsBaseRespWithoutStatusCode()
+{
+    const auto result = MiniMaxResponseParser::parse(R"json({
+        "base_resp": {},
+        "model_remains": [{
+            "model_name": "general",
+            "current_interval_remaining_percent": 50
+        }]
+    })json");
+
+    QVERIFY(!result.ok);
+    QCOMPARE(result.errorCode, QStringLiteral("api_error"));
 }
 
 QTEST_GUILESS_MAIN(MiniMaxResponseParserTest)

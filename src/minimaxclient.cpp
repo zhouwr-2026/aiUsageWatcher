@@ -14,8 +14,9 @@
 namespace
 {
 constexpr qsizetype maximumResponseBytes = 1024 * 1024;
-const QString walletFolder = QStringLiteral("AI Usage Watcher");
+const QString walletFolder = QStringLiteral("AIQuotaPilot");
 const QString miniMaxWalletEntry = QStringLiteral("MiniMax API Key");
+constexpr int walletRetryLimit = 5;
 
 QVariantMap emptySnapshot(const QString &status, const QString &error = {})
 {
@@ -44,6 +45,7 @@ QVariantMap toVariantMap(const MiniMaxSnapshot &snapshot)
             {QStringLiteral("total"), plan.total},
             {QStringLiteral("unit"), QStringLiteral("%")},
             {QStringLiteral("resetText"), resetText},
+            {QStringLiteral("resetAt"), plan.resetAtMs},
             {QStringLiteral("extraText"), QString()},
             {QStringLiteral("isValid"), true},
             {QStringLiteral("invalidReason"), QString()},
@@ -60,9 +62,6 @@ QVariantMap toVariantMap(const MiniMaxSnapshot &snapshot)
 
 QString networkErrorMessage(int httpStatus, QNetworkReply::NetworkError error)
 {
-    if (httpStatus == 401 || httpStatus == 403) {
-        return QStringLiteral("MiniMax 认证失败，请检查 API Key");
-    }
     if (httpStatus == 429) {
         return QStringLiteral("MiniMax 请求过于频繁，请稍后重试");
     }
@@ -132,10 +131,16 @@ QList<QUrl> MiniMaxClient::endpointCandidates()
 {
     return {
         QUrl(QStringLiteral("https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains")),
-        QUrl(QStringLiteral("https://api.minimaxi.com/v1/token_plan/remains")),
         QUrl(QStringLiteral("https://api.minimax.io/v1/api/openplatform/coding_plan/remains")),
-        QUrl(QStringLiteral("https://api.minimax.io/v1/token_plan/remains")),
     };
+}
+
+void MiniMaxClient::setNetworkAccessManager(QNetworkAccessManager *network)
+{
+    if (m_network) {
+        m_network->deleteLater();
+    }
+    m_network = network;
 }
 
 QNetworkRequest MiniMaxClient::createRequest(const QUrl &url, QByteArrayView apiKey)
@@ -213,6 +218,12 @@ void MiniMaxClient::requestNextEndpoint()
             m_lastRequestError = QStringLiteral("MiniMax 请求超时");
         } else if (responseTooLarge) {
             m_lastRequestError = QStringLiteral("MiniMax 响应过大，已拒绝处理");
+        } else if (httpStatus == 401 || httpStatus == 403) {
+            m_lastRequestError = QStringLiteral("MiniMax Key 无效或已过期");
+            setSnapshot(emptySnapshot(QStringLiteral("请求失败"), m_lastRequestError));
+            reply->deleteLater();
+            finishRefresh();
+            return;
         } else if (reply->error() != QNetworkReply::NoError || httpStatus < 200 || httpStatus >= 300) {
             m_lastRequestError = networkErrorMessage(httpStatus, reply->error());
         } else {
@@ -304,6 +315,11 @@ void MiniMaxClient::openWallet()
     if (!m_wallet) {
         m_walletOpening = false;
         setCredentialState(QStringLiteral("无法打开 KDE 钱包"), false, true);
+        // Plasma 启动竞态：kwalletd 可能晚于 plasmashell 就绪，失败后定时重试自愈
+        // ponytail: 上限 5 次（约 25s），kwalletd 故障时避免永久重试；钱包被禁用时提前返回
+        if (++m_walletRetryCount < walletRetryLimit) {
+            QTimer::singleShot(5000, this, &MiniMaxClient::openWallet);
+        }
         return;
     }
     m_wallet->setParent(this);
@@ -314,10 +330,13 @@ void MiniMaxClient::openWallet()
             return;
         }
         m_walletOpening = false;
+        m_walletRetryCount = 0;
         if (!success || !prepareWalletFolder()) {
             setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
             return;
         }
+        // 钱包文件夹改名后一次性迁移旧 Key（幂等，见 migrateLegacyWalletEntry）
+        migrateLegacyWalletEntry();
         if (m_pendingCredentialOperation == PendingCredentialOperation::None) {
             loadCredential();
         } else {
@@ -358,6 +377,38 @@ bool MiniMaxClient::prepareWalletFolder()
         return false;
     }
     return m_wallet->setFolder(walletFolder);
+}
+
+bool MiniMaxClient::migrateLegacyWalletEntry()
+{
+    // 项目改名后钱包文件夹由 "AI Usage Watcher" 迁至 AIQuotaPilot。
+    // 幂等：新文件夹已有 Key 则跳过；迁移后删除旧条目。
+    const QString legacyFolder = QStringLiteral("AI Usage Watcher");
+    if (!m_wallet || !m_wallet->isOpen() || !m_wallet->hasFolder(legacyFolder)) {
+        return true;
+    }
+    m_wallet->setFolder(legacyFolder);
+    QString legacyKey;
+    const int result = m_wallet->readPassword(miniMaxWalletEntry, legacyKey);
+    m_wallet->setFolder(walletFolder);
+    if (result != 0 || legacyKey.trimmed().isEmpty()) {
+        legacyKey.fill(QChar(u'\0'));
+        return true;
+    }
+    QString currentKey;
+    const bool alreadyPresent = m_wallet->readPassword(miniMaxWalletEntry, currentKey) == 0
+        && !currentKey.isEmpty();
+    currentKey.fill(QChar(u'\0'));
+    if (alreadyPresent) {
+        legacyKey.fill(QChar(u'\0'));
+        return true;
+    }
+    m_wallet->writePassword(miniMaxWalletEntry, legacyKey);
+    m_wallet->setFolder(legacyFolder);
+    m_wallet->removeEntry(miniMaxWalletEntry);
+    m_wallet->setFolder(walletFolder);
+    legacyKey.fill(QChar(u'\0'));
+    return true;
 }
 
 void MiniMaxClient::loadCredential()

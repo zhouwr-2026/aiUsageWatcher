@@ -83,15 +83,16 @@ bool readOptionalReset(const QJsonObject &model, const QString &key, qint64 &res
 
 bool appendIntervalQuota(const QJsonObject &model, QList<MiniMaxPlan> &plans)
 {
-    if (!model.contains(QStringLiteral("current_interval_remaining_percent"))) {
+    if (!model.contains(QStringLiteral("current_interval_remaining_percent"))
+        || model.value(QStringLiteral("current_interval_remaining_percent")).isNull()) {
         return true;
     }
     double remaining = 0;
     qint64 resetAt = 0;
-    if (!readPercentage(model, QStringLiteral("current_interval_remaining_percent"), remaining)
-        || !readOptionalReset(model, QStringLiteral("end_time"), resetAt)) {
-        return false;
+    if (!readPercentage(model, QStringLiteral("current_interval_remaining_percent"), remaining)) {
+        return true;
     }
+    readOptionalReset(model, QStringLiteral("end_time"), resetAt);
     plans.push_back({QStringLiteral("general-interval"),
                      intervalLabel(model),
                      100 - remaining,
@@ -102,18 +103,23 @@ bool appendIntervalQuota(const QJsonObject &model, QList<MiniMaxPlan> &plans)
 
 bool appendWeeklyQuota(const QJsonObject &model, QList<MiniMaxPlan> &plans)
 {
+    if (!model.contains(QStringLiteral("current_weekly_status"))) {
+        return true;
+    }
     qint64 status = 0;
-    if (!readInteger(model, QStringLiteral("current_weekly_status"), status)
-        || status != 1
-        || !model.contains(QStringLiteral("current_weekly_remaining_percent"))) {
+    if (!readInteger(model, QStringLiteral("current_weekly_status"), status) || status != 1) {
+        return true;
+    }
+    if (!model.contains(QStringLiteral("current_weekly_remaining_percent"))
+        || model.value(QStringLiteral("current_weekly_remaining_percent")).isNull()) {
         return true;
     }
     double remaining = 0;
     qint64 resetAt = 0;
-    if (!readPercentage(model, QStringLiteral("current_weekly_remaining_percent"), remaining)
-        || !readOptionalReset(model, QStringLiteral("weekly_end_time"), resetAt)) {
-        return false;
+    if (!readPercentage(model, QStringLiteral("current_weekly_remaining_percent"), remaining)) {
+        return true;
     }
+    readOptionalReset(model, QStringLiteral("weekly_end_time"), resetAt);
     plans.push_back({QStringLiteral("general-weekly"),
                      QStringLiteral("每周"),
                      100 - remaining,
@@ -134,15 +140,18 @@ MiniMaxParseResult MiniMaxResponseParser::parse(QByteArrayView payload)
     const QJsonObject root = document.object();
     const QJsonValue baseValue = root.value(QStringLiteral("base_resp"));
     const QJsonValue modelsValue = root.value(QStringLiteral("model_remains"));
-    if (!modelsValue.isArray()) {
-        return invalidResponse();
-    }
 
     if (!baseValue.isUndefined() && !baseValue.isNull()) {
+        // status_code 必须存在且可解析；缺失或非零均按接口错误处理（与 cc-switch 参考实现一致）
         qint64 statusCode = 0;
         if (!baseValue.isObject()
             || !readInteger(baseValue.toObject(), QStringLiteral("status_code"), statusCode)) {
-            return invalidResponse();
+            return {
+                false,
+                QStringLiteral("api_error"),
+                QStringLiteral("MiniMax 接口拒绝了本次请求"),
+                {},
+            };
         }
         if (statusCode != 0) {
             return {
@@ -155,24 +164,17 @@ MiniMaxParseResult MiniMaxResponseParser::parse(QByteArrayView payload)
     }
 
     MiniMaxSnapshot snapshot;
-    const QJsonArray models = modelsValue.toArray();
-    for (const QJsonValue &modelValue : models) {
-        if (!modelValue.isObject()) {
-            return invalidResponse();
-        }
-
-        const QJsonObject model = modelValue.toObject();
-        const QString modelName = model.value(QStringLiteral("model_name")).toString();
-        if (modelName.isEmpty()) {
-            return invalidResponse();
-        }
-        if (modelName != QLatin1String("general")) {
-            continue;
-        }
-
-        if (!appendIntervalQuota(model, snapshot.plans)
-            || !appendWeeklyQuota(model, snapshot.plans)) {
-            return invalidResponse();
+    if (modelsValue.isArray()) {
+        for (const QJsonValue &modelValue : modelsValue.toArray()) {
+            if (!modelValue.isObject()) {
+                continue;
+            }
+            const QJsonObject model = modelValue.toObject();
+            if (model.value(QStringLiteral("model_name")).toString() != QLatin1String("general")) {
+                continue;
+            }
+            appendIntervalQuota(model, snapshot.plans);
+            appendWeeklyQuota(model, snapshot.plans);
         }
     }
 

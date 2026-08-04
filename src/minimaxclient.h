@@ -45,6 +45,9 @@ public:
     static QList<QUrl> endpointCandidates();
     static QNetworkRequest createRequest(const QUrl &url, QByteArrayView apiKey);
 
+    // 测试注入点：替换网络访问管理器（ponytail: 仅测试使用，生命周期由调用方管理）
+    void setNetworkAccessManager(QNetworkAccessManager *network);
+
 Q_SIGNALS:
     void snapshotChanged();
     void loadingChanged();
@@ -62,6 +65,7 @@ private:
 
     void openWallet();
     bool prepareWalletFolder();
+    bool migrateLegacyWalletEntry();
     void loadCredential();
     void performPendingCredentialOperation();
     void setStoredApiKey(const QByteArray &apiKey);
@@ -86,6 +90,7 @@ private:
     PendingCredentialOperation m_pendingCredentialOperation = PendingCredentialOperation::None;
     bool m_loading = false;
     bool m_walletOpening = false;
+    int m_walletRetryCount = 0;
     bool m_credentialBusy = false;
     bool m_credentialError = false;
 };

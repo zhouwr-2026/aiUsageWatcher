@@ -137,6 +137,7 @@ AiUsageWatcherApplet::AiUsageWatcherApplet(QObject *parent,
     , m_deepSeekClient(this)
     , m_sharedProviderConfig(QStringLiteral("aiquotapilotrc"), this)
     , m_codexzhClient(this)
+    , m_opencodeGoClient(this)
     , m_customUsageClient(this)
     , m_codexNetwork(new QNetworkAccessManager(this))
     , m_codexPollTimer(new QTimer(this))
@@ -229,6 +230,30 @@ AiUsageWatcherApplet::AiUsageWatcherApplet(QObject *parent,
             &CodexZhClient::credentialErrorChanged,
             this,
             &AiUsageWatcherApplet::codexzhCredentialErrorChanged);
+    connect(&m_opencodeGoClient,
+            &OpenCodeGoClient::snapshotChanged,
+            this,
+            &AiUsageWatcherApplet::opencodeGoSnapshotChanged);
+    connect(&m_opencodeGoClient,
+            &OpenCodeGoClient::loadingChanged,
+            this,
+            &AiUsageWatcherApplet::opencodeGoLoadingChanged);
+    connect(&m_opencodeGoClient,
+            &OpenCodeGoClient::credentialConfiguredChanged,
+            this,
+            &AiUsageWatcherApplet::opencodeGoCredentialConfiguredChanged);
+    connect(&m_opencodeGoClient,
+            &OpenCodeGoClient::credentialStatusChanged,
+            this,
+            &AiUsageWatcherApplet::opencodeGoCredentialStatusChanged);
+    connect(&m_opencodeGoClient,
+            &OpenCodeGoClient::credentialBusyChanged,
+            this,
+            &AiUsageWatcherApplet::opencodeGoCredentialBusyChanged);
+    connect(&m_opencodeGoClient,
+            &OpenCodeGoClient::credentialErrorChanged,
+            this,
+            &AiUsageWatcherApplet::opencodeGoCredentialErrorChanged);
     connect(&m_customUsageClient,
             &CustomUsageClient::snapshotsChanged,
             this,
@@ -350,6 +375,36 @@ bool AiUsageWatcherApplet::codexzhCredentialError() const
     return m_codexzhClient.credentialError();
 }
 
+QVariantMap AiUsageWatcherApplet::opencodeGoSnapshot() const
+{
+    return m_opencodeGoClient.snapshot();
+}
+
+bool AiUsageWatcherApplet::opencodeGoLoading() const
+{
+    return m_opencodeGoClient.loading();
+}
+
+bool AiUsageWatcherApplet::opencodeGoCredentialConfigured() const
+{
+    return m_opencodeGoClient.credentialConfigured();
+}
+
+QString AiUsageWatcherApplet::opencodeGoCredentialStatus() const
+{
+    return m_opencodeGoClient.credentialStatus();
+}
+
+bool AiUsageWatcherApplet::opencodeGoCredentialBusy() const
+{
+    return m_opencodeGoClient.credentialBusy();
+}
+
+bool AiUsageWatcherApplet::opencodeGoCredentialError() const
+{
+    return m_opencodeGoClient.credentialError();
+}
+
 QVariantMap AiUsageWatcherApplet::codexSnapshot() const
 {
     return m_codexSnapshot;
@@ -448,6 +503,21 @@ void AiUsageWatcherApplet::clearDeepSeekApiKey()
 void AiUsageWatcherApplet::refreshCodexZhUsage()
 {
     m_codexzhClient.refresh();
+}
+
+void AiUsageWatcherApplet::refreshOpenCodeGoUsage()
+{
+    m_opencodeGoClient.refresh();
+}
+
+void AiUsageWatcherApplet::saveOpenCodeGoCredential(const QString &workspaceId, const QString &cookie)
+{
+    m_opencodeGoClient.saveCredential(workspaceId, cookie);
+}
+
+void AiUsageWatcherApplet::clearOpenCodeGoCredential()
+{
+    m_opencodeGoClient.clearCredential();
 }
 
 void AiUsageWatcherApplet::saveCodexZhApiKey(const QString &apiKey)

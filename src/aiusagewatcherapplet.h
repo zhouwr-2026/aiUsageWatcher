@@ -11,6 +11,7 @@
 #include "customusageclient.h"
 #include "deepseekclient.h"
 #include "minimaxclient.h"
+#include "opencodegoclient.h"
 #include "sharedproviderconfig.h"
 
 class QQuickTextDocument;
@@ -51,6 +52,12 @@ class AiUsageWatcherApplet : public Plasma::Applet
     Q_PROPERTY(QString codexzhCredentialStatus READ codexzhCredentialStatus NOTIFY codexzhCredentialStatusChanged)
     Q_PROPERTY(bool codexzhCredentialBusy READ codexzhCredentialBusy NOTIFY codexzhCredentialBusyChanged)
     Q_PROPERTY(bool codexzhCredentialError READ codexzhCredentialError NOTIFY codexzhCredentialErrorChanged)
+    Q_PROPERTY(QVariantMap opencodeGoSnapshot READ opencodeGoSnapshot NOTIFY opencodeGoSnapshotChanged)
+    Q_PROPERTY(bool opencodeGoLoading READ opencodeGoLoading NOTIFY opencodeGoLoadingChanged)
+    Q_PROPERTY(bool opencodeGoCredentialConfigured READ opencodeGoCredentialConfigured NOTIFY opencodeGoCredentialConfiguredChanged)
+    Q_PROPERTY(QString opencodeGoCredentialStatus READ opencodeGoCredentialStatus NOTIFY opencodeGoCredentialStatusChanged)
+    Q_PROPERTY(bool opencodeGoCredentialBusy READ opencodeGoCredentialBusy NOTIFY opencodeGoCredentialBusyChanged)
+    Q_PROPERTY(bool opencodeGoCredentialError READ opencodeGoCredentialError NOTIFY opencodeGoCredentialErrorChanged)
     Q_PROPERTY(QString sharedProviders READ sharedProviders NOTIFY sharedProvidersChanged)
 
 public:
@@ -87,6 +94,12 @@ public:
     QString codexzhCredentialStatus() const;
     bool codexzhCredentialBusy() const;
     bool codexzhCredentialError() const;
+    QVariantMap opencodeGoSnapshot() const;
+    bool opencodeGoLoading() const;
+    bool opencodeGoCredentialConfigured() const;
+    QString opencodeGoCredentialStatus() const;
+    bool opencodeGoCredentialBusy() const;
+    bool opencodeGoCredentialError() const;
     QString sharedProviders() const;
 
     Q_INVOKABLE void refreshMiniMax();
@@ -105,6 +118,9 @@ public:
     Q_INVOKABLE void refreshCodexZhUsage();
     Q_INVOKABLE void saveCodexZhApiKey(const QString &apiKey);
     Q_INVOKABLE void clearCodexZhApiKey();
+    Q_INVOKABLE void refreshOpenCodeGoUsage();
+    Q_INVOKABLE void saveOpenCodeGoCredential(const QString &workspaceId, const QString &cookie);
+    Q_INVOKABLE void clearOpenCodeGoCredential();
     Q_INVOKABLE bool ensureSharedProviders(const QString &providers);
     Q_INVOKABLE bool saveSharedProviders(const QString &providers);
     Q_INVOKABLE void attachJavaScriptHighlighter(QQuickTextDocument *document,
@@ -143,6 +159,12 @@ Q_SIGNALS:
     void codexzhCredentialStatusChanged();
     void codexzhCredentialBusyChanged();
     void codexzhCredentialErrorChanged();
+    void opencodeGoSnapshotChanged();
+    void opencodeGoLoadingChanged();
+    void opencodeGoCredentialConfiguredChanged();
+    void opencodeGoCredentialStatusChanged();
+    void opencodeGoCredentialBusyChanged();
+    void opencodeGoCredentialErrorChanged();
     void sharedProvidersChanged();
 
 private Q_SLOTS:
@@ -178,6 +200,7 @@ private:
     MiniMaxClient m_miniMaxClient;
     DeepSeekClient m_deepSeekClient;
     CodexZhClient m_codexzhClient;
+    OpenCodeGoClient m_opencodeGoClient;
     CustomUsageClient m_customUsageClient;
     QNetworkAccessManager *m_codexNetwork = nullptr;
     QNetworkReply *m_codexReply = nullptr;

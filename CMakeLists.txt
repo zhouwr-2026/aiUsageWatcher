@@ -46,6 +46,8 @@ kcoreaddons_add_plugin(org.kde.plasma.AIQuotaPilot
         src/deepseekclient.h
         src/deepseekresponseparser.cpp
         src/deepseekresponseparser.h
+        src/opencodegoclient.cpp
+        src/opencodegoclient.h
         src/sharedproviderconfig.cpp
         src/sharedproviderconfig.h
     INSTALL_NAMESPACE "plasma/applets"
@@ -125,6 +127,15 @@ if(BUILD_TESTING)
     target_include_directories(tst_deepseekclient PRIVATE src)
     target_link_libraries(tst_deepseekclient PRIVATE Qt6::Core Qt6::Network Qt6::Test KF6::Wallet)
     add_test(NAME deepseek-client-contract COMMAND tst_deepseekclient)
+
+    add_executable(tst_opencodegoclient
+        tests/cpp/tst_opencodegoclient.cpp
+        src/opencodegoclient.cpp
+        src/opencodegoclient.h
+    )
+    target_include_directories(tst_opencodegoclient PRIVATE src)
+    target_link_libraries(tst_opencodegoclient PRIVATE Qt6::Core Qt6::Network Qt6::Test KF6::Wallet)
+    add_test(NAME opencodego-client-contract COMMAND tst_opencodegoclient)
 
     add_executable(tst_javascripthighlighter
         tests/cpp/tst_javascripthighlighter.cpp

@@ -22,6 +22,8 @@ private Q_SLOTS:
     void clampsTodayUsageToWeeklyUsage();
     void missingWeekCallsRendersAsDash();
     void hugeTokenCountRendersWithoutOverflow();
+    void errorFieldFallbackWhenMessageMissing();
+    void messageFieldStillWins();
 };
 
 void CodexZhResponseParserTest::parsesWeeklyUsdBudget()
@@ -242,6 +244,26 @@ void CodexZhResponseParserTest::clampsTodayUsageToWeeklyUsage()
     QCOMPARE(result.snapshot.plan.usageSegments.first().kind, QStringLiteral("today"));
     QCOMPARE(result.snapshot.plan.usageSegments.first().used, 50.0);
     QCOMPARE(result.snapshot.plan.usageSegments.first().usedPercent, 50.0);
+}
+
+void CodexZhResponseParserTest::errorFieldFallbackWhenMessageMissing()
+{
+    // 服务端新版错误字段为 error（无 key → "API Key is required"）
+    const QByteArray payload = R"({"success":false,"error":"API Key is required"})";
+    const CodexZhParseResult result = CodexZhResponseParser::parse(payload);
+
+    QVERIFY(!result.ok);
+    QCOMPARE(result.errorMessage, QStringLiteral("API Key is required"));
+}
+
+void CodexZhResponseParserTest::messageFieldStillWins()
+{
+    // 旧版 message 字段仍优先
+    const QByteArray payload = R"({"success":false,"message":"旧错误","error":"新错误"})";
+    const CodexZhParseResult result = CodexZhResponseParser::parse(payload);
+
+    QVERIFY(!result.ok);
+    QCOMPARE(result.errorMessage, QStringLiteral("旧错误"));
 }
 
 void CodexZhResponseParserTest::missingWeekCallsRendersAsDash()

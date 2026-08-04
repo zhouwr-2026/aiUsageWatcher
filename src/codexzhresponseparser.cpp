@@ -242,7 +242,10 @@ CodexZhParseResult CodexZhResponseParser::parse(QByteArrayView payload)
     const QJsonObject root = document.object();
     const bool success = root.value(QStringLiteral("success")).toBool();
     if (!success) {
-        const QString message = root.value(QStringLiteral("message")).toString();
+        // 服务端错误信息字段兼容：message（旧）与 error（新）均可能使用
+        QString message = root.value(QStringLiteral("message")).toString();
+        if (message.isEmpty())
+            message = root.value(QStringLiteral("error")).toString();
         return {
             false,
             message.isEmpty() ? QStringLiteral("查询失败") : message,

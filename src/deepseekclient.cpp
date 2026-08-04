@@ -15,6 +15,7 @@ namespace
 constexpr qsizetype maximumResponseBytes = 1024 * 1024;
 const QString walletFolder = QStringLiteral("AIQuotaPilot");
 const QString deepSeekWalletEntry = QStringLiteral("deepseek-api-key");
+constexpr int walletRetryLimit = 5;
 
 QVariantMap emptySnapshot(const QString &status, const QString &error = {})
 {
@@ -284,6 +285,11 @@ void DeepSeekClient::openWallet()
     if (!m_wallet) {
         m_walletOpening = false;
         setCredentialState(QStringLiteral("无法打开 KDE 钱包"), false, true);
+        // Plasma 启动竞态：kwalletd 可能晚于 plasmashell 就绪，失败后定时重试自愈
+        // ponytail: 上限 5 次（约 25s），kwalletd 故障时避免永久重试；钱包被禁用时提前返回
+        if (++m_walletRetryCount < walletRetryLimit) {
+            QTimer::singleShot(5000, this, &DeepSeekClient::openWallet);
+        }
         return;
     }
     m_wallet->setParent(this);
@@ -294,6 +300,7 @@ void DeepSeekClient::openWallet()
             return;
         }
         m_walletOpening = false;
+        m_walletRetryCount = 0;
         if (!success || !prepareWalletFolder()) {
             setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
             return;

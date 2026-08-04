@@ -62,6 +62,7 @@ private:
 
     void openWallet();
     bool prepareWalletFolder();
+    bool migrateLegacyWalletEntry();
     void loadCredential();
     void performPendingCredentialOperation();
     void setStoredApiKey(const QByteArray &apiKey);
@@ -82,6 +83,7 @@ private:
     PendingCredentialOperation m_pendingCredentialOperation = PendingCredentialOperation::None;
     bool m_loading = false;
     bool m_walletOpening = false;
+    int m_walletRetryCount = 0;
     bool m_credentialBusy = false;
     bool m_credentialError = false;
 };

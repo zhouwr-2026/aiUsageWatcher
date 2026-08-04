@@ -14,8 +14,9 @@
 namespace
 {
 constexpr qsizetype maximumResponseBytes = 1024 * 1024;
-const QString walletFolder = QStringLiteral("AI Usage Watcher");
+const QString walletFolder = QStringLiteral("AIQuotaPilot");
 const QString codexZhWalletEntry = QStringLiteral("CodexZH API Key");
+constexpr int walletRetryLimit = 5;
 
 QVariantMap emptySnapshot(const QString &status, const QString &error = {})
 {
@@ -30,17 +31,31 @@ QVariantMap emptySnapshot(const QString &status, const QString &error = {})
 QVariantMap toVariantMap(const CodexZhSnapshot &snapshot)
 {
     QVariantList plans;
-    plans.push_back(QVariantMap{
+    QVariantMap plan{
         {QStringLiteral("planId"), snapshot.plan.planId},
         {QStringLiteral("planName"), snapshot.plan.planName},
         {QStringLiteral("used"), snapshot.plan.used},
         {QStringLiteral("total"), snapshot.plan.total},
         {QStringLiteral("unit"), QStringLiteral("USD")},
-        {QStringLiteral("resetText"), QString()},
+        {QStringLiteral("resetText"), snapshot.plan.resetText},
+        {QStringLiteral("resetAt"), snapshot.plan.resetAtMs},
         {QStringLiteral("extraText"), snapshot.plan.extraText},
         {QStringLiteral("isValid"), true},
         {QStringLiteral("invalidReason"), QString()},
-    });
+    };
+    QVariantList usageSegments;
+    for (const CodexZhUsageSegment &segment : snapshot.plan.usageSegments) {
+        usageSegments.push_back(QVariantMap{
+            {QStringLiteral("kind"), segment.kind},
+            {QStringLiteral("used"), segment.used},
+            {QStringLiteral("usedPercent"), segment.usedPercent},
+            {QStringLiteral("formattedUsed"), segment.formattedUsed},
+        });
+    }
+    if (!usageSegments.isEmpty()) {
+        plan.insert(QStringLiteral("usageSegments"), usageSegments);
+    }
+    plans.push_back(plan);
 
     return {
         {QStringLiteral("providerId"), QStringLiteral("codexzh")},
@@ -259,6 +274,11 @@ void CodexZhClient::openWallet()
     if (!m_wallet) {
         m_walletOpening = false;
         setCredentialState(QStringLiteral("无法打开 KDE 钱包"), false, true);
+        // Plasma 启动竞态：kwalletd 可能晚于 plasmashell 就绪，失败后定时重试自愈
+        // ponytail: 上限 5 次（约 25s），kwalletd 故障时避免永久重试；钱包被禁用时提前返回
+        if (++m_walletRetryCount < walletRetryLimit) {
+            QTimer::singleShot(5000, this, &CodexZhClient::openWallet);
+        }
         return;
     }
     m_wallet->setParent(this);
@@ -269,10 +289,13 @@ void CodexZhClient::openWallet()
             return;
         }
         m_walletOpening = false;
+        m_walletRetryCount = 0;
         if (!success || !prepareWalletFolder()) {
             setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
             return;
         }
+        // 钱包文件夹改名后一次性迁移旧 Key（幂等，见 migrateLegacyWalletEntry）
+        migrateLegacyWalletEntry();
         if (m_pendingCredentialOperation == PendingCredentialOperation::None) {
             loadCredential();
         } else {
@@ -309,6 +332,38 @@ bool CodexZhClient::prepareWalletFolder()
         return false;
     }
     return m_wallet->setFolder(walletFolder);
+}
+
+bool CodexZhClient::migrateLegacyWalletEntry()
+{
+    // 项目改名后钱包文件夹由 "AI Usage Watcher" 迁至 AIQuotaPilot。
+    // 幂等：新文件夹已有 Key 则跳过；迁移后删除旧条目。
+    const QString legacyFolder = QStringLiteral("AI Usage Watcher");
+    if (!m_wallet || !m_wallet->isOpen() || !m_wallet->hasFolder(legacyFolder)) {
+        return true;
+    }
+    m_wallet->setFolder(legacyFolder);
+    QString legacyKey;
+    const int result = m_wallet->readPassword(codexZhWalletEntry, legacyKey);
+    m_wallet->setFolder(walletFolder);
+    if (result != 0 || legacyKey.trimmed().isEmpty()) {
+        legacyKey.fill(QChar(u'\0'));
+        return true;
+    }
+    QString currentKey;
+    const bool alreadyPresent = m_wallet->readPassword(codexZhWalletEntry, currentKey) == 0
+        && !currentKey.isEmpty();
+    currentKey.fill(QChar(u'\0'));
+    if (alreadyPresent) {
+        legacyKey.fill(QChar(u'\0'));
+        return true;
+    }
+    m_wallet->writePassword(codexZhWalletEntry, legacyKey);
+    m_wallet->setFolder(legacyFolder);
+    m_wallet->removeEntry(codexZhWalletEntry);
+    m_wallet->setFolder(walletFolder);
+    legacyKey.fill(QChar(u'\0'));
+    return true;
 }
 
 void CodexZhClient::loadCredential()

@@ -1,6 +1,6 @@
 # AIQuotaPilot 项目级 Comet 配置
-# AIQuotaPilot 是 QML-only Plasma 6 小部件,无需编译/CI
-# 验证方式: kpackagetool6 装包 + plasmawindowed 启动
+# 构建验证: cmake 编译（含 C++ 原生插件）
+# 验证方式: tests/run-static-checks.sh 全套静态检查与 QML 测试
 
-build_command: kpackagetool6 --upgrade package
-verify_command: kpackagetool6 --upgrade package
+build_command: cmake --build build
+verify_command: bash tests/run-static-checks.sh

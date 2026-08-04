@@ -63,6 +63,13 @@ KCM.SimpleKCM {
     property bool zhCredentialBusy: false
     property bool zhCredentialError: false
     property string zhCredentialStatus: qsTr("尚未保存 API Key")
+    property bool opencodeGoCredentialConfigured: false
+    property bool opencodeGoCredentialBusy: false
+    property bool opencodeGoCredentialError: false
+    property string opencodeGoCredentialStatus: qsTr("尚未保存凭据")
+    property bool opencodeGoUsageLoading: false
+    property string opencodeGoUsageStatus: qsTr("未配置")
+    property string opencodeGoUsageError: ""
     property bool zhUsageLoading: false
     property string zhUsageStatus: qsTr("未配置")
     property string zhUsageError: ""
@@ -297,6 +304,10 @@ KCM.SimpleKCM {
             if (action === "save") return "saveDeepSeekApiKey"
             if (action === "clear") return "clearDeepSeekApiKey"
             if (action === "refresh") return "refreshDeepSeekUsage"
+        } else if (catalogId === "opencode-go") {
+            if (action === "save") return "saveOpenCodeGoCredential"
+            if (action === "clear") return "clearOpenCodeGoCredential"
+            if (action === "refresh") return "refreshOpenCodeGoUsage"
         }
         return ""
     }
@@ -384,6 +395,36 @@ KCM.SimpleKCM {
         }
     }
 
+    function syncOpenCodeGoState() {
+        const prefix = "opencodeGo"
+        opencodeGoCredentialConfigured = usageBackend[prefix + "CredentialConfigured"] === true
+        opencodeGoCredentialBusy = usageBackend[prefix + "CredentialBusy"] === true
+        opencodeGoCredentialError = usageBackend[prefix + "CredentialError"] === true
+        const status = usageBackend[prefix + "CredentialStatus"]
+        const snapshot = usageBackend[prefix + "Snapshot"]
+        opencodeGoCredentialStatus = typeof status === "string" && status.length > 0
+            ? status : qsTr("尚未保存凭据")
+        opencodeGoUsageLoading = usageBackend[prefix + "Loading"] === true
+        opencodeGoUsageStatus = snapshot && typeof snapshot.statusLabel === "string"
+            ? snapshot.statusLabel : qsTr("未配置")
+        opencodeGoUsageError = snapshot && typeof snapshot.errorText === "string"
+            ? snapshot.errorText : ""
+    }
+
+    function connectOpenCodeGoSignals() {
+        const prefix = "opencodeGo"
+        const suffixes = [
+            "CredentialConfiguredChanged", "CredentialStatusChanged",
+            "CredentialBusyChanged", "CredentialErrorChanged",
+            "SnapshotChanged", "LoadingChanged"
+        ]
+        for (let i = 0; i < suffixes.length; ++i) {
+            const signal = usageBackend[prefix + suffixes[i]]
+            if (signal && typeof signal.connect === "function")
+                signal.connect(root.syncOpenCodeGoState)
+        }
+    }
+
 
     function syncCodexLoginState() {
         codexLoggedIn = usageBackend["codexLoggedIn"] === true
@@ -448,6 +489,8 @@ KCM.SimpleKCM {
         connectCodexZhSignals()
         syncDeepSeekState()
         connectDeepSeekSignals()
+        syncOpenCodeGoState()
+        connectOpenCodeGoSignals()
         syncCodexLoginState()
     }
 
@@ -668,26 +711,34 @@ KCM.SimpleKCM {
 
                 Layout.fillWidth: true
                 highlighterBackend: root.usageBackend
-                credentialConfigured: providerEditor.isCodexZh
-                    ? root.zhCredentialConfigured
-                    : (providerEditor.isDeepSeek
-                       ? root.deepseekCredentialConfigured
-                       : root.miniMaxCredentialConfigured)
-                credentialBusy: providerEditor.isCodexZh
-                    ? root.zhCredentialBusy
-                    : (providerEditor.isDeepSeek
-                       ? root.deepseekCredentialBusy
-                       : root.miniMaxCredentialBusy)
-                credentialError: providerEditor.isCodexZh
-                    ? root.zhCredentialError
-                    : (providerEditor.isDeepSeek
-                       ? root.deepseekCredentialError
-                       : root.miniMaxCredentialError)
-                credentialStatus: providerEditor.isCodexZh
-                    ? root.zhCredentialStatus
-                    : (providerEditor.isDeepSeek
-                       ? root.deepseekCredentialStatus
-                       : root.miniMaxCredentialStatus)
+                credentialConfigured: providerEditor.isOpenCodeGo
+                    ? root.opencodeGoCredentialConfigured
+                    : (providerEditor.isCodexZh
+                       ? root.zhCredentialConfigured
+                       : (providerEditor.isDeepSeek
+                          ? root.deepseekCredentialConfigured
+                          : root.miniMaxCredentialConfigured))
+                credentialBusy: providerEditor.isOpenCodeGo
+                    ? root.opencodeGoCredentialBusy
+                    : (providerEditor.isCodexZh
+                       ? root.zhCredentialBusy
+                       : (providerEditor.isDeepSeek
+                          ? root.deepseekCredentialBusy
+                          : root.miniMaxCredentialBusy))
+                credentialError: providerEditor.isOpenCodeGo
+                    ? root.opencodeGoCredentialError
+                    : (providerEditor.isCodexZh
+                       ? root.zhCredentialError
+                       : (providerEditor.isDeepSeek
+                          ? root.deepseekCredentialError
+                          : root.miniMaxCredentialError))
+                credentialStatus: providerEditor.isOpenCodeGo
+                    ? root.opencodeGoCredentialStatus
+                    : (providerEditor.isCodexZh
+                       ? root.zhCredentialStatus
+                       : (providerEditor.isDeepSeek
+                          ? root.deepseekCredentialStatus
+                          : root.miniMaxCredentialStatus))
                 miniMaxUsageLoading: root.miniMaxUsageLoading
                 miniMaxUsageStatus: root.miniMaxUsageStatus
                 miniMaxUsageError: root.miniMaxUsageError
@@ -697,6 +748,9 @@ KCM.SimpleKCM {
                 deepseekUsageLoading: root.deepseekUsageLoading
                 deepseekUsageStatus: root.deepseekUsageStatus
                 deepseekUsageError: root.deepseekUsageError
+                opencodeGoUsageLoading: root.opencodeGoUsageLoading
+                opencodeGoUsageStatus: root.opencodeGoUsageStatus
+                opencodeGoUsageError: root.opencodeGoUsageError
                 codexLoggedIn: root.codexLoggedIn
                 codexLoginBusy: root.codexLoginBusy
                 codexLoginError: root.codexLoginError
@@ -715,6 +769,17 @@ KCM.SimpleKCM {
                 onRefreshMiniMaxRequested: root.callCredentialBackend("minimax", "refresh")
                 onRefreshCodexZhRequested: root.callCredentialBackend("codexzh", "refresh")
                 onRefreshDeepSeekRequested: root.callCredentialBackend("deepseek", "refresh")
+                onSaveOpenCodeGoCredentialRequested: (workspaceId, cookie) => {
+                    const operation = root.usageBackend["saveOpenCodeGoCredential"]
+                    if (typeof operation === "function")
+                        operation.call(root.usageBackend, workspaceId, cookie)
+                }
+                onClearOpenCodeGoCredentialRequested: {
+                    const operation = root.usageBackend["clearOpenCodeGoCredential"]
+                    if (typeof operation === "function")
+                        operation.call(root.usageBackend)
+                }
+                onRefreshOpenCodeGoRequested: root.callCredentialBackend("opencode-go", "refresh")
                 onStartCodexLoginRequested: root.callCodexBackend("startCodexLogin")
                 onCancelCodexLoginRequested: root.callCodexBackend("cancelCodexLogin")
                 onOpenCodexLoginPageRequested: root.callCodexBackend("openCodexLoginPage")

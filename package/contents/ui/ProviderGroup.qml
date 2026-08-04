@@ -19,6 +19,7 @@ Rectangle {
     property string logoSource: ""
     property string logoChar: ""
     property bool logoIsSvg: true
+    property string logoBackdropColor: "" // 浅色底色（透明底 Logo 用，如 OpenCode Go）
     property string priceText: ""
 
     function _websiteValid(value) {
@@ -46,15 +47,18 @@ Rectangle {
         spacing: Kirigami.Units.largeSpacing
 
         Rectangle {
+            id: providerStatusIndicator
+
             objectName: "providerStatusIndicator"
 
             readonly property bool isCodex: root.providerName === "Codex"
+            readonly property bool hasBackdrop: root.logoBackdropColor.length > 0
             Layout.preferredWidth: Kirigami.Units.iconSizes.medium
             Layout.preferredHeight: Layout.preferredWidth
             Layout.alignment: Qt.AlignVCenter
             radius: width / 2
-            color: isCodex ? "white" : "transparent"
-            border.width: isCodex ? 1 : 0
+            color: hasBackdrop ? root.logoBackdropColor : (isCodex ? "white" : "transparent")
+            border.width: (hasBackdrop || isCodex) ? 1 : 0
             border.color: root.statusColor(root.ledClass)
             Accessible.name: root.providerName
             Accessible.description: root.statusLabel
@@ -64,7 +68,7 @@ Rectangle {
 
                 objectName: "providerLogoImage"
                 anchors.fill: parent
-                anchors.margins: 1
+                anchors.margins: providerStatusIndicator.hasBackdrop ? Math.round(providerStatusIndicator.width * 0.18) : 1
                 source: root.logoSource.length > 0
                     ? (root.logoIsSvg
                        ? "data:image/svg+xml;utf8," + root.logoSource

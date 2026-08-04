@@ -38,6 +38,9 @@ Item {
     property bool deepseekUsageLoading: false
     property string deepseekUsageStatus: qsTr("未配置")
     property string deepseekUsageError: ""
+    property bool opencodeGoUsageLoading: false
+    property string opencodeGoUsageStatus: qsTr("未配置")
+    property string opencodeGoUsageError: ""
     property bool codexLoggedIn: false
     property bool codexLoginBusy: false
     property bool codexLoginError: false
@@ -55,6 +58,7 @@ Item {
     readonly property bool isCodex: (candidate.catalogId || "") === "codex"
     readonly property bool isCodexZh: (candidate.catalogId || "") === "codexzh"
     readonly property bool isDeepSeek: (candidate.catalogId || "") === "deepseek"
+    readonly property bool isOpenCodeGo: (candidate.catalogId || "") === "opencode-go"
     readonly property var validation: ProviderConfig.validateProvider(candidate, siblings)
     readonly property var providerOptions: ProviderCatalog.providerOptions()
     readonly property real fieldWidth: Kirigami.Units.gridUnit * 20
@@ -64,6 +68,9 @@ Item {
 
     signal saveApiKeyRequested(string apiKey)
     signal clearApiKeyRequested()
+    signal saveOpenCodeGoCredentialRequested(string workspaceId, string cookie)
+    signal clearOpenCodeGoCredentialRequested()
+    signal refreshOpenCodeGoRequested()
     signal refreshMiniMaxRequested()
     signal refreshCodexZhRequested()
     signal refreshDeepSeekRequested()
@@ -402,7 +409,8 @@ Item {
         }
 
         Kirigami.InlineMessage {
-            visible: !root.isCustom && !root.isMiniMax && !root.isCodex && !root.isCodexZh && !root.isDeepSeek
+            visible: !root.isCustom && !root.isMiniMax && !root.isCodex && !root.isCodexZh
+                && !root.isDeepSeek && !root.isOpenCodeGo
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: root.formWidth
             Layout.maximumWidth: root.formWidth
@@ -567,6 +575,95 @@ Item {
         }
 
         SectionHeading {
+            visible: root.isOpenCodeGo
+            text: qsTr("OpenCode Go 凭据")
+        }
+
+        GridLayout {
+            visible: root.isOpenCodeGo
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: root.formWidth
+            Layout.maximumWidth: root.formWidth
+            columns: 2
+            columnSpacing: Kirigami.Units.largeSpacing
+
+            FieldLabel { text: qsTr("工作区 ID：") }
+
+            QQC2.TextField {
+                id: opencodeGoWorkspaceField
+
+                objectName: "opencodeGoWorkspaceField"
+                Layout.preferredWidth: root.fieldWidth
+                Layout.maximumWidth: root.fieldWidth
+                placeholderText: qsTr("请输入工作区 ID（wrk_ 开头，控制台地址栏可复制）")
+                enabled: !root.credentialBusy
+
+                Keys.onReturnPressed: {
+                    if (opencodeGoCookieField.text.trim().length === 0 || root.credentialBusy)
+                        return
+                    const workspaceId = text
+                    const cookie = opencodeGoCookieField.text
+                    opencodeGoWorkspaceField.clear()
+                    opencodeGoCookieField.clear()
+                    root.saveOpenCodeGoCredentialRequested(workspaceId, cookie)
+                }
+            }
+
+            FieldLabel { text: qsTr("Cookie：") }
+
+            QQC2.TextField {
+                id: opencodeGoCookieField
+
+                objectName: "opencodeGoCookieField"
+                Layout.preferredWidth: root.fieldWidth
+                Layout.maximumWidth: root.fieldWidth
+                placeholderText: root.credentialConfigured
+                    ? qsTr("输入新 Cookie 以替换已保存凭据")
+                    : qsTr("请输入 Cookie（完整 Cookie 串或 auth= 值均可）")
+                enabled: !root.credentialBusy
+
+                Keys.onReturnPressed: {
+                    if (opencodeGoWorkspaceField.text.trim().length === 0 || root.credentialBusy)
+                        return
+                    const workspaceId = opencodeGoWorkspaceField.text
+                    const cookie = text
+                    opencodeGoWorkspaceField.clear()
+                    opencodeGoCookieField.clear()
+                    root.saveOpenCodeGoCredentialRequested(workspaceId, cookie)
+                }
+            }
+        }
+
+        RowLayout {
+            visible: root.isOpenCodeGo
+            Layout.fillWidth: true
+
+            Item { Layout.fillWidth: true }
+
+            QQC2.Button {
+                objectName: "saveOpenCodeGoCredentialButton"
+                text: root.credentialConfigured ? qsTr("更新凭据") : qsTr("保存凭据")
+                icon.name: "document-save"
+                enabled: opencodeGoWorkspaceField.text.trim().length > 0
+                    && opencodeGoCookieField.text.trim().length > 0 && !root.credentialBusy
+                onClicked: {
+                    const workspaceId = opencodeGoWorkspaceField.text
+                    const cookie = opencodeGoCookieField.text
+                    opencodeGoWorkspaceField.clear()
+                    opencodeGoCookieField.clear()
+                    root.saveOpenCodeGoCredentialRequested(workspaceId, cookie)
+                }
+            }
+
+            QQC2.Button {
+                text: qsTr("移除已保存凭据")
+                icon.name: "edit-delete"
+                enabled: root.credentialConfigured && !root.credentialBusy
+                onClicked: root.clearOpenCodeGoCredentialRequested()
+            }
+        }
+
+        SectionHeading {
             visible: root.isDeepSeek
             text: qsTr("充值设置（可选）")
         }
@@ -679,7 +776,7 @@ Item {
         }
 
         RowLayout {
-            visible: root.isMiniMax || root.isCodexZh || root.isDeepSeek
+            visible: root.isMiniMax || root.isCodexZh || root.isDeepSeek || root.isOpenCodeGo
             Layout.fillWidth: true
 
             Item { Layout.fillWidth: true }
@@ -709,6 +806,7 @@ Item {
                 text: (root.isCodexZh && root.codexzhUsageLoading)
                     || (root.isMiniMax && root.miniMaxUsageLoading)
                     || (root.isDeepSeek && root.deepseekUsageLoading)
+                    || (root.isOpenCodeGo && root.opencodeGoUsageLoading)
                     ? qsTr("正在刷新…")
                     : qsTr("刷新额度")
                 icon.name: "view-refresh"
@@ -716,11 +814,14 @@ Item {
                        && !root.miniMaxUsageLoading
                        && !root.codexzhUsageLoading
                        && !root.deepseekUsageLoading
-                onClicked: root.isCodexZh
-                           ? root.refreshCodexZhRequested()
-                           : (root.isDeepSeek
-                              ? root.refreshDeepSeekRequested()
-                              : root.refreshMiniMaxRequested())
+                       && !root.opencodeGoUsageLoading
+                onClicked: root.isOpenCodeGo
+                           ? root.refreshOpenCodeGoRequested()
+                           : (root.isCodexZh
+                              ? root.refreshCodexZhRequested()
+                              : (root.isDeepSeek
+                                 ? root.refreshDeepSeekRequested()
+                                 : root.refreshMiniMaxRequested()))
             }
 
             QQC2.BusyIndicator {
@@ -756,21 +857,28 @@ Item {
                 ? (root.codexzhUsageError.length > 0
                    ? qsTr("额度查询失败：%1").arg(root.codexzhUsageError)
                    : qsTr("额度查询：%1").arg(root.codexzhUsageStatus))
-                : (root.isDeepSeek
-                   ? (root.deepseekUsageError.length > 0
-                      ? qsTr("额度查询失败：%1").arg(root.deepseekUsageError)
-                      : qsTr("额度查询：%1").arg(root.deepseekUsageStatus))
-                   : (root.miniMaxUsageError.length > 0
-                      ? qsTr("额度查询失败：%1").arg(root.miniMaxUsageError)
-                      : qsTr("额度查询：%1").arg(root.miniMaxUsageStatus)))
+                : (root.isOpenCodeGo
+                   ? (root.opencodeGoUsageError.length > 0
+                      ? qsTr("额度查询失败：%1").arg(root.opencodeGoUsageError)
+                      : qsTr("额度查询：%1").arg(root.opencodeGoUsageStatus))
+                   : (root.isDeepSeek
+                      ? (root.deepseekUsageError.length > 0
+                         ? qsTr("额度查询失败：%1").arg(root.deepseekUsageError)
+                         : qsTr("额度查询：%1").arg(root.deepseekUsageStatus))
+                      : (root.miniMaxUsageError.length > 0
+                         ? qsTr("额度查询失败：%1").arg(root.miniMaxUsageError)
+                         : qsTr("额度查询：%1").arg(root.miniMaxUsageStatus))))
             type: root.isCodexZh
                 ? (root.codexzhUsageError.length > 0
                    ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)
-                : (root.isDeepSeek
-                   ? (root.deepseekUsageError.length > 0
+                : (root.isOpenCodeGo
+                   ? (root.opencodeGoUsageError.length > 0
                       ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)
-                   : (root.miniMaxUsageError.length > 0
-                      ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive))
+                   : (root.isDeepSeek
+                      ? (root.deepseekUsageError.length > 0
+                         ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)
+                      : (root.miniMaxUsageError.length > 0
+                         ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)))
         }
 
         SectionHeading {

@@ -46,7 +46,11 @@ var PRESETS = [{
     "vendor": "OpenCode",
     "website": "https://opencode.ai/go",
     "sourceLabel": "订阅",
-    "plans": [{ "id": "monthly", "planName": "月度额度", "unit": "%" }]
+    "plans": [
+        { "id": "five-hour", "planName": "5 小时", "unit": "%" },
+        { "id": "weekly", "planName": "每周", "unit": "%" },
+        { "id": "monthly", "planName": "月度额度", "unit": "%" }
+    ]
 }, {
     "catalogId": "minimax",
     "label": "MiniMax",

@@ -14,7 +14,7 @@ var _LOGO_ASSETS = {
     "kimi-for-coding": _LOGO_BASE + "kimi-for-coding.png",
     siliconflow: _LOGO_BASE + "siliconflow.svg",
     codexzh: _LOGO_BASE + "codexzh-icon.png",
-    "opencode-go": _LOGO_BASE + "opencode-go.svg"
+    "opencode-go": _LOGO_BASE + "opencode-go.png"
 }
 
 var _LOGO_CHARS = {

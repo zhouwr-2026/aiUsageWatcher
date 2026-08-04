@@ -23,7 +23,8 @@
 
 - `PanelPieView.qml` 已用 `Charts.PieChart + Charts.SingleValueSource`、固定 `0..100`
   范围和 `backgroundColor` 绘制圆环，可直接复用。
-- `CompactView.qml` 与 `PlanBar.qml` 已有百分比钳制、语义色、底轨和 300ms 动画。
+- `CompactView.qml` 与 `PlanBar.qml` 已有百分比钳制、语义色和底轨；水平用量条保留
+  300ms 动画。
 - 项目运行环境已经依赖 KQuickCharts，不新增第三方依赖或安装步骤。
 
 ## 组件映射
@@ -60,7 +61,8 @@ currentUsage.usedPercent
 - compact 使用一个 `Charts.SingleValueSource` 提供已使用百分比，范围固定为 `0..100`。
 - 已使用圆弧沿用 `usageColor()`；剩余轨道使用 `backgroundColor`。
 - `smoothEnds: true`，厚度与当前视觉尺寸一致。
-- 用可动画的显示百分比属性驱动数据源，保留 300ms `Easing.OutCubic` 变化动画。
+- 数据源直接绑定钳制后的百分比，跟随 Plasma 原生 `Charts.PieChart` 更新方式；不增加
+  自定义动画代理。
 - `usedPercent < 0` 时值为 `0`、颜色为禁用色，中心文字继续显示 `—`。
 
 ### 水平用量条
@@ -80,6 +82,10 @@ currentUsage.usedPercent
 
 - 保留面向功能的根对象名；删除 `Shape` 专属的 `compactPieTrack/compactPieArc`
   内部契约，改为验证 `Charts.PieChart` 的数据源、范围和可见性。
+- 为饼图颜色源保留稳定对象名，验证正常值使用现有语义色、无数据使用禁用色；不做
+  像素级颜色测试。
+- 为 compact 和 popup 的水平填充保留稳定对象名，直接验证其颜色绑定；无数据测试
+  同步提供 `usedPercent: -1` 与展示标签 `—`，不假定组件负责派生标签。
 - 不为保持旧测试而创建不可见占位对象。
 
 ## 测试计划
@@ -105,13 +111,18 @@ Plasma smoke
 ```
 
 - QML 行为测试：`tests/tst_compactView.qml`、`tests/tst_providerGroup.qml`。
-- 自动门：`bash tests/run-static-checks.sh`。
-- 安装级门：`bash tests/run-plasma-smoke.sh`。
+- 自动门：`bash tests/run-static-checks.sh`。静态检查覆盖现有全部图表文件：
+  `CompactView.qml` 必须使用 `Charts.PieChart + QQC2.ProgressBar`，
+  `PanelPieView.qml` 必须使用 `Charts.PieChart`，`PlanBar.qml` 必须使用
+  `QQC2.ProgressBar`；三者均禁止回退到自绘图表技术。
+- 安装级门：`bash tests/run-plasma-smoke.sh`。缺少可见 Plasma 会话时可以记录
+  `BLOCKED`，但只能标记“代码完成、视觉待验”，不得宣称本次视觉改造完成。
 - 人工视觉门：在真实 Plasma 面板尺寸下保存 compact 与 popup 两种图表截图，
-  核对亮暗主题及 100%/125%/150% 缩放。
+  核对亮暗主题及 100%/125%/150% 缩放；该门通过后才能完成本次改造。
 - 当前工作区存在与本改造无关的旧 `mockData.js` 测试引用；实施前先记录测试基线，
   若全量门因此失败，须单独报告为既有问题，并继续运行本次直接相关的 QML 测试，
-  不得把既有失败误归因于图表改造或把未通过说成通过。
+  不得把既有失败误归因于图表改造或把未通过说成通过。相关 QML 测试与生产 QML
+  `qmllint` 必须通过；全量套件仍为红时，只能报告“范围内验证通过、仓库基线未通过”。
 
 ## 失败模式
 
@@ -162,21 +173,21 @@ Sequential implementation, no parallelization opportunity：核心改动集中�
   - Verify: `bash tests/run-static-checks.sh`
 - [ ] **T4 (P1, human: ~45min / Codex: ~10min)** — QA — 验证真实 Plasma 尺寸与缩放下的抗锯齿效果
   - Surfaced by: Test Review — 逻辑测试不能证明 GPU 输出的边缘质量。
-  - Files: `tests/README.md`（仅在现有 smoke 缺少必要断言时最小修改脚本）
-  - Verify: `bash tests/run-plasma-smoke.sh` 并保存人工截图
+  - Files: `tests/README.md`, `tests/run-static-checks.sh`（仅做现有验收门所需的最小修改）
+  - Verify: `bash tests/run-plasma-smoke.sh` 并保存人工截图；无可见 Plasma 会话时保持未完成
 
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
 | CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | 本次不改变产品范围 |
-| Codex Review | `/codex review` | Independent 2nd opinion | 1 | PARTIAL | 结果通道被 403 阻断；已折叠 2 项只读检查发现 |
-| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAR | 8 项问题/缺口已全部写入方案，0 个关键缺口 |
+| Codex Review | `/codex review` | Independent 2nd opinion | 2 | CLEAR (fallback) | CLI 受权限策略阻断；独立只读审查的 3 项验收缺口已折叠 |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 2 | CLEAR | 6 项设计缺口已写入方案，0 个关键缺口 |
 | Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | 原生同款视觉由真实 Plasma 截图门验收 |
 | DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | 不适用 |
 
-**CODEX:** 明确了 `ProgressBar.contentItem` 容器与填充子项的层级，记录了既有测试基线风险；外部模型最终摘要因 403 未返回。
+**CODEX:** CLI 复核受权限策略阻断；独立回退审查补齐了全局图表约束、颜色测试契约和测试基线表述。
 
-**VERDICT:** ENG CLEARED — 方案可进入实施；饼图和水平柱状图的原生技术选型已锁定。
+**VERDICT:** ENG CLEARED — 方案可进入实施；真实 Plasma 视觉门通过后才能宣称改造完成。
 
 NO UNRESOLVED DECISIONS

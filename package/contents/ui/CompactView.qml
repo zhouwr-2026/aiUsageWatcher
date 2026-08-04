@@ -20,11 +20,12 @@ Item {
 
     implicitWidth: compactStyle === "pie"
         ? Math.max(height, Kirigami.Units.gridUnit * 2)
-        : Kirigami.Units.gridUnit * 4
+        : Kirigami.Units.gridUnit * 5
     implicitHeight: Kirigami.Units.gridUnit * 2
     Layout.minimumWidth: compactStyle === "pie"
         ? Kirigami.Units.gridUnit * 2
-        : Kirigami.Units.gridUnit * 3
+        : Kirigami.Units.gridUnit * 5
+    Layout.minimumHeight: implicitHeight
     Layout.preferredWidth: implicitWidth
     clip: true
 
@@ -96,21 +97,22 @@ Item {
         height: width
         visible: root.compactStyle === "pie"
 
+        readonly property real thickness: Math.max(2, Kirigami.Units.smallSpacing)
+
         Charts.PieChart {
+            objectName: "compactPieChart"
             anchors.fill: parent
             anchors.margins: Kirigami.Units.smallSpacing / 2
             valueSources: Charts.SingleValueSource {
+                objectName: "compactPieValueSource"
                 value: root.currentUsage.usedPercent >= 0 ? root.boundedPercent : 0
             }
             colorSource: Charts.SingleValueSource {
+                objectName: "compactPieColorSource"
                 value: root.usageColor(root.currentUsage.usedPercent)
             }
-            range {
-                from: 0
-                to: 100
-                automatic: false
-            }
-            thickness: Math.max(2, Kirigami.Units.smallSpacing)
+            range { from: 0; to: 100; automatic: false }
+            thickness: pieFace.thickness
             backgroundColor: Kirigami.ColorUtils.linearInterpolation(
                                  Kirigami.Theme.backgroundColor,
                                  Kirigami.Theme.textColor, 0.15)
@@ -162,41 +164,51 @@ Item {
             font: Kirigami.Theme.smallFont
         }
 
-        // 自研水平柱状图（不依赖 QQC2.ProgressBar 的主题渲染，
-        // 必保证在 Plasma 6 Breeze 主题下可见）
-        Item {
+        // 与 Plasma 硬盘监控一致：使用 ProgressBar，但完全覆写内容和背景，
+        // 避免依赖 Breeze 默认样式并确保 0% 时底轨仍可见。
+        QQC2.ProgressBar {
+            id: compactProgress
+
+            objectName: "compactProgressBar"
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
             Layout.minimumWidth: Kirigami.Units.gridUnit * 2
-            Layout.preferredHeight: Kirigami.Units.smallSpacing * 2
-            Layout.minimumHeight: Layout.preferredHeight
-            implicitHeight: Layout.preferredHeight
+            from: 0
+            to: 100
+            value: root.currentUsage.usedPercent >= 0 ? root.boundedPercent : 0
+            topPadding: topInset
+            bottomPadding: bottomInset
+            Accessible.name: root.currentUsage.providerName
+            Accessible.description: qsTr("Used %1%").arg(
+                                            Math.round(root.boundedPercent))
 
-            Rectangle {
-                objectName: "compactBarTrack"
-                anchors.fill: parent
-                radius: height / 2
-                color: Kirigami.Theme.disabledTextColor
-                opacity: 0.28
-            }
+            contentItem: Item {
+                Rectangle {
+                    objectName: "compactProgressFill"
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    width: parent.width * compactProgress.visualPosition
+                    radius: height / 2
+                    color: root.usageColor(root.currentUsage.usedPercent)
 
-            Rectangle {
-                objectName: "compactBarFill"
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                width: root.boundedPercent > 0 ? Math.max(
-                            Kirigami.Units.smallSpacing,
-                            parent.width * root.boundedPercent / 100) : 0
-                radius: height / 2
-                color: root.usageColor(root.currentUsage.usedPercent)
-
-                Behavior on width {
-                    NumberAnimation {
-                        duration: 300
-                        easing.type: Easing.OutCubic
+                    Behavior on width {
+                        NumberAnimation {
+                            duration: 300
+                            easing.type: Easing.OutCubic
+                        }
                     }
                 }
+            }
+
+            background: Rectangle {
+                objectName: "compactBarTrack"
+                implicitWidth: 100
+                implicitHeight: Kirigami.Units.largeSpacing
+                radius: height / 2
+                color: Kirigami.ColorUtils.linearInterpolation(
+                    Kirigami.Theme.backgroundColor,
+                    Kirigami.Theme.textColor, 0.2)
             }
         }
     }

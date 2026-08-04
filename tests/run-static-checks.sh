@@ -14,7 +14,7 @@ for tool in "$qmltestrunner" "$qmllint" /usr/bin/xmllint /usr/bin/python3 /usr/b
 done
 
 echo "[static] qmltestrunner: 全套组件与逻辑测试"
-QT_QPA_PLATFORM=offscreen "$qmltestrunner" \
+QT_QPA_PLATFORM=offscreen QT_QUICK_CONTROLS_STYLE=org.kde.desktop "$qmltestrunner" \
     -input tests \
     -import package/contents/ui
 
@@ -45,8 +45,8 @@ empty = [name for name, value in required.items()
          if not isinstance(value, str) or not value.strip()]
 if empty:
     raise SystemExit("metadata 必填字段为空: " + ", ".join(empty))
-if plugin["Id"] != "aiUsageWatcher":
-    raise SystemExit("KPlugin.Id 必须是 aiUsageWatcher")
+if plugin["Id"] != "org.kde.plasma.AIQuotaPilot":
+    raise SystemExit("KPlugin.Id 必须是 org.kde.plasma.AIQuotaPilot")
 if plugin["Name"] != "额度领航员":
     raise SystemExit("KPlugin.Name 必须是额度领航员")
 if metadata["KPackageStructure"] != "Plasma/Applet":
@@ -68,6 +68,26 @@ if /usr/bin/rg -n \
 fi
 if /usr/bin/rg -n '#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?' package/contents --glob '*.qml'; then
     echo "发现硬编码十六进制主题色" >&2
+    exit 1
+fi
+echo "[static] native chart gate: 图表必须使用 Plasma 原生 Charts.PieChart / QQC2.ProgressBar"
+for chart_file in package/contents/ui/CompactView.qml package/contents/ui/PanelPieView.qml package/contents/ui/PlanBar.qml; do
+    if /usr/bin/rg -n 'QtQuick\.Shapes|PathAngleArc|Canvas|ShaderEffect' "$chart_file"; then
+        echo "图表禁止自绘路径或着色器: $chart_file" >&2
+        exit 1
+    fi
+done
+if ! /usr/bin/rg -q 'Charts\.PieChart' package/contents/ui/CompactView.qml \
+   || ! /usr/bin/rg -q 'QQC2\.ProgressBar' package/contents/ui/CompactView.qml; then
+    echo "CompactView.qml 必须同时包含 Charts.PieChart 和 QQC2.ProgressBar" >&2
+    exit 1
+fi
+if ! /usr/bin/rg -q 'Charts\.PieChart' package/contents/ui/PanelPieView.qml; then
+    echo "PanelPieView.qml 必须包含 Charts.PieChart" >&2
+    exit 1
+fi
+if ! /usr/bin/rg -q 'QQC2\.ProgressBar' package/contents/ui/PlanBar.qml; then
+    echo "PlanBar.qml 必须包含 QQC2.ProgressBar" >&2
     exit 1
 fi
 if /usr/bin/rg -n 'Plasmoid\.contextualActions[[:space:]]*:[[:space:]]*\[[^]]*icon\.name:[[:space:]]*"configure"' \

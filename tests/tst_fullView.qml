@@ -274,6 +274,33 @@ Item {
             compare(current.Accessible.name, "今日使用 · 30% · $30.00")
         }
 
+        function test_previous_segment_guards_zero_used_percent() {
+            // 用量 <0.5% 被取整为 0 但两段仍存在：前段宽度必须回退 0，不得 Infinity
+            host.testProviders = [{
+                id: "codexzh",
+                providerName: "CodexZH",
+                statusLabel: "可用",
+                errorText: "",
+                ledClass: "led-green",
+                plans: [{
+                    planName: "周限额", usedPercent: 0, usedPercentLabel: "0%",
+                    barClass: "bar-green", usedText: "0", totalText: "100",
+                    usageSegments: [{
+                        kind: "previous", used: 0.3, usedPercent: 0.3, formattedUsed: "$0.30"
+                    }, {
+                        kind: "today", used: 0.1, usedPercent: 0.1, formattedUsed: "$0.10"
+                    }]
+                }]
+            }]
+            wait(0)
+
+            const bar = descendantsNamed(fullView, "planBar")[0]
+            const previous = findChild(bar, "usagePreviousSegment")
+            verify(previous !== null)
+            compare(previous.width, 0)
+            verify(!previous.visible)
+        }
+
         function test_progress_bar_accepts_cpp_array_like_segments() {
             host.testProviders = [{
                 id: "codexzh", providerName: "CodexZH", statusLabel: "可用",

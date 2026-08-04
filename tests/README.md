@@ -19,10 +19,10 @@ bash tests/run-plasma-smoke.sh
 ```
 
 脚本使用 CMake 构建并安装 QML 包和 C++ Applet 插件，通过
-`kpackagetool6 --show aiUsageWatcher` 解析实际安装目录，并用 `diff -qr`
+`kpackagetool6 --show org.kde.plasma.AIQuotaPilot` 解析实际安装目录，并用 `diff -qr`
 比较源码包和安装副本。只排除 `.directory`、`*.qmlc`、`*.jsc` 运行缓存，
 不会排除任何 QML、JavaScript、XML 或 metadata 源文件；同时验证
-`~/.local/lib/qt6/plugins/plasma/applets/aiUsageWatcher.so` 存在。
+`~/.local/lib/qt6/plugins/plasma/applets/org.kde.plasma.AIQuotaPilot.so` 存在。
 
 随后脚本运行 `tst_fullView.qml`。该测试明确断言 3 个 `providerGroup` 和
 6 个 `planBar`，再启动一个由脚本自己记录 PID 的 `plasmawindowed`
@@ -48,6 +48,9 @@ KDE 官方参考：
 - compact 按配置间隔轮巡供应商，首个限额项文字 Tooltip 与图标当前值一致；右键菜单只有一个
   Plasma 标准“配置…”入口。
 - 分别切换 popup 水平柱状图和环形饼图布局，确认模型/窗口数量一致。
+- 分别检查 compact/popup 的饼图与水平条：饼图应与 Plasma CPU/内存监控同样细腻，
+  水平条应与硬盘使用率监控一致；在亮色/暗色主题及 100%/125%/150% 缩放下不得出现
+  明显锯齿、裁切、空白图表或 100% 端点缝隙，0% 与无数据状态的底轨必须可见。
 - 启用 D-Bus 事件优先，发送 `ModelActivated` 后确认立即切换、金色高亮并按时恢复。
 
 再点击配置按钮，人工检查 KCM：
@@ -67,3 +70,8 @@ KDE 官方参考：
 
 若当前没有 DISPLAY/Wayland 或 D-Bus 桌面会话，smoke 脚本返回
 `BLOCKED`，不得把这种环境阻塞写成通过。
+
+视觉验收必须在真实可见的 Plasma 桌面会话中完成，覆盖 compact 与 popup
+的环形饼图与水平进度条，并分别在亮色/暗色主题及 100%/125%/150% 缩放下
+人工确认无锯齿、裁切、空白图表或 100% 端点缝隙。缺少可见 Plasma 会话时，
+视为“代码完成、视觉待验”，**不计入完成**。

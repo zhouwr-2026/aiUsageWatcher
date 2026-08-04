@@ -86,6 +86,15 @@ if(BUILD_TESTING)
     target_link_libraries(tst_minimaxresponseparser PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME minimax-response-parser COMMAND tst_minimaxresponseparser)
 
+    add_executable(tst_codexzhresponseparser
+        tests/cpp/tst_codexzhresponseparser.cpp
+        src/codexzhresponseparser.cpp
+        src/codexzhresponseparser.h
+    )
+    target_include_directories(tst_codexzhresponseparser PRIVATE src)
+    target_link_libraries(tst_codexzhresponseparser PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME codexzh-response-parser COMMAND tst_codexzhresponseparser)
+
     add_executable(tst_minimaxclient
         tests/cpp/tst_minimaxclient.cpp
         src/minimaxclient.cpp

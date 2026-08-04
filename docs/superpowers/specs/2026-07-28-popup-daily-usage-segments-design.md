@@ -37,9 +37,10 @@ CodexZH 响应中的字段：
 | `todayUsed` | 今日使用金额；两段计算的唯一数据来源 |
 | `todayUsedFormatted` | 今日金额的接口格式化展示文本 |
 
-数学计算必须使用 `data.todayUsed` 规范化后的数值，在 C++ 中命名为 `todayUsedUsd`。
-规范化行为与官网 `toNumberOrNull` 一致：接受 JSON 数字，或去掉 `$`、逗号和空白后
-可解析为有限数的字符串。
+解析层统一使用强类型的可选数值，不能以字符串或隐式 `0` 表示“字段缺失”。
+`data.todayUsed` 规范化后的值在 C++ 中命名为 `todayUsedUsd`；规范化行为与官网
+`toNumberOrNull` 一致：接受 JSON 数字，或去掉 `$`、逗号和空白后可解析为有限数的字符串。
+缺失、不可解析或负数必须保留为“无今日用量数据”，不能与真实的 `0` 混淆。
 `todayUsedFormatted` 可能包含货币符号、特殊标记或格式差异，只能交给
 `formatUsdFromApi(data.todayUsedFormatted, todayUsedUsd)` 生成展示文本，禁止从该字符串
 反解析数值。
@@ -79,14 +80,12 @@ CodexZH 周限额快照增加可选的结构化段：
 usageSegments: [
   {
     kind: "previous",
-    label: "此前使用",
     used: 51.0,
     usedPercent: 20.0,
     formattedUsed: "$51.00"
   },
   {
     kind: "today",
-    label: "今日使用",
     used: 76.5,
     usedPercent: 30.0,
     formattedUsed: "$76.50"
@@ -97,8 +96,10 @@ usageSegments: [
 - 数值为 0 的段不进入数组。
 - 数组顺序固定为“此前使用”在前、“今日使用”在后。
 - `usageSegments` 不存在时，QML 走当前单色路径。
-- C++ 后端生成并校验结构化段；两个 QML 图表只消费数据，不重复计算业务规则。
-- `displayProvider.js` 只验证并透传数组，不从 `extraText` 提取数据。
+- C++ 后端只生成 `kind`、金额、精确百分比和接口金额文本；中文标签、颜色、提示和
+  无障碍文案属于 QML 展示层，按 `kind` 生成。
+- `displayProvider.js` 只在 `definition.id === "codexzh"` 且 `planId === "weekly"` 时验证并
+  透传数组；其余供应商或计划一律移除分段数据，不从 `extraText` 提取数据。
 - 展开面板的填充几何使用各段未取整 `usedPercent` 之和；整体百分比文字继续沿用现有
   取整后的 `usedPercentLabel`。两者只存在显示精度差异，不改变金额或额度语义。
 
@@ -126,10 +127,12 @@ usageSegments: [
 - 有 `usageSegments` 时，用 `Charts.ArraySource` 提供两个百分比值和对应颜色。
 - 图表范围固定为 `0..100`，剩余额度继续由 `backgroundColor` 绘制。
 - 无结构化段时保留当前 `SingleValueSource` 单色路径。
+- 图表明确设置 `fromAngle: -90`、`toAngle: 270`：从 12 点钟方向开始顺时针累计。
 
 ## 颜色与提示
 
-- “此前使用”和“今日使用”使用两种固定、主题适配且容易区分的颜色。
+- “此前使用”使用 `Kirigami.Theme.highlightColor`，“今日使用”使用
+  `Kirigami.Theme.positiveTextColor`。
 - 同一段在列表模式和饼图模式下颜色一致。
 - 颜色不再表示额度紧张程度；整体百分比文字仍可沿用现有语义色。
 - Plasma 原生 ToolTip 文本：
@@ -141,7 +144,8 @@ usageSegments: [
 水平条可直接为每个 QML 段绑定 `HoverHandler` 和 Plasma ToolTip。
 
 KQuickCharts 没有公开当前悬浮扇区索引。饼图使用一个 Qt `HoverHandler` 获取坐标，
-通过圆环内外半径和累计角度判断当前段；命中中心、图表外部或未使用区域时不显示提示。
+通过圆环内外半径和从 12 点钟方向顺时针累计的角度判断当前段。命中计算封装为
+`PanelPieView.qml` 内可直接测试的纯函数；命中中心、图表外部或未使用区域时不显示提示。
 该计算只负责交互命中，不参与图表绘制。
 
 ## 数据流
@@ -186,14 +190,15 @@ CompactView <────────────── overall usedPercent only
 - `weekUsed=0`、`todayUsed=0`：空段数组。
 - `todayUsed > weekUsed`：今日钳制为本周金额。
 - `todayUsed` 为数字或可规范化的数字字符串：生成相同的两段结果。
-- 今日字段缺失、不可解析字符串、NaN、无穷或负数：不生成两段，整体周用量仍按现有规则处理。
+- 今日字段缺失、不可解析字符串或负数：不生成两段，整体周用量仍按现有规则处理。
+- 非法 JSON 仍由既有响应解析失败路径处理；不在有效 JSON 测试中伪造 NaN 或无穷值。
 - `todayUsedFormatted` 优先用于今日金额展示，原始数值作为回退。
 
 ### 展示模型
 
-- 有效 `usageSegments` 原样透传。
+- 仅 CodexZH 的 `weekly` 计划透传有效 `usageSegments`。
 - 不存在、非数组或包含无效数值时不进入分段路径。
-- 非 CodexZH 快照不因计划名称包含“周”而自动启用分段。
+- 其他供应商及 CodexZH 的非 weekly 计划都不因计划名称包含“周”而自动启用分段。
 
 ### QML
 
@@ -203,6 +208,23 @@ CompactView <────────────── overall usedPercent only
 - 饼图命中此前段、今日段、中心、外部和未使用区域的结果正确。
 - 缺少结构化段时，两个展开面板图表继续使用当前单色。
 - `CompactView` 继续忽略 `usageSegments`，现有 compact 行为不变。
+
+### 覆盖图
+
+```text
+CodexZH JSON
+  └─ 强类型可选数值解析
+       ├─ 有效 number / 数字字符串 ──> [C++ 测试] 两段金额与精确百分比
+       ├─ 缺失 / 不可解析 / 负数 ────> [C++ 测试] 无 segments、单色回退
+       └─ today > week ─────────────> [C++ 测试] 钳制到周累计
+  └─ displayProvider 白名单
+       ├─ codexzh + weekly ─────────> [QML JS 测试] 透传
+       └─ 其他 provider / plan ─────> [QML JS 测试] 删除 segments
+  └─ 展开面板
+       ├─ PlanBar ──────────────────> [QML 测试] 宽度、颜色、提示、零段隐藏
+       └─ PanelPieView ─────────────> [QML 测试] 两值源、12 点钟起点、四类命中
+CompactView ────────────────────────> [回归测试] 始终忽略 segments
+```
 
 ### 验证门
 
@@ -221,3 +243,17 @@ CompactView <────────────── overall usedPercent only
 - 不增加历史页面、导出、颜色设置或每日预算线。
 - 不改变顶部面板小图标。
 - 不引入 Canvas、QtQuick Shapes、自定义 Shader 或第三方图表库。
+
+## GSTACK REVIEW REPORT
+
+| 项目 | 结果 | 结论 |
+|---|---|---|
+| 架构 | 已审查 | 采用强类型可选数值、后端与展示职责分离、双重白名单与固定角度约定。 |
+| 代码质量 | 已审查 | 不将中文标签或颜色写入 C++ 数据模型；复用现有 parser、展示模型与原生图表。 |
+| 测试 | 已审查 | 补充 C++、展示模型、条形图、饼图命中和 CompactView 的完整覆盖。 |
+| 性能 | 已审查 | 两段数据与命中判断均为常数复杂度；不需要缓存、历史存储或后台任务。 |
+| 外部复核 | 未完成 | 本机 Codex CLI 模型不受账户支持，备用审查员达到用量限制；未改变本审查结论。 |
+
+**VERDICT：修订后的设计可进入实施计划。**
+
+NO UNRESOLVED DECISIONS

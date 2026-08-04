@@ -205,6 +205,24 @@ function providerUsageAt(displayProviders, providerIndex) {
     return DisplayProvider.providerUsageAt(displayProviders, providerIndex);
 }
 
+function copyUsageSegments(segments) {
+    if (!segments || typeof segments.length !== "number")
+        return []
+    const copied = []
+    for (let index = 0; index < segments.length; ++index)
+        copied.push(segments[index])
+    return copied
+}
+
+function usageSegmentLabel(segment) {
+    if (!segment)
+        return ""
+    const label = segment.kind === "today" ? "今日使用" : "此前使用"
+    const percent = Math.round(segment.usedPercent * 100) / 100
+    const amount = segment.formattedUsed || String(segment.used)
+    return label + " · " + percent + "% · " + amount
+}
+
 function nextProviderIndexWithUsage(displayProviders, providerIndex) {
     return DisplayProvider.nextProviderIndexWithUsage(displayProviders, providerIndex);
 }

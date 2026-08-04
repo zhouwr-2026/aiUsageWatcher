@@ -1,6 +1,8 @@
 import QtQuick 2.15
 import QtTest 1.3
-import "../package/contents/js/mockData.js" as MockData
+import "../package/contents/js/providerNormalize.js" as ProviderNormalize
+import "../package/contents/js/displayProvider.js" as DisplayProvider
+import "../package/contents/js/providerCatalog.js" as ProviderCatalog
 
 TestCase {
     name: "MockDataContract"
@@ -13,16 +15,81 @@ TestCase {
         return null
     }
 
+    function providerIds(providers) {
+        return providers.map(function(provider) { return provider.id }).join(",")
+    }
+
+    function sortableProviders() {
+        return [{
+            id: "unknown", providerName: "Zulu", tightestPercent: -1,
+            tightestRemaining: -1, nextResetAt: -1
+        }, {
+            id: "high", providerName: "Beta", tightestPercent: 80,
+            tightestRemaining: 20, nextResetAt: 2000
+        }, {
+            id: "low", providerName: "alpha", tightestPercent: 20,
+            tightestRemaining: 80, nextResetAt: 1000
+        }]
+    }
+
+    function test_sort_default_preserves_provider_order() {
+        compare(providerIds(DisplayProvider.sortProviders(
+                    sortableProviders(), "default", [])), "unknown,high,low")
+    }
+
+    function test_sort_alphabetical_uses_provider_name_a_to_z() {
+        compare(providerIds(DisplayProvider.sortProviders(
+                    sortableProviders(), "alphabetical", [])), "low,high,unknown")
+    }
+
+    function test_sort_used_percent_places_highest_first() {
+        compare(providerIds(DisplayProvider.sortProviders(
+                    sortableProviders(), "usedPercent", [])), "high,low,unknown")
+    }
+
+    function test_sort_remaining_percent_places_highest_first() {
+        compare(providerIds(DisplayProvider.sortProviders(
+                    sortableProviders(), "remainingPercent", [])), "low,high,unknown")
+    }
+
+    function test_sort_next_reset_places_earliest_known_time_first() {
+        compare(providerIds(DisplayProvider.sortProviders(
+                    sortableProviders(), "nextReset", [])), "low,high,unknown")
+    }
+
+    function test_sort_custom_uses_configured_provider_ids() {
+        compare(providerIds(DisplayProvider.sortProviders(
+                    sortableProviders(), "custom", ["high", "unknown", "low"])),
+                "high,unknown,low")
+    }
+
+    function test_build_display_uses_earliest_plan_reset_time() {
+        var definitions = [{
+            id: "alpha", providerName: "Alpha", plans: [
+                { id: "slow", planName: "Slow" },
+                { id: "soon", planName: "Soon" }
+            ]
+        }]
+        var snapshots = [{
+            providerId: "alpha", plans: [
+                { planId: "slow", used: 10, total: 100, resetAt: 2000 },
+                { planId: "soon", used: 20, total: 100, resetAt: 1000 }
+            ]
+        }]
+
+        compare(DisplayProvider.buildDisplay(definitions, snapshots)[0].nextResetAt, 1000)
+    }
+
     function test_thresholds() {
-        compare(MockData.usageClass(84, "bar"), "bar-green")
-        compare(MockData.usageClass(85, "bar"), "bar-yellow")
-        compare(MockData.usageClass(94, "bar"), "bar-yellow")
-        compare(MockData.usageClass(95, "bar"), "bar-red")
-        compare(MockData.usageClass(-1, "bar"), "bar-gray")
+        compare(ProviderNormalize.usageClass(84, "bar"), "bar-green")
+        compare(ProviderNormalize.usageClass(85, "bar"), "bar-yellow")
+        compare(ProviderNormalize.usageClass(94, "bar"), "bar-yellow")
+        compare(ProviderNormalize.usageClass(95, "bar"), "bar-red")
+        compare(ProviderNormalize.usageClass(-1, "bar"), "bar-gray")
     }
 
     function test_tightest_usage_uses_largest_valid_percent() {
-        var tightest = MockData.tightestUsage([{
+        var tightest = DisplayProvider.tightestUsage([{
             providerName: "A",
             plans: [{ planName: "low", usedPercent: 22 }]
         }, {
@@ -53,10 +120,10 @@ TestCase {
             plans: []
         }]
 
-        var first = MockData.providerUsageAt(providers, 0)
-        var second = MockData.providerUsageAt(providers, 1)
-        var wrapped = MockData.providerUsageAt(providers, 4)
-        var empty = MockData.providerUsageAt(providers, 2)
+        var first = ProviderNormalize.providerUsageAt(providers, 0)
+        var second = ProviderNormalize.providerUsageAt(providers, 1)
+        var wrapped = ProviderNormalize.providerUsageAt(providers, 4)
+        var empty = ProviderNormalize.providerUsageAt(providers, 2)
 
         compare(first.providerName, "MiniMax")
         compare(first.planName, "每周")
@@ -81,13 +148,13 @@ TestCase {
             plans: [{ planName: "每周", usedPercent: 67 }]
         }]
 
-        compare(MockData.nextProviderIndexWithUsage(providers, 0), 1)
-        compare(MockData.nextProviderIndexWithUsage(providers, 1), 2)
-        compare(MockData.nextProviderIndexWithUsage(providers, 2), 0)
+        compare(ProviderNormalize.nextProviderIndexWithUsage(providers, 0), 1)
+        compare(ProviderNormalize.nextProviderIndexWithUsage(providers, 1), 2)
+        compare(ProviderNormalize.nextProviderIndexWithUsage(providers, 2), 0)
     }
 
     function test_manual_windows_create_runtime_snapshot() {
-        var definitions = MockData.normalizeDefinitions([{
+        var definitions = ProviderNormalize.normalizeDefinitions([{
             id: "custom",
             providerName: "Custom",
             vendor: "自定义",
@@ -100,8 +167,8 @@ TestCase {
                 limit: 100
             }]
         }])
-        var snapshots = MockData.createSeedSnapshots(definitions)
-        var display = MockData.buildDisplayProviders(definitions, snapshots)
+        var snapshots = ProviderNormalize.createSeedSnapshots(definitions)
+        var display = DisplayProvider.buildDisplay(definitions, snapshots)
 
         compare(snapshots.length, 1)
         compare(snapshots[0].statusLabel, "可用")
@@ -112,7 +179,7 @@ TestCase {
     }
 
     function test_normalize_definitions_keeps_new_fields_and_old_defaults() {
-        var definitions = MockData.normalizeDefinitions([{
+        var definitions = ProviderNormalize.normalizeDefinitions([{
             id: "custom",
             providerName: "Custom",
             vendor: "Vendor",
@@ -129,18 +196,12 @@ TestCase {
         compare(definitions[0].plans[0].resetVariable, "${resetAt}")
     }
 
-    function test_seed_minimax_waits_for_real_backend() {
-        var snapshots = MockData.createSeedSnapshots(MockData.SEED_PROVIDER_DEFINITIONS)
-        var minimax = null
-        for (var i = 0; i < snapshots.length; ++i) {
-            if (snapshots[i].providerId === "minimax")
-                minimax = snapshots[i]
-        }
+    function test_native_seed_snapshots_are_empty() {
+        var snapshots = ProviderNormalize.createSeedSnapshots(
+            ProviderCatalog.defaultDefinitions())
 
-        verify(minimax !== null)
-        compare(minimax.statusLabel, "未配置")
-        compare(minimax.errorText, "")
-        compare(minimax.plans.length, 0)
+        verify(Array.isArray(snapshots))
+        compare(snapshots.length, 0)
     }
 
     function test_replace_snapshot_is_immutable() {
@@ -162,7 +223,7 @@ TestCase {
             plans: [{ planId: "general-weekly", used: 28, total: 100 }]
         }
 
-        var after = MockData.replaceSnapshot(before, live)
+        var after = ProviderNormalize.replaceSnapshot(before, live)
 
         compare(before[0].statusLabel, "未配置")
         verify(after !== before)
@@ -193,7 +254,7 @@ TestCase {
             }
         }
 
-        var after = MockData.replaceSnapshot([], cppLikeSnapshot)
+        var after = ProviderNormalize.replaceSnapshot([], cppLikeSnapshot)
 
         compare(after.length, 1)
         verify(Array.isArray(after[0].plans))
@@ -202,27 +263,77 @@ TestCase {
     }
 
     function test_invalid_definitions_fall_back_to_seed() {
-        var seedCount = MockData.SEED_PROVIDER_DEFINITIONS.length
+        var seedCount = ProviderCatalog.defaultDefinitions().length
 
-        compare(MockData.normalizeDefinitions(null).length, seedCount)
-        compare(MockData.normalizeDefinitions({}).length, seedCount)
-        compare(MockData.normalizeDefinitions("not json").length, seedCount)
-        compare(MockData.normalizeDefinitions([{
+        compare(ProviderNormalize.normalizeDefinitions(null).length, seedCount)
+        compare(ProviderNormalize.normalizeDefinitions({}).length, seedCount)
+        compare(ProviderNormalize.normalizeDefinitions("not json").length, seedCount)
+        compare(ProviderNormalize.normalizeDefinitions([{
             id: "broken",
             providerName: "Broken",
             plans: {}
         }]).length, seedCount)
     }
 
-    function test_codex_seed_never_claims_fake_usage() {
-        var out = MockData.buildDisplayProviders(
-            MockData.SEED_PROVIDER_DEFINITIONS,
-            MockData.SEED_RUNTIME_SNAPSHOTS)
+    function test_codex_no_backend_display_is_empty() {
+        var out = DisplayProvider.buildDisplay(
+            ProviderCatalog.defaultDefinitions(),
+            [])
         var codex = providerById(out, "codex")
 
         verify(codex !== null)
-        compare(codex.statusLabel, "未登录")
+        compare(codex.statusLabel, "暂无用量")
         compare(codex.plans.length, 0)
+    }
+
+    function test_usage_segments_are_limited_to_codexzh_weekly() {
+        var definitions = [ProviderCatalog.definitionFor("codexzh"), {
+            id: "other",
+            providerName: "Other",
+            plans: [{ id: "weekly", planName: "Weekly", unit: "USD" }]
+        }]
+        var segments = [
+            { kind: "previous", used: 20, usedPercent: 20, formattedUsed: "$20.00" },
+            { kind: "today", used: 30, usedPercent: 30, formattedUsed: "$30.00" }
+        ]
+        var display = DisplayProvider.buildDisplay(definitions, [{
+            providerId: "codexzh", plans: [{
+                planId: "weekly", used: 50, total: 100, usageSegments: segments
+            }]
+        }, {
+            providerId: "other", plans: [{
+                planId: "weekly", used: 50, total: 100, usageSegments: segments
+            }]
+        }])
+
+        var codexZh = providerById(display, "codexzh")
+        var otherProvider = providerById(display, "other")
+        compare(codexZh.plans[0].usageSegments.length, 2)
+        verify(!otherProvider.plans[0].hasOwnProperty("usageSegments"))
+
+        display = DisplayProvider.buildDisplay(definitions, [{
+            providerId: "codexzh", plans: [{
+                planId: "weekly", used: 50, total: 100,
+                usageSegments: [{ kind: "unknown", used: 20, usedPercent: 20 }]
+            }]
+        }])
+        verify(!display[0].plans[0].hasOwnProperty("usageSegments"))
+    }
+
+    function test_usage_segments_accept_cpp_array_like_values() {
+        var display = DisplayProvider.buildDisplay([ProviderCatalog.definitionFor("codexzh")], [{
+            providerId: "codexzh", plans: [{
+                planId: "weekly", used: 50, total: 100,
+                usageSegments: {
+                    0: { kind: "previous", used: 20, usedPercent: 20, formattedUsed: "$20.00" },
+                    1: { kind: "today", used: 30, usedPercent: 30, formattedUsed: "$30.00" },
+                    length: 2
+                }
+            }]
+        }])
+
+        compare(display[0].plans[0].usageSegments.length, 2)
+        compare(display[0].plans[0].usageSegments[1].kind, "today")
     }
 
 }

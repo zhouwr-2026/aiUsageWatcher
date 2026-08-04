@@ -29,4 +29,4 @@
 ## Task 6: 对抗性自审 + verify
 - [x] `git diff --stat` 确认改动范围仅限 minimax 相关文件 + 本 change
 - [x] 复核：不输出 API Key、不改其他供应商、不动 KConfig/QML
-- [ ] 派独立 reviewer subagent（general-purpose）仅给 diff 与设计 doc，复核正确性与最小性
+- [x] 派独立 reviewer subagent（general-purpose）仅给 diff 与设计 doc，复核正确性与最小性

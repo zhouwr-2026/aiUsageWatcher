@@ -188,7 +188,8 @@ Item {
                     anchors.left: parent.left
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
-                    width: parent.width * compactProgress.visualPosition
+                    width: Math.max(parent.width * compactProgress.visualPosition,
+                                    root.currentUsage.usedPercent >= 0 ? height : 0)
                     radius: height / 2
                     color: root.usageColor(root.currentUsage.usedPercent)
 

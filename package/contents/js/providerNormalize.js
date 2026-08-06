@@ -40,7 +40,7 @@ function normalizeDefinitions(raw) {
             return ProviderCatalog.defaultDefinitions();
     }
 
-    return DisplayProvider.filterEnabled(definitions.map(function(definition, providerIndex) {
+    return definitions.map(function(definition, providerIndex) {
         var catalogId = ProviderCatalog.catalogIdForLegacy(definition);
         var fixedDefinition = ProviderCatalog.definitionFor(catalogId);
         if (fixedDefinition) {
@@ -111,7 +111,7 @@ function normalizeDefinitions(raw) {
                 };
             })
         };
-    }));
+    });
 }
 
 function _manualPlans(definition) {

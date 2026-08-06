@@ -329,6 +329,7 @@ function buildDisplay(definitions, snapshots, options) {
             logoChar: firstCharFallback(definition.providerName
                                         || ProviderRegistry.providerNameFor(definition.catalogId)),
             logoIsSvg: !definition.logoPath,
+            logoBackdropColor: definition.logoBackdropColor || "",
             plans: plans,
             ledClass: _usageClass(tight.percent).replace("bar-", "led-"),
             tightestPercent: tight.percent,

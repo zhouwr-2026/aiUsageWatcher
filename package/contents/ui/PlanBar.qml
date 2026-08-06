@@ -107,7 +107,7 @@ Item {
                         anchors.bottom: parent.bottom
                         // 有数据但用量为 0% 时给最小可见宽度，避免进度条被误认为"无数据"（全灰轨道）
                         width: Math.max(parent.width * planProgress.visualPosition,
-                                        root.usedPercent >= 0 ? Kirigami.Units.smallSpacing : 0)
+                                        root.usedPercent >= 0 ? height : 0)
                         radius: height / 2
                         color: root.usageColor(root.barClass)
 
@@ -127,7 +127,7 @@ Item {
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
                         width: Math.max(parent.width * planProgress.visualPosition,
-                                        root.usedPercent >= 0 ? Kirigami.Units.smallSpacing : 0)
+                                        root.usedPercent >= 0 ? height : 0)
                         radius: height / 2
                         color: root.segmentColor(lastSegment)
                         objectName: "usageCurrentSegment"
@@ -140,16 +140,30 @@ Item {
                         readonly property real previousWidth: root.normalizedUsageSegments.length > 1 && root.usedPercent > 0
                             ? width * firstSegment.usedPercent / root.usedPercent : 0
 
-                        Rectangle {
+                        Item {
                             id: previousSegment
 
                             objectName: "usagePreviousSegment"
                             visible: segmentedFill.previousWidth > 0
                             width: segmentedFill.previousWidth
                             height: parent.height
-                            radius: height / 2
-                            color: root.segmentColor(segmentedFill.firstSegment)
+                            clip: true
                             Accessible.name: ProviderNormalize.usageSegmentLabel(segmentedFill.firstSegment)
+
+                            Rectangle {
+                                objectName: "usagePreviousSegmentShape"
+                                width: Math.max(parent.width, parent.height)
+                                height: parent.height
+                                radius: height / 2
+                                color: root.segmentColor(segmentedFill.firstSegment)
+
+                                Rectangle {
+                                    anchors.right: parent.right
+                                    width: Math.min(parent.height / 2, parent.width)
+                                    height: parent.height
+                                    color: parent.color
+                                }
+                            }
 
                             HoverHandler {
                                 id: startCapHover
@@ -158,13 +172,6 @@ Item {
                             PlasmaComponents.ToolTip {
                                 text: ProviderNormalize.usageSegmentLabel(segmentedFill.firstSegment)
                                 visible: startCapHover.hovered
-                            }
-
-                            Rectangle {
-                                anchors.right: parent.right
-                                width: Math.min(parent.height / 2, parent.width)
-                                height: parent.height
-                                color: parent.color
                             }
                         }
 

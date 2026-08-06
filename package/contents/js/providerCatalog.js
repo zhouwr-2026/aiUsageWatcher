@@ -17,6 +17,11 @@ var _LOGO_ASSETS = {
     deepseek: "file:///home/zhouwr/.local/share/plasma/plasmoids/org.kde.plasma.AIQuotaPilot/contents/images/providers/deepseek.svg"
 };
 
+var _LOGO_BACKDROP_COLORS = {
+    "opencode-go": "#b6c0cc",
+    deepseek: "#b6c0cc"
+};
+
 var PRESETS = [{
     "catalogId": "codex",
     "label": "Codex",
@@ -170,6 +175,7 @@ function definitionFor(catalogId) {
         "template": preset.template || DEFAULT_TEMPLATE,
         "script": "",
         "logoPath": logoAsset,
+        "logoBackdropColor": _LOGO_BACKDROP_COLORS[catalogId] || "",
         "plans": preset.plans.map(function(plan) {
             return Object.assign({}, plan, {
                 "sourceType": "native",

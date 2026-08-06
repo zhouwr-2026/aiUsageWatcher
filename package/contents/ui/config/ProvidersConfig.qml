@@ -86,6 +86,8 @@ KCM.SimpleKCM {
     property string cfg_sortMode: "default"
     property string cfg_sortModeDefault: "default"
 
+    verticalScrollBarPolicy: QQC2.ScrollBar.AsNeeded
+
     function copy(value) {
         return JSON.parse(JSON.stringify(value))
     }
@@ -562,12 +564,17 @@ KCM.SimpleKCM {
         }
     }
 
-    StackLayout {
+    Item {
+        objectName: "providerStackLayout"
         width: parent.width
-        currentIndex: root.editorVisible ? 1 : 0
+        implicitHeight: root.editorVisible ? editorPage.implicitHeight : providerListPage.implicitHeight
 
-        ColumnLayout {
-            id: providerListPage
+        StackLayout {
+            anchors.fill: parent
+            currentIndex: root.editorVisible ? 1 : 0
+
+            ColumnLayout {
+                id: providerListPage
 
             objectName: "providerListPage"
             Layout.fillWidth: true
@@ -697,10 +704,10 @@ KCM.SimpleKCM {
                     }
                 }
             }
-        }
+            }
 
-        ColumnLayout {
-            id: editorPage
+            ColumnLayout {
+                id: editorPage
 
             objectName: "providerEditorPage"
             Layout.fillWidth: true
@@ -785,6 +792,7 @@ KCM.SimpleKCM {
                 onOpenCodexLoginPageRequested: root.callCodexBackend("openCodexLoginPage")
                 onRemoveCodexAccountRequested: profileId => root.removeCodexAccount(profileId)
                 onRefreshCodexUsageRequested: root.callCodexBackend("refreshCodexUsage")
+            }
             }
         }
     }

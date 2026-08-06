@@ -271,8 +271,7 @@ Item {
                     logoSource: modelData.logoSource || ""
                     logoChar: modelData.logoChar || ""
                     logoIsSvg: modelData.logoIsSvg === true
-                    logoBackdropColor: modelData.catalogId === "opencode-go"
-                        ? "white" : ""
+                    logoBackdropColor: modelData.logoBackdropColor || ""
                     ledClass: modelData.ledClass || "led-gray"
                     sourceLabel: modelData.sourceLabel || ""
                     statusLabel: modelData.statusLabel || ""

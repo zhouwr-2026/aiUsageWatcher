@@ -19,7 +19,7 @@ Rectangle {
     property string logoSource: ""
     property string logoChar: ""
     property bool logoIsSvg: true
-    property string logoBackdropColor: "" // 浅色底色（透明底 Logo 用，如 OpenCode Go）
+    property string logoBackdropColor: "" // 仅透明 Logo 使用的统一中性色底
     property string priceText: ""
 
     function _websiteValid(value) {
@@ -68,7 +68,7 @@ Rectangle {
 
                 objectName: "providerLogoImage"
                 anchors.fill: parent
-                anchors.margins: providerStatusIndicator.hasBackdrop ? Math.round(providerStatusIndicator.width * 0.18) : 1
+                anchors.margins: providerStatusIndicator.hasBackdrop ? Math.round(providerStatusIndicator.width * 0.1) : 0
                 source: root.logoSource.length > 0
                     ? (root.logoIsSvg
                        ? "data:image/svg+xml;utf8," + root.logoSource

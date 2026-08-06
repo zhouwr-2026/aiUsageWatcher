@@ -347,6 +347,25 @@ Item {
             page.destroy()
         }
 
+        function test_provider_stack_uses_current_page_height() {
+            const page = createPage([provider("alpha", "Alpha")])
+            const stack = findChild(page, "providerStackLayout")
+            const listPage = findChild(page, "providerListPage")
+            const editorPage = findChild(page, "providerEditorPage")
+
+            compare(stack.implicitHeight, listPage.implicitHeight)
+            compare(page.verticalScrollBarPolicy, 0)
+            verify(page.beginEdit("alpha"))
+            compare(stack.implicitHeight, editorPage.implicitHeight)
+            page.flickable.contentY = 20
+            page.cancelEditor()
+            wait(0)
+            compare(stack.implicitHeight, listPage.implicitHeight)
+            compare(page.flickable.contentHeight, listPage.implicitHeight + 6)
+            compare(page.flickable.contentY, 0)
+            page.destroy()
+        }
+
         function test_form_fields_are_bounded_and_aligned() {
             const page = createPage([provider("alpha", "Alpha")])
             page.width = 1200

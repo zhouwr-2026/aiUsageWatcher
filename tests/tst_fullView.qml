@@ -301,6 +301,31 @@ Item {
             verify(!previous.visible)
         }
 
+        function test_narrow_previous_segment_keeps_a_round_start_cap() {
+            host.testProviders = [{
+                id: "codexzh", providerName: "CodexZH", statusLabel: "可用",
+                errorText: "", ledClass: "led-green",
+                plans: [{
+                    planName: "周限额", usedPercent: 7, usedPercentLabel: "7%",
+                    barClass: "bar-green", usedText: "7", totalText: "100",
+                    usageSegments: [{
+                        kind: "previous", used: 1, usedPercent: 1, formattedUsed: "$1.00"
+                    }, {
+                        kind: "today", used: 6, usedPercent: 6, formattedUsed: "$6.00"
+                    }]
+                }]
+            }]
+            wait(0)
+
+            const bar = descendantsNamed(fullView, "planBar")[0]
+            const previous = findChild(bar, "usagePreviousSegment")
+            const shape = findChild(bar, "usagePreviousSegmentShape")
+            verify(previous.width < previous.height)
+            verify(previous.clip)
+            verify(shape.width >= shape.height)
+            compare(shape.radius, shape.height / 2)
+        }
+
         function test_progress_bar_accepts_cpp_array_like_segments() {
             host.testProviders = [{
                 id: "codexzh", providerName: "CodexZH", statusLabel: "可用",

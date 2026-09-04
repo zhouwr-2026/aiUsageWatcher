@@ -1,0 +1,117 @@
+# GitHub Actions CI for AIQuotaPilot (KDE Plasma 6 widget)
+#
+# What this runs:
+#   - cmake configure + build (the production target)
+#   - ctest (C++ unit/contract tests)
+#   - tests/run-static-checks.sh (QML component tests, qmllint, metadata,
+#     AppStream, native-chart-gate)
+#
+# Trigger policy:
+#   - push / pull_request to master
+#   - manual dispatch via the Actions tab
+#
+# Image choice:
+#   - KDE neon — official KDE CI image with Plasma 6 + Qt 6 + KF6 pre-installed.
+#     Avoids the long apt-get install chain of stock Ubuntu.
+#
+# The workflow is intentionally a "no-restart" job: it builds and tests
+# only, mirroring what a human does locally via tests/run-static-checks.sh
+# before pushing. The plasma-local-deploy skill (post-merge deploy to
+# the user's desktop) is NOT invoked here — that requires explicit user
+# confirmation per AGENTS.md.
+
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: build-and-test
+    runs-on: ubuntu-24.04
+    container:
+      image: kdeci/neon:latest
+    env:
+      # mirror of tests/run-static-checks.sh expectations
+      DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install host build dependencies
+        # KDE neon ships most of these, but pin the exact set so the job
+        # is reproducible if a future neon image drops one of them.
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            extra-cmake-modules \
+            gettext \
+            kpackagetool6 \
+            libkf6wallet-dev \
+            libkf6config-dev \
+            libkf6coreaddons-dev \
+            libplasma6-dev \
+            libqt6core6 \
+            libqt6qml6 \
+            qml6-module-* \
+            qmltestrunner-qt6 \
+            qt6-base-dev \
+            qt6-declarative-dev \
+            qt6-tools-dev \
+            qt6-tools-dev-tools \
+            xmllint
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -DCMAKE_INSTALL_PREFIX="$HOME/.local" -DBUILD_TESTING=ON
+
+      - name: Build
+        # The whole tree (not just org.kde.plasma.AIQuotaPilot) so the
+        # test executables under tests/cpp/ also link.
+        run: cmake --build build -j"$(nproc)"
+
+      - name: C++ tests (ctest)
+        run: |
+          set -euo pipefail
+          cd build
+          ctest --output-on-failure
+
+      - name: QML + static checks
+        # run-static-checks.sh expects rg, xmllint, python3 and a Qt6
+        # QML test runner — all present on kdeci/neon.
+        run: bash tests/run-static-checks.sh
+
+      - name: Build summary
+        if: failure()
+        run: |
+          echo "::group::CMake configure log"
+          cat build/CMakeFiles/CMakeOutput.log 2>/dev/null || true
+          echo "::endgroup::"
+
+      - name: Upload ctest log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-log
+          path: |
+            build/Testing/Temporary/LastTest.log
+            build/Testing/Temporary
+          if-no-files-found: ignore

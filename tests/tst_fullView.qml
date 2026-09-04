@@ -260,7 +260,7 @@ Item {
                     }]
                 }]
             }]
-            wait(0)
+            wait(400)
 
             const bar = descendantsNamed(fullView, "planBar")[0]
             const previous = findChild(bar, "usagePreviousSegment")

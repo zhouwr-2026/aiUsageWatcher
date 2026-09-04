@@ -100,16 +100,21 @@ Item {
 
                 contentItem: Item {
                     Rectangle {
-                        objectName: "planProgressFill"
-                        visible: !root.hasUsageSegments
+                        id: progressFill
+
+                        objectName: root.hasUsageSegments ? "usageCurrentSegment" : "planProgressFill"
                         anchors.left: parent.left
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
-                        // 有数据但用量为 0% 时给最小可见宽度，避免进度条被误认为"无数据"（全灰轨道）
+                        // 普通用量与分段用量共用同一个填充条，确保宽度和动画语义一致。
                         width: Math.max(parent.width * planProgress.visualPosition,
                                         root.usedPercent >= 0 ? height : 0)
                         radius: height / 2
-                        color: root.usageColor(root.barClass)
+                        color: root.hasUsageSegments
+                            ? root.segmentColor(progressFill.lastSegment)
+                            : root.usageColor(root.barClass)
+                        Accessible.name: root.hasUsageSegments
+                            ? ProviderNormalize.usageSegmentLabel(progressFill.lastSegment) : ""
 
                         Behavior on width {
                             NumberAnimation {
@@ -117,45 +122,29 @@ Item {
                                 easing.type: Easing.OutCubic
                             }
                         }
-                    }
-
-                    Rectangle {
-                        id: segmentedFill
-
-                        visible: root.hasUsageSegments
-                        anchors.left: parent.left
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        width: Math.max(parent.width * planProgress.visualPosition,
-                                        root.usedPercent >= 0 ? height : 0)
-                        radius: height / 2
-                        color: root.segmentColor(lastSegment)
-                        objectName: "usageCurrentSegment"
-                        Accessible.name: ProviderNormalize.usageSegmentLabel(lastSegment)
 
                         readonly property var firstSegment: root.normalizedUsageSegments[0]
                         readonly property var lastSegment: root.normalizedUsageSegments[
                             root.normalizedUsageSegments.length - 1]
                         // 分母为 0（用量 <0.5% 被取整）时回退 0，避免 Infinity 撑爆进度条
-                        readonly property real previousWidth: root.normalizedUsageSegments.length > 1 && root.usedPercent > 0
+                        readonly property real previousWidth: root.hasUsageSegments
+                            && root.normalizedUsageSegments.length > 1 && root.usedPercent > 0
                             ? width * firstSegment.usedPercent / root.usedPercent : 0
 
                         Item {
-                            id: previousSegment
-
                             objectName: "usagePreviousSegment"
-                            visible: segmentedFill.previousWidth > 0
-                            width: segmentedFill.previousWidth
+                            visible: progressFill.previousWidth > 0
+                            width: progressFill.previousWidth
                             height: parent.height
                             clip: true
-                            Accessible.name: ProviderNormalize.usageSegmentLabel(segmentedFill.firstSegment)
+                            Accessible.name: ProviderNormalize.usageSegmentLabel(progressFill.firstSegment)
 
                             Rectangle {
                                 objectName: "usagePreviousSegmentShape"
                                 width: Math.max(parent.width, parent.height)
                                 height: parent.height
                                 radius: height / 2
-                                color: root.segmentColor(segmentedFill.firstSegment)
+                                color: root.segmentColor(progressFill.firstSegment)
 
                                 Rectangle {
                                     anchors.right: parent.right
@@ -170,19 +159,19 @@ Item {
                             }
 
                             PlasmaComponents.ToolTip {
-                                text: ProviderNormalize.usageSegmentLabel(segmentedFill.firstSegment)
+                                text: ProviderNormalize.usageSegmentLabel(progressFill.firstSegment)
                                 visible: startCapHover.hovered
                             }
                         }
 
                         HoverHandler {
                             id: endCapHover
-                            enabled: !startCapHover.hovered
+                            enabled: root.hasUsageSegments && !startCapHover.hovered
                         }
 
                         PlasmaComponents.ToolTip {
-                            text: ProviderNormalize.usageSegmentLabel(segmentedFill.lastSegment)
-                            visible: endCapHover.hovered
+                            text: ProviderNormalize.usageSegmentLabel(progressFill.lastSegment)
+                            visible: root.hasUsageSegments && endCapHover.hovered
                         }
                     }
                 }

@@ -9,13 +9,17 @@
 #include <QUrl>
 #include <QVariantMap>
 
+#include "kwalletdispatcher.h"
+
 class QNetworkAccessManager;
 class QNetworkReply;
-namespace KWallet
-{
-class Wallet;
-}
 
+/**
+ * DeepSeek 余额查询客户端。
+ *
+ * 凭据处理与 MiniMaxClient 对齐：构建期不打开钱包，由 KWalletDispatcher 异步调度。
+ * 环境变量 DEEPSEEK_API_KEY 直接生效，与 KWallet 互斥。
+ */
 class DeepSeekClient : public QObject
 {
     Q_OBJECT
@@ -38,11 +42,17 @@ public:
     bool credentialError() const;
 
     Q_INVOKABLE void refresh();
+    Q_INVOKABLE void forceRefresh();
+    Q_INVOKABLE void cancelRefresh();
     Q_INVOKABLE void saveCredential(const QString &apiKey);
     Q_INVOKABLE void clearCredential();
 
     static QUrl balanceEndpoint();
     static QNetworkRequest createRequest(const QUrl &url, QByteArrayView apiKey);
+
+    // 注入钱包调度器；必须由所有者（AiUsageWatcherApplet）注入。
+    void setWalletDispatcher(KWalletDispatcher *dispatcher);
+    void reloadCredential();
 
 Q_SIGNALS:
     void snapshotChanged();
@@ -53,16 +63,10 @@ Q_SIGNALS:
     void credentialErrorChanged();
 
 private:
-    enum class PendingCredentialOperation {
-        None,
-        Save,
-        Clear,
-    };
-
-    void openWallet();
-    bool prepareWalletFolder();
-    void loadCredential();
-    void performPendingCredentialOperation();
+    void requestCredentialLoad();
+    void handleCredentialRead(const KWalletDispatcher::Result &result);
+    void handleCredentialSave(const KWalletDispatcher::Result &result);
+    void handleCredentialClear(const KWalletDispatcher::Result &result);
     void setStoredApiKey(const QByteArray &apiKey);
     void setCredentialState(const QString &status, bool busy, bool error);
     void setLoading(bool loading);
@@ -72,17 +76,17 @@ private:
 
     QNetworkAccessManager *m_network = nullptr;
     QNetworkReply *m_reply = nullptr;
-    KWallet::Wallet *m_wallet = nullptr;
+    KWalletDispatcher *m_dispatcher = nullptr;
     QByteArray m_storedApiKey;
     QByteArray m_activeApiKey;
     QString m_lastRequestError;
     QString m_pendingApiKey;
     QString m_credentialStatus;
     QVariantMap m_snapshot;
-    PendingCredentialOperation m_pendingCredentialOperation = PendingCredentialOperation::None;
     bool m_loading = false;
-    bool m_walletOpening = false;
-    int m_walletRetryCount = 0;
+    bool m_refreshPending = false;
+    bool m_refreshInterrupted = false;
+    bool m_initialLoadDispatched = false;
     bool m_credentialBusy = false;
     bool m_credentialError = false;
 };

@@ -3,27 +3,20 @@
 #pragma once
 
 #include <QObject>
-#include <QString>
+#include <QNetworkRequest>
+#include <QUrl>
 #include <QVariantMap>
 
 #include "kwalletdispatcher.h"
 
 class QNetworkAccessManager;
 class QNetworkReply;
+class ResilientNetworkRequest;
 
 /**
- * OpenCode Go 用量查询客户端（控制台页面抓取）。
- *
- * OpenCode Go 无公开用量 API（官方 /zen/go/v1/usage 至今未上线），社区可行方案
- * 即抓取控制台页面：GET https://opencode.ai/workspace/{workspaceId}/go 并携带
- * 浏览器登录后的 auth Cookie（参考 github.com/ridho9/opencode-go-usage）。
- * 响应 HTML 内含 SolidJS 序列化的服务端用量（rollingUsage/weeklyUsage/
- * monthlyUsage，键名无引号），正则提取后解析出 usagePercent 与 resetInSec。
- *
- * 凭据（workspaceId + auth Cookie）以 JSON 形式写入 KDE Wallet 二进制条目，
- * 通过 KWalletDispatcher 异步调度；构建期不再打开钱包。
+ * Command Code 用量客户端：使用 KWallet Cookie 会话查询汇总与额度窗口。
  */
-class OpenCodeGoClient : public QObject
+class CommandCodeClient : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QVariantMap snapshot READ snapshot NOTIFY snapshotChanged)
@@ -34,8 +27,8 @@ class OpenCodeGoClient : public QObject
     Q_PROPERTY(bool credentialError READ credentialError NOTIFY credentialErrorChanged)
 
 public:
-    explicit OpenCodeGoClient(QObject *parent = nullptr);
-    ~OpenCodeGoClient() override;
+    explicit CommandCodeClient(QObject *parent = nullptr);
+    ~CommandCodeClient() override;
 
     QVariantMap snapshot() const;
     bool loading() const;
@@ -47,15 +40,14 @@ public:
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void forceRefresh();
     Q_INVOKABLE void cancelRefresh();
-    Q_INVOKABLE void saveCredential(const QString &workspaceId, const QString &cookie);
+    Q_INVOKABLE void saveCredential(const QString &cookie);
     Q_INVOKABLE void clearCredential();
 
-    /// 从控制台页面 HTML 解析三档用量（纯函数，测试入口）；解析不完整返回空列表
-    static QVariantList parseUsageHtml(const QByteArray &html, qint64 nowMs);
+    static QNetworkRequest createRequest(const QUrl &url, const QString &cookie);
 
-    // 注入钱包调度器；必须由所有者（AiUsageWatcherApplet）注入。
     void setWalletDispatcher(KWalletDispatcher *dispatcher);
     void reloadCredential();
+    void setNetworkAccessManager(QNetworkAccessManager *network);
 
 Q_SIGNALS:
     void snapshotChanged();
@@ -70,21 +62,27 @@ private:
     void handleCredentialRead(const KWalletDispatcher::Result &result);
     void handleCredentialSave(const KWalletDispatcher::Result &result);
     void handleCredentialClear(const KWalletDispatcher::Result &result);
-    void setStoredCredential(const QString &workspaceId, const QString &cookie);
     void setCredentialState(const QString &status, bool busy, bool error);
-    void setLoading(bool loading);
-    void setError(const QString &message);
+    void setStoredCookie(const QString &cookie);
     void setSnapshot(const QVariantMap &snapshot);
+    void setLoading(bool loading);
+    void finishRequests();
+    void buildSnapshot();
 
     QNetworkAccessManager *m_network = nullptr;
-    QNetworkReply *m_reply = nullptr;
     KWalletDispatcher *m_dispatcher = nullptr;
-    QString m_storedWorkspaceId;
-    QString m_storedCookie;
-    QString m_pendingWorkspaceId;
+    QNetworkReply *m_summaryReply = nullptr;
+    QNetworkReply *m_creditsReply = nullptr;
+    ResilientNetworkRequest *m_summaryRequest = nullptr;
+    ResilientNetworkRequest *m_creditsRequest = nullptr;
+    QString m_cookie;
     QString m_pendingCookie;
     QString m_credentialStatus;
     QVariantMap m_snapshot;
+    QVariantMap m_summary;
+    QVariantMap m_credits;
+    QString m_summaryError;
+    QString m_creditsError;
     bool m_loading = false;
     bool m_refreshPending = false;
     bool m_refreshInterrupted = false;

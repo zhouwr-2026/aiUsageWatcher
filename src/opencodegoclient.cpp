@@ -2,7 +2,8 @@
 
 #include "opencodegoclient.h"
 
-#include <KWallet>
+#include "kwalletdispatcher.h"
+
 #include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -16,9 +17,6 @@
 namespace
 {
 constexpr qsizetype maximumResponseBytes = 4 * 1024 * 1024;
-const QString walletFolder = QStringLiteral("AIQuotaPilot");
-const QString openCodeGoWalletEntry = QStringLiteral("opencode-go-credential");
-constexpr int walletRetryLimit = 5;
 
 QVariantMap emptySnapshot(const QString &status, const QString &error = {})
 {
@@ -53,10 +51,8 @@ OpenCodeGoClient::OpenCodeGoClient(QObject *parent)
     : QObject(parent)
     , m_network(new QNetworkAccessManager(this))
     , m_snapshot(emptySnapshot(QStringLiteral("待刷新")))
-    , m_credentialStatus(QStringLiteral("正在读取 KDE 钱包…"))
+    , m_credentialStatus(QStringLiteral("待连接 KDE 钱包"))
 {
-    m_credentialBusy = true;
-    QTimer::singleShot(0, this, &OpenCodeGoClient::openWallet);
 }
 
 OpenCodeGoClient::~OpenCodeGoClient()
@@ -143,8 +139,14 @@ QVariantList OpenCodeGoClient::parseUsageHtml(const QByteArray &html, qint64 now
 
 void OpenCodeGoClient::refresh()
 {
+    if (m_loading) {
+        m_refreshPending = true;
+        return;
+    }
     setLoading(true);
     if (!credentialConfigured()) {
+        m_refreshPending = false;
+        m_refreshInterrupted = false;
         setSnapshot(emptySnapshot(QStringLiteral("未配置"),
                                   QStringLiteral("请在配置页填写 OpenCode 工作区 ID 与 Cookie")));
         setLoading(false);
@@ -163,6 +165,7 @@ void OpenCodeGoClient::refresh()
     request.setRawHeader("User-Agent",
                          QByteArrayLiteral("Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/148.0"));
     request.setRawHeader("Accept", QByteArrayLiteral("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"));
+    request.setTransferTimeout(15000);
     QNetworkReply *reply = m_network->get(request);
     m_reply = reply;
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
@@ -171,16 +174,23 @@ void OpenCodeGoClient::refresh()
             return;
         if (m_reply == reply)
             m_reply = nullptr;
+        if (m_refreshInterrupted) {
+            reply->deleteLater();
+            setLoading(false);
+            m_refreshPending = false;
+            m_refreshInterrupted = false;
+            QTimer::singleShot(0, this, &OpenCodeGoClient::refresh);
+            return;
+        }
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (status == 200) {
             const QByteArray body = reply->readAll();
             if (body.size() > maximumResponseBytes) {
-                setSnapshot(emptySnapshot(QStringLiteral("不可用"), QStringLiteral("页面响应过大")));
+                setError(QStringLiteral("页面响应过大"));
             } else {
                 const QVariantList plans = parseUsageHtml(body, QDateTime::currentMSecsSinceEpoch());
                 if (plans.isEmpty()) {
-                    setSnapshot(emptySnapshot(QStringLiteral("不可用"),
-                                              QStringLiteral("未能从页面解析出用量数据，可能页面结构已变化")));
+                    setError(QStringLiteral("未能从页面解析出用量数据，可能页面结构已变化"));
                 } else {
                     setSnapshot({
                         {QStringLiteral("providerId"), QStringLiteral("opencode-go")},
@@ -194,12 +204,36 @@ void OpenCodeGoClient::refresh()
             setSnapshot(emptySnapshot(QStringLiteral("凭据无效"),
                                       QStringLiteral("Cookie 已失效，请在配置页更新")));
         } else {
-            setSnapshot(emptySnapshot(QStringLiteral("不可用"),
-                                      QStringLiteral("无法访问 OpenCode 服务")));
+            setError(QStringLiteral("无法访问 OpenCode 服务"));
         }
         reply->deleteLater();
         setLoading(false);
+        if (m_refreshPending) {
+            m_refreshPending = false;
+            QTimer::singleShot(0, this, &OpenCodeGoClient::refresh);
+        }
     });
+}
+
+void OpenCodeGoClient::forceRefresh()
+{
+    if (!m_loading) {
+        refresh();
+        return;
+    }
+
+    m_refreshPending = true;
+    m_refreshInterrupted = true;
+    if (m_reply && m_reply->isRunning()) {
+        m_reply->abort();
+    }
+}
+
+void OpenCodeGoClient::cancelRefresh()
+{
+    m_refreshPending = false;
+    m_refreshInterrupted = false;
+    if (m_reply) m_reply->abort();
 }
 
 void OpenCodeGoClient::saveCredential(const QString &workspaceId, const QString &cookie)
@@ -210,147 +244,132 @@ void OpenCodeGoClient::saveCredential(const QString &workspaceId, const QString 
         setCredentialState(QStringLiteral("工作区 ID 与 Cookie 不能为空"), false, true);
         return;
     }
+    if (!m_dispatcher) {
+        setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
+        return;
+    }
     m_pendingWorkspaceId = trimmedWorkspaceId;
     m_pendingCookie = trimmedCookie;
-    m_pendingCredentialOperation = PendingCredentialOperation::Save;
     setCredentialState(QStringLiteral("正在保存到 KDE 钱包…"), true, false);
-    if (m_wallet && m_wallet->isOpen()) {
-        performPendingCredentialOperation();
-    } else {
-        openWallet();
-    }
+
+    const QJsonObject obj{
+        {QStringLiteral("workspaceId"), m_pendingWorkspaceId},
+        {QStringLiteral("cookie"), m_pendingCookie},
+    };
+    const QString payload = QString::fromUtf8(
+        QJsonDocument(obj).toJson(QJsonDocument::Compact));
+    m_dispatcher->submit(KWalletDispatcher::Op::Save,
+                         QStringLiteral("opencodego"),
+                         payload,
+                         [this](const KWalletDispatcher::Result &result) {
+                             handleCredentialSave(result);
+                         });
 }
 
 void OpenCodeGoClient::clearCredential()
 {
+    if (!m_dispatcher) {
+        setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
+        return;
+    }
+    m_pendingWorkspaceId.fill(QChar(u'\0'));
     m_pendingWorkspaceId.clear();
+    m_pendingCookie.fill(QChar(u'\0'));
     m_pendingCookie.clear();
-    m_pendingCredentialOperation = PendingCredentialOperation::Clear;
     setCredentialState(QStringLiteral("正在从 KDE 钱包移除…"), true, false);
-    if (m_wallet && m_wallet->isOpen()) {
-        performPendingCredentialOperation();
-    } else {
-        openWallet();
+
+    m_dispatcher->submit(KWalletDispatcher::Op::Clear,
+                         QStringLiteral("opencodego"),
+                         QString(),
+                         [this](const KWalletDispatcher::Result &result) {
+                             handleCredentialClear(result);
+                         });
+}
+
+void OpenCodeGoClient::setWalletDispatcher(KWalletDispatcher *dispatcher)
+{
+    m_dispatcher = dispatcher;
+    if (m_dispatcher && !m_initialLoadDispatched) {
+        m_initialLoadDispatched = true;
+        QTimer::singleShot(1500, this, [this] { requestCredentialLoad(); });
     }
 }
 
-void OpenCodeGoClient::openWallet()
+void OpenCodeGoClient::reloadCredential()
 {
-    if ((m_wallet && m_wallet->isOpen()) || m_walletOpening) {
-        if (m_wallet && m_wallet->isOpen()) {
-            performPendingCredentialOperation();
-        }
-        return;
-    }
-    if (!KWallet::Wallet::isEnabled()) {
-        setCredentialState(QStringLiteral("KDE 钱包未启用，无法安全保存凭据"), false, true);
-        return;
-    }
-    if (m_wallet) {
-        m_wallet->deleteLater();
-        m_wallet = nullptr;
-    }
-    m_walletOpening = true;
-    m_wallet = KWallet::Wallet::openWallet(KWallet::Wallet::LocalWallet(),
-                                           0,
-                                           KWallet::Wallet::Asynchronous);
-    if (!m_wallet) {
-        m_walletOpening = false;
-        setCredentialState(QStringLiteral("无法打开 KDE 钱包"), false, true);
-        if (++m_walletRetryCount < walletRetryLimit) {
-            QTimer::singleShot(5000, this, &OpenCodeGoClient::openWallet);
-        }
-        return;
-    }
-    m_wallet->setParent(this);
-    KWallet::Wallet *openedWallet = m_wallet;
-    connect(openedWallet, &KWallet::Wallet::walletOpened, this, [this, openedWallet](bool success) {
-        if (m_wallet != openedWallet) {
-            return;
-        }
-        m_walletOpening = false;
-        m_walletRetryCount = 0;
-        if (!success || !prepareWalletFolder()) {
-            setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
-            return;
-        }
-        if (m_pendingCredentialOperation == PendingCredentialOperation::None) {
-            loadCredential();
-        } else {
-            performPendingCredentialOperation();
-        }
-    });
-    connect(openedWallet, &KWallet::Wallet::walletClosed, this, [this, openedWallet]() {
-        if (m_wallet != openedWallet) {
-            openedWallet->deleteLater();
-            return;
-        }
-        setStoredCredential({}, {});
-        m_wallet = nullptr;
-        openedWallet->deleteLater();
-    });
+    requestCredentialLoad();
 }
 
-bool OpenCodeGoClient::prepareWalletFolder()
+void OpenCodeGoClient::requestCredentialLoad()
 {
-    return m_wallet && m_wallet->hasFolder(walletFolder)
-        ? m_wallet->setFolder(walletFolder)
-        : m_wallet && m_wallet->createFolder(walletFolder);
+    if (!m_dispatcher) {
+        return;
+    }
+    m_credentialBusy = true;
+    Q_EMIT credentialBusyChanged();
+    m_dispatcher->submit(KWalletDispatcher::Op::Read,
+                         QStringLiteral("opencodego"),
+                         QString(),
+                         [this](const KWalletDispatcher::Result &result) {
+                             handleCredentialRead(result);
+                         });
 }
 
-void OpenCodeGoClient::loadCredential()
+void OpenCodeGoClient::handleCredentialRead(const KWalletDispatcher::Result &result)
 {
-    if (!m_wallet || !m_wallet->isOpen()) {
-        setCredentialState(QStringLiteral("无法读取 KDE 钱包"), false, true);
-        return;
-    }
-    QByteArray storedJson;
-    if (m_wallet->readEntry(openCodeGoWalletEntry, storedJson) != 0 || storedJson.isEmpty()) {
-        setStoredCredential({}, {});
-        setCredentialState(QStringLiteral("未配置"), false, false);
-        return;
-    }
-    const QJsonDocument doc = QJsonDocument::fromJson(storedJson);
-    if (!doc.isObject()) {
+    if (result.ok) {
+        const QJsonDocument doc = QJsonDocument::fromJson(result.value.toUtf8());
+        if (doc.isObject()) {
+            const QJsonObject obj = doc.object();
+            setStoredCredential(obj.value(QStringLiteral("workspaceId")).toString(),
+                                obj.value(QStringLiteral("cookie")).toString());
+            setCredentialState(credentialConfigured() ? QStringLiteral("已配置")
+                                                      : QStringLiteral("未配置"),
+                               false,
+                               false);
+            if (credentialConfigured()) {
+                refresh();
+            }
+            return;
+        }
         setStoredCredential({}, {});
         setCredentialState(QStringLiteral("凭据格式无效，请重新保存"), false, true);
         return;
     }
-    const QJsonObject obj = doc.object();
-    setStoredCredential(obj.value(QStringLiteral("workspaceId")).toString(),
-                        obj.value(QStringLiteral("cookie")).toString());
-    setCredentialState(credentialConfigured() ? QStringLiteral("已配置") : QStringLiteral("未配置"),
-                       false, false);
-    // 启动时钱包异步打开，凭据加载完成后自动拉取一次用量
-    if (credentialConfigured())
-        QTimer::singleShot(0, this, &OpenCodeGoClient::refresh);
-}
-
-void OpenCodeGoClient::performPendingCredentialOperation()
-{
-    if (!m_wallet || !m_wallet->isOpen()) {
-        setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
+    if (result.errorCode == QLatin1String("not_found")) {
+        setStoredCredential({}, {});
+        setCredentialState(QStringLiteral("未配置"), false, false);
         return;
     }
-    if (m_pendingCredentialOperation == PendingCredentialOperation::Save) {
-        const QJsonObject obj{
-            {QStringLiteral("workspaceId"), m_pendingWorkspaceId},
-            {QStringLiteral("cookie"), m_pendingCookie},
-        };
-        const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-        const int rc = m_wallet->writeEntry(openCodeGoWalletEntry, payload);
-        if (rc != 0) {
-            setCredentialState(QStringLiteral("保存到 KDE 钱包失败"), false, true);
-            return;
-        }
+    if (result.errorCode == QLatin1String("wallet_disabled")
+        || result.errorCode == QLatin1String("wallet_open_failed")
+        || result.errorCode == QLatin1String("timeout")
+        || result.errorCode == QLatin1String("worker_failed_to_start")
+        || result.errorCode == QLatin1String("worker_crashed")) {
+        setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
+        return;
+    }
+    setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
+}
+
+void OpenCodeGoClient::handleCredentialSave(const KWalletDispatcher::Result &result)
+{
+    if (result.ok) {
         setStoredCredential(m_pendingWorkspaceId, m_pendingCookie);
         setCredentialState(QStringLiteral("已保存"), false, false);
-    } else if (m_pendingCredentialOperation == PendingCredentialOperation::Clear) {
-        m_wallet->removeEntry(openCodeGoWalletEntry);
+        return;
+    }
+    setCredentialState(QStringLiteral("保存到 KDE 钱包失败"), false, true);
+}
+
+void OpenCodeGoClient::handleCredentialClear(const KWalletDispatcher::Result &result)
+{
+    if (result.ok) {
         setStoredCredential({}, {});
         setCredentialState(QStringLiteral("已清除"), false, false);
+        return;
     }
-    m_pendingCredentialOperation = PendingCredentialOperation::None;
+    setCredentialState(QStringLiteral("清除 KDE 钱包失败"), false, true);
 }
 
 void OpenCodeGoClient::setStoredCredential(const QString &workspaceId, const QString &cookie)
@@ -365,12 +384,18 @@ void OpenCodeGoClient::setStoredCredential(const QString &workspaceId, const QSt
 
 void OpenCodeGoClient::setCredentialState(const QString &status, bool busy, bool error)
 {
-    m_credentialStatus = status;
-    m_credentialBusy = busy;
-    m_credentialError = error;
-    Q_EMIT credentialStatusChanged();
-    Q_EMIT credentialBusyChanged();
-    Q_EMIT credentialErrorChanged();
+    if (m_credentialStatus != status) {
+        m_credentialStatus = status;
+        Q_EMIT credentialStatusChanged();
+    }
+    if (m_credentialBusy != busy) {
+        m_credentialBusy = busy;
+        Q_EMIT credentialBusyChanged();
+    }
+    if (m_credentialError != error) {
+        m_credentialError = error;
+        Q_EMIT credentialErrorChanged();
+    }
 }
 
 void OpenCodeGoClient::setLoading(bool loading)
@@ -381,8 +406,23 @@ void OpenCodeGoClient::setLoading(bool loading)
     Q_EMIT loadingChanged();
 }
 
+void OpenCodeGoClient::setError(const QString &message)
+{
+    if (!m_snapshot.value(QStringLiteral("plans")).toList().isEmpty()) {
+        QVariantMap staleSnapshot = m_snapshot;
+        staleSnapshot.insert(QStringLiteral("statusLabel"), QStringLiteral("数据暂时不可更新"));
+        staleSnapshot.insert(QStringLiteral("errorText"), message);
+        staleSnapshot.insert(QStringLiteral("stale"), true);
+        setSnapshot(staleSnapshot);
+        return;
+    }
+    setSnapshot(emptySnapshot(QStringLiteral("不可用"), message));
+}
+
 void OpenCodeGoClient::setSnapshot(const QVariantMap &snapshot)
 {
+    if (m_snapshot == snapshot)
+        return;
     m_snapshot = snapshot;
     Q_EMIT snapshotChanged();
 }

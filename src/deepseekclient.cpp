@@ -3,8 +3,8 @@
 #include "deepseekclient.h"
 
 #include "deepseekresponseparser.h"
+#include "kwalletdispatcher.h"
 
-#include <KWallet>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QTimer>
@@ -13,9 +13,6 @@
 namespace
 {
 constexpr qsizetype maximumResponseBytes = 1024 * 1024;
-const QString walletFolder = QStringLiteral("AIQuotaPilot");
-const QString deepSeekWalletEntry = QStringLiteral("deepseek-api-key");
-constexpr int walletRetryLimit = 5;
 
 QVariantMap emptySnapshot(const QString &status, const QString &error = {})
 {
@@ -70,6 +67,11 @@ QString transportErrorMessage(QNetworkReply::NetworkError error)
     }
     return QStringLiteral("无法连接 DeepSeek 服务");
 }
+
+bool isEnvironmentConfigured()
+{
+    return !qgetenv("DEEPSEEK_API_KEY").trimmed().isEmpty();
+}
 }
 
 DeepSeekClient::DeepSeekClient(QObject *parent)
@@ -77,14 +79,9 @@ DeepSeekClient::DeepSeekClient(QObject *parent)
     , m_network(new QNetworkAccessManager(this))
     , m_snapshot(emptySnapshot(QStringLiteral("未配置")))
 {
-    const bool configuredByEnvironment = !qgetenv("DEEPSEEK_API_KEY").trimmed().isEmpty();
-    m_credentialStatus = configuredByEnvironment
+    m_credentialStatus = isEnvironmentConfigured()
         ? QStringLiteral("已通过环境变量配置")
-        : QStringLiteral("正在读取 KDE 钱包…");
-    if (!configuredByEnvironment) {
-        m_credentialBusy = true;
-        QTimer::singleShot(0, this, &DeepSeekClient::openWallet);
-    }
+        : QStringLiteral("待连接 KDE 钱包");
 }
 
 DeepSeekClient::~DeepSeekClient()
@@ -106,7 +103,7 @@ bool DeepSeekClient::loading() const
 
 bool DeepSeekClient::credentialConfigured() const
 {
-    return !qgetenv("DEEPSEEK_API_KEY").trimmed().isEmpty() || !m_storedApiKey.isEmpty();
+    return isEnvironmentConfigured() || !m_storedApiKey.isEmpty();
 }
 
 QString DeepSeekClient::credentialStatus() const
@@ -142,6 +139,7 @@ QNetworkRequest DeepSeekClient::createRequest(const QUrl &url, QByteArrayView ap
 void DeepSeekClient::refresh()
 {
     if (m_loading) {
+        m_refreshPending = true;
         return;
     }
 
@@ -150,6 +148,8 @@ void DeepSeekClient::refresh()
         apiKey = m_storedApiKey;
     }
     if (apiKey.isEmpty()) {
+        m_refreshPending = false;
+        m_refreshInterrupted = false;
         setSnapshot(emptySnapshot(QStringLiteral("未配置")));
         return;
     }
@@ -185,6 +185,12 @@ void DeepSeekClient::refresh()
         const QNetworkReply::NetworkError transportError = reply->error();
         const bool timedOut = reply->property("aiUsageWatcherTimedOut").toBool();
         const bool responseTooLarge = reply->property("aiUsageWatcherResponseTooLarge").toBool();
+
+        if (m_refreshInterrupted) {
+            reply->deleteLater();
+            finishRefresh();
+            return;
+        }
 
         bool succeeded = false;
         if (timedOut) {
@@ -222,11 +228,38 @@ void DeepSeekClient::refresh()
     });
 }
 
+void DeepSeekClient::forceRefresh()
+{
+    if (!m_loading) {
+        refresh();
+        return;
+    }
+
+    m_refreshPending = true;
+    m_refreshInterrupted = true;
+    // abort() 的 finished() 回调统一清理活动 Key，再串行触发这次手动刷新。
+    if (m_reply && m_reply->isRunning()) {
+        m_reply->abort();
+    }
+}
+
+void DeepSeekClient::cancelRefresh()
+{
+    m_refreshPending = false;
+    m_refreshInterrupted = false;
+    if (m_reply) m_reply->abort();
+}
+
 void DeepSeekClient::finishRefresh()
 {
     m_activeApiKey.fill('\0');
     m_activeApiKey.clear();
     setLoading(false);
+    if (m_refreshPending) {
+        m_refreshPending = false;
+        m_refreshInterrupted = false;
+        QTimer::singleShot(0, this, &DeepSeekClient::refresh);
+    }
 }
 
 void DeepSeekClient::saveCredential(const QString &apiKey)
@@ -236,175 +269,137 @@ void DeepSeekClient::saveCredential(const QString &apiKey)
         setCredentialState(QStringLiteral("API Key 不能为空"), false, true);
         return;
     }
-
+    if (!m_dispatcher) {
+        setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
+        return;
+    }
     m_pendingApiKey.fill(QChar(u'\0'));
     m_pendingApiKey = trimmedApiKey;
-    m_pendingCredentialOperation = PendingCredentialOperation::Save;
     setCredentialState(QStringLiteral("正在保存到 KDE 钱包…"), true, false);
-    if (m_wallet && m_wallet->isOpen()) {
-        performPendingCredentialOperation();
-    } else {
-        openWallet();
-    }
+
+    const QString snapshotValue = m_pendingApiKey;
+    m_dispatcher->submit(KWalletDispatcher::Op::Save,
+                         QStringLiteral("deepseek"),
+                         snapshotValue,
+                         [this](const KWalletDispatcher::Result &result) {
+                             handleCredentialSave(result);
+                         });
 }
 
 void DeepSeekClient::clearCredential()
 {
+    if (!m_dispatcher) {
+        setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
+        return;
+    }
     m_pendingApiKey.fill(QChar(u'\0'));
     m_pendingApiKey.clear();
-    m_pendingCredentialOperation = PendingCredentialOperation::Clear;
     setCredentialState(QStringLiteral("正在从 KDE 钱包移除…"), true, false);
-    if (m_wallet && m_wallet->isOpen()) {
-        performPendingCredentialOperation();
-    } else {
-        openWallet();
+
+    m_dispatcher->submit(KWalletDispatcher::Op::Clear,
+                         QStringLiteral("deepseek"),
+                         QString(),
+                         [this](const KWalletDispatcher::Result &result) {
+                             handleCredentialClear(result);
+                         });
+}
+
+void DeepSeekClient::setWalletDispatcher(KWalletDispatcher *dispatcher)
+{
+    m_dispatcher = dispatcher;
+    if (m_dispatcher && !m_initialLoadDispatched) {
+        m_initialLoadDispatched = true;
+        QTimer::singleShot(1500, this, [this] { requestCredentialLoad(); });
     }
 }
 
-void DeepSeekClient::openWallet()
+void DeepSeekClient::reloadCredential()
 {
-    if ((m_wallet && m_wallet->isOpen()) || m_walletOpening) {
-        if (m_wallet && m_wallet->isOpen()) {
-            performPendingCredentialOperation();
-        }
-        return;
-    }
-    if (!KWallet::Wallet::isEnabled()) {
-        setCredentialState(QStringLiteral("KDE 钱包未启用，无法安全保存 API Key"), false, true);
-        return;
-    }
+    requestCredentialLoad();
+}
 
-    if (m_wallet) {
-        m_wallet->deleteLater();
-        m_wallet = nullptr;
-    }
-    m_walletOpening = true;
-    m_wallet = KWallet::Wallet::openWallet(KWallet::Wallet::LocalWallet(),
-                                           0,
-                                           KWallet::Wallet::Asynchronous);
-    if (!m_wallet) {
-        m_walletOpening = false;
-        setCredentialState(QStringLiteral("无法打开 KDE 钱包"), false, true);
-        // Plasma 启动竞态：kwalletd 可能晚于 plasmashell 就绪，失败后定时重试自愈
-        // ponytail: 上限 5 次（约 25s），kwalletd 故障时避免永久重试；钱包被禁用时提前返回
-        if (++m_walletRetryCount < walletRetryLimit) {
-            QTimer::singleShot(5000, this, &DeepSeekClient::openWallet);
-        }
+void DeepSeekClient::requestCredentialLoad()
+{
+    if (!m_dispatcher) {
         return;
     }
-    m_wallet->setParent(this);
-    KWallet::Wallet *openedWallet = m_wallet;
+    m_credentialBusy = true;
+    Q_EMIT credentialBusyChanged();
+    m_dispatcher->submit(KWalletDispatcher::Op::Read,
+                         QStringLiteral("deepseek"),
+                         QString(),
+                         [this](const KWalletDispatcher::Result &result) {
+                             handleCredentialRead(result);
+                         });
+}
 
-    connect(openedWallet, &KWallet::Wallet::walletOpened, this, [this, openedWallet](bool success) {
-        if (m_wallet != openedWallet) {
-            return;
-        }
-        m_walletOpening = false;
-        m_walletRetryCount = 0;
-        if (!success || !prepareWalletFolder()) {
-            setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
-            return;
-        }
-        if (m_pendingCredentialOperation == PendingCredentialOperation::None) {
-            loadCredential();
-        } else {
-            performPendingCredentialOperation();
-        }
-    });
-    connect(openedWallet, &KWallet::Wallet::walletClosed, this, [this, openedWallet]() {
-        if (m_wallet != openedWallet) {
-            openedWallet->deleteLater();
+void DeepSeekClient::handleCredentialRead(const KWalletDispatcher::Result &result)
+{
+    if (result.ok) {
+        const QString trimmed = result.value.trimmed();
+        if (!trimmed.isEmpty()) {
+            setStoredApiKey(trimmed.toUtf8());
+            setCredentialState(QStringLiteral("已保存在 KDE 钱包"), false, false);
+            refresh();
             return;
         }
         setStoredApiKey({});
-        m_wallet = nullptr;
-        if (qgetenv("DEEPSEEK_API_KEY").trimmed().isEmpty()) {
-            setCredentialState(QStringLiteral("KDE 钱包已锁定"), false, true);
-        } else {
-            setCredentialState(QStringLiteral("已通过环境变量配置"), false, false);
-        }
-        openedWallet->deleteLater();
-    });
-    connect(openedWallet,
-            &KWallet::Wallet::folderUpdated,
-            this,
-            [this, openedWallet](const QString &folder) {
-                if (m_wallet == openedWallet && folder == walletFolder
-                    && m_pendingCredentialOperation == PendingCredentialOperation::None) {
-                    loadCredential();
-                }
-            });
+        setCredentialState(QStringLiteral("尚未保存 API Key"), false, false);
+        return;
+    }
+    if (result.errorCode == QLatin1String("not_found")) {
+        setStoredApiKey({});
+        setCredentialState(QStringLiteral("尚未保存 API Key"), false, false);
+        return;
+    }
+    if (result.errorCode == QLatin1String("wallet_disabled")
+        || result.errorCode == QLatin1String("wallet_open_failed")
+        || result.errorCode == QLatin1String("timeout")
+        || result.errorCode == QLatin1String("worker_failed_to_start")
+        || result.errorCode == QLatin1String("worker_crashed")) {
+        setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
+        return;
+    }
+    setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
 }
 
-bool DeepSeekClient::prepareWalletFolder()
+void DeepSeekClient::handleCredentialSave(const KWalletDispatcher::Result &result)
 {
-    if (!m_wallet || !m_wallet->isOpen()) {
-        return false;
-    }
-    if (!m_wallet->hasFolder(walletFolder) && !m_wallet->createFolder(walletFolder)) {
-        return false;
-    }
-    return m_wallet->setFolder(walletFolder);
-}
-
-void DeepSeekClient::loadCredential()
-{
-    QString apiKey;
-    const int result = m_wallet->readPassword(deepSeekWalletEntry, apiKey);
-    if (result == 0 && !apiKey.trimmed().isEmpty()) {
-        setStoredApiKey(apiKey.trimmed().toUtf8());
-        apiKey.fill(QChar(u'\0'));
-        setCredentialState(QStringLiteral("已保存在 KDE 钱包"), false, false);
+    if (result.ok) {
+        QByteArray storedApiKey = m_pendingApiKey.toUtf8();
+        setStoredApiKey(storedApiKey);
+        storedApiKey.fill('\0');
+        setCredentialState(QStringLiteral("API Key 已保存到 KDE 钱包"), false, false);
+        m_pendingApiKey.fill(QChar(u'\0'));
+        m_pendingApiKey.clear();
         refresh();
         return;
     }
-    apiKey.fill(QChar(u'\0'));
-    setStoredApiKey({});
-    setCredentialState(QStringLiteral("尚未保存 API Key"), false, false);
-}
-
-void DeepSeekClient::performPendingCredentialOperation()
-{
-    if (!prepareWalletFolder()) {
-        setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
-        return;
-    }
-
-    if (m_pendingCredentialOperation == PendingCredentialOperation::Save) {
-        QString apiKey = m_pendingApiKey;
-        const int result = m_wallet->writePassword(deepSeekWalletEntry, apiKey);
-        if (result == 0) {
-            QByteArray storedApiKey = apiKey.toUtf8();
-            setStoredApiKey(storedApiKey);
-            storedApiKey.fill('\0');
-            setCredentialState(QStringLiteral("API Key 已保存到 KDE 钱包"), false, false);
-            refresh();
-        } else {
-            setCredentialState(QStringLiteral("API Key 保存失败，请检查 KDE 钱包"), false, true);
-        }
-        apiKey.fill(QChar(u'\0'));
-    } else if (m_pendingCredentialOperation == PendingCredentialOperation::Clear) {
-        const int result = m_wallet->hasEntry(deepSeekWalletEntry)
-            ? m_wallet->removeEntry(deepSeekWalletEntry) : 0;
-        if (result == 0) {
-            setStoredApiKey({});
-            const bool environmentConfigured = !qgetenv("DEEPSEEK_API_KEY").trimmed().isEmpty();
-            setCredentialState(environmentConfigured
-                                   ? QStringLiteral("钱包凭据已移除；环境变量仍在生效")
-                                   : QStringLiteral("API Key 已移除"),
-                               false,
-                               false);
-            if (!environmentConfigured) {
-                setSnapshot(emptySnapshot(QStringLiteral("未配置")));
-            }
-        } else {
-            setCredentialState(QStringLiteral("API Key 移除失败，请检查 KDE 钱包"), false, true);
-        }
-    }
-
+    setCredentialState(QStringLiteral("API Key 保存失败，请检查 KDE 钱包"), false, true);
     m_pendingApiKey.fill(QChar(u'\0'));
     m_pendingApiKey.clear();
-    m_pendingCredentialOperation = PendingCredentialOperation::None;
+}
+
+void DeepSeekClient::handleCredentialClear(const KWalletDispatcher::Result &result)
+{
+    if (result.ok) {
+        setStoredApiKey({});
+        const bool environmentConfigured = isEnvironmentConfigured();
+        setCredentialState(environmentConfigured
+                               ? QStringLiteral("钱包凭据已移除；环境变量仍在生效")
+                               : QStringLiteral("API Key 已移除"),
+                           false,
+                           false);
+        if (!environmentConfigured) {
+            setSnapshot(emptySnapshot(QStringLiteral("未配置")));
+        }
+        m_pendingApiKey.fill(QChar(u'\0'));
+        m_pendingApiKey.clear();
+        return;
+    }
+    setCredentialState(QStringLiteral("API Key 移除失败，请检查 KDE 钱包"), false, true);
+    m_pendingApiKey.fill(QChar(u'\0'));
+    m_pendingApiKey.clear();
 }
 
 void DeepSeekClient::setStoredApiKey(const QByteArray &apiKey)
@@ -419,11 +414,6 @@ void DeepSeekClient::setStoredApiKey(const QByteArray &apiKey)
 
 void DeepSeekClient::setCredentialState(const QString &status, bool busy, bool error)
 {
-    if (error && !busy) {
-        m_pendingApiKey.fill(QChar(u'\0'));
-        m_pendingApiKey.clear();
-        m_pendingCredentialOperation = PendingCredentialOperation::None;
-    }
     if (m_credentialStatus != status) {
         m_credentialStatus = status;
         Q_EMIT credentialStatusChanged();
@@ -449,6 +439,14 @@ void DeepSeekClient::setLoading(bool loading)
 
 void DeepSeekClient::setError(const QString &message)
 {
+    if (!m_snapshot.value(QStringLiteral("plans")).toList().isEmpty()) {
+        QVariantMap staleSnapshot = m_snapshot;
+        staleSnapshot.insert(QStringLiteral("statusLabel"), QStringLiteral("数据暂时不可更新"));
+        staleSnapshot.insert(QStringLiteral("errorText"), message);
+        staleSnapshot.insert(QStringLiteral("stale"), true);
+        setSnapshot(staleSnapshot);
+        return;
+    }
     setSnapshot(emptySnapshot(QStringLiteral("请求失败"), message));
 }
 

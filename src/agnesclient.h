@@ -2,28 +2,28 @@
 
 #pragma once
 
+#include <QByteArrayView>
 #include <QObject>
+#include <QNetworkRequest>
 #include <QString>
+#include <QUrl>
 #include <QVariantMap>
 
 #include "kwalletdispatcher.h"
 
 class QNetworkAccessManager;
 class QNetworkReply;
+class ResilientNetworkRequest;
 
 /**
- * OpenCode Go 用量查询客户端（控制台页面抓取）。
+ * Agnes AI 用量查询客户端（Coding Plan 余额）。
  *
- * OpenCode Go 无公开用量 API（官方 /zen/go/v1/usage 至今未上线），社区可行方案
- * 即抓取控制台页面：GET https://opencode.ai/workspace/{workspaceId}/go 并携带
- * 浏览器登录后的 auth Cookie（参考 github.com/ridho9/opencode-go-usage）。
- * 响应 HTML 内含 SolidJS 序列化的服务端用量（rollingUsage/weeklyUsage/
- * monthlyUsage，键名无引号），正则提取后解析出 usagePercent 与 resetInSec。
- *
- * 凭据（workspaceId + auth Cookie）以 JSON 形式写入 KDE Wallet 二进制条目，
- * 通过 KWalletDispatcher 异步调度；构建期不再打开钱包。
+ * 与 MiniMaxClient / DeepSeekClient 同样由 KWalletDispatcher 异步注入凭据。
+ * Agnes 控制台 Reveal 出的 API Key 直接作为 Bearer 凭据；如果用量接口因
+ * 鉴权策略变化拒绝 API Key，UI 会通过错误信息引导用户粘贴 localStorage
+ * 里的 user session token（同样作为 Bearer）。
  */
-class OpenCodeGoClient : public QObject
+class AgnesClient : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QVariantMap snapshot READ snapshot NOTIFY snapshotChanged)
@@ -34,8 +34,8 @@ class OpenCodeGoClient : public QObject
     Q_PROPERTY(bool credentialError READ credentialError NOTIFY credentialErrorChanged)
 
 public:
-    explicit OpenCodeGoClient(QObject *parent = nullptr);
-    ~OpenCodeGoClient() override;
+    explicit AgnesClient(QObject *parent = nullptr);
+    ~AgnesClient() override;
 
     QVariantMap snapshot() const;
     bool loading() const;
@@ -47,11 +47,11 @@ public:
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void forceRefresh();
     Q_INVOKABLE void cancelRefresh();
-    Q_INVOKABLE void saveCredential(const QString &workspaceId, const QString &cookie);
+    Q_INVOKABLE void saveCredential(const QString &apiKey);
     Q_INVOKABLE void clearCredential();
 
-    /// 从控制台页面 HTML 解析三档用量（纯函数，测试入口）；解析不完整返回空列表
-    static QVariantList parseUsageHtml(const QByteArray &html, qint64 nowMs);
+    static QUrl usageEndpoint();
+    static QNetworkRequest createRequest(const QUrl &url, QByteArrayView apiKey);
 
     // 注入钱包调度器；必须由所有者（AiUsageWatcherApplet）注入。
     void setWalletDispatcher(KWalletDispatcher *dispatcher);
@@ -70,19 +70,21 @@ private:
     void handleCredentialRead(const KWalletDispatcher::Result &result);
     void handleCredentialSave(const KWalletDispatcher::Result &result);
     void handleCredentialClear(const KWalletDispatcher::Result &result);
-    void setStoredCredential(const QString &workspaceId, const QString &cookie);
+    void setStoredApiKey(const QByteArray &apiKey);
     void setCredentialState(const QString &status, bool busy, bool error);
     void setLoading(bool loading);
     void setError(const QString &message);
     void setSnapshot(const QVariantMap &snapshot);
+    void finishRefresh();
 
     QNetworkAccessManager *m_network = nullptr;
     QNetworkReply *m_reply = nullptr;
+    ResilientNetworkRequest *m_request = nullptr;
     KWalletDispatcher *m_dispatcher = nullptr;
-    QString m_storedWorkspaceId;
-    QString m_storedCookie;
-    QString m_pendingWorkspaceId;
-    QString m_pendingCookie;
+    QByteArray m_storedApiKey;
+    QByteArray m_activeApiKey;
+    QString m_lastRequestError;
+    QString m_pendingApiKey;
     QString m_credentialStatus;
     QVariantMap m_snapshot;
     bool m_loading = false;
@@ -91,4 +93,5 @@ private:
     bool m_initialLoadDispatched = false;
     bool m_credentialBusy = false;
     bool m_credentialError = false;
+    bool m_authInvalid = false;
 };

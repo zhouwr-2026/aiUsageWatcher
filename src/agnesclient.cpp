@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-#include "minimaxclient.h"
+#include "agnesclient.h"
 
+#include "agnesresponseparser.h"
 #include "kwalletdispatcher.h"
-#include "minimaxresponseparser.h"
 #include "resilientnetworkrequest.h"
 
-#include <QDateTime>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QPointer>
@@ -20,211 +19,160 @@ constexpr qsizetype maximumResponseBytes = 1024 * 1024;
 QVariantMap emptySnapshot(const QString &status, const QString &error = {})
 {
     return {
-        {QStringLiteral("providerId"), QStringLiteral("minimax")},
+        {QStringLiteral("providerId"), QStringLiteral("agnes-ai")},
         {QStringLiteral("statusLabel"), status},
         {QStringLiteral("errorText"), error},
         {QStringLiteral("plans"), QVariantList{}},
     };
 }
 
-QVariantMap toVariantMap(const MiniMaxSnapshot &snapshot)
+QVariantMap toVariantMap(const AgnesSnapshot &snapshot)
 {
     QVariantList plans;
     plans.reserve(snapshot.plans.size());
-    for (const MiniMaxPlan &plan : snapshot.plans) {
-        const QString resetText = plan.resetAtMs > 0
-            ? QDateTime::fromMSecsSinceEpoch(plan.resetAtMs)
-                  .toLocalTime()
-                  .toString(QStringLiteral("MM-dd HH:mm"))
-            : QString{};
+    for (const AgnesPlan &plan : snapshot.plans) {
         plans.push_back(QVariantMap{
             {QStringLiteral("planId"), plan.planId},
             {QStringLiteral("planName"), plan.planName},
             {QStringLiteral("used"), plan.used},
             {QStringLiteral("total"), plan.total},
-            {QStringLiteral("unit"), QStringLiteral("%")},
-            {QStringLiteral("resetText"), resetText},
+            {QStringLiteral("unit"), plan.unit},
+            {QStringLiteral("resetText"), plan.resetText},
             {QStringLiteral("resetAt"), plan.resetAtMs},
-            {QStringLiteral("extraText"), QString()},
+            {QStringLiteral("extraText"), plan.extraText},
             {QStringLiteral("isValid"), true},
             {QStringLiteral("invalidReason"), QString()},
         });
     }
-
     return {
-        {QStringLiteral("providerId"), QStringLiteral("minimax")},
+        {QStringLiteral("providerId"), QStringLiteral("agnes-ai")},
         {QStringLiteral("statusLabel"), snapshot.statusLabel},
-        {QStringLiteral("errorText"), QString()},
+        {QStringLiteral("errorText"), snapshot.errorText},
         {QStringLiteral("plans"), plans},
     };
 }
 
+// 高置信、简洁的失败分类：HTTP 状态优先，其次 Qt 传输层错误；
+// 兜底文案带 enum 数值便于定位，且不包含任何凭据内容。
 QString networkErrorMessage(int httpStatus, QNetworkReply::NetworkError error)
 {
+    if (httpStatus == 401 || httpStatus == 403) {
+        return QStringLiteral("Agnes 凭据无效或已过期；若使用 API Key 仍被拒绝，请在浏览器登录后粘贴 localStorage.token 作为 Bearer");
+    }
     if (httpStatus == 429) {
-        return QStringLiteral("MiniMax 请求过于频繁，请稍后重试");
+        return QStringLiteral("Agnes 请求过于频繁，请稍后重试");
     }
     if (httpStatus >= 500) {
-        return QStringLiteral("MiniMax 服务暂时不可用");
+        return QStringLiteral("Agnes 服务暂时不可用");
     }
-    if (error == QNetworkReply::TimeoutError) {
-        return QStringLiteral("MiniMax 请求超时");
+
+    switch (error) {
+    case QNetworkReply::TimeoutError:
+        return QStringLiteral("Agnes 请求超时");
+    case QNetworkReply::HostNotFoundError:
+        return QStringLiteral("无法解析 Agnes 服务地址");
+    case QNetworkReply::ConnectionRefusedError:
+        return QStringLiteral("Agnes 服务拒绝连接");
+    case QNetworkReply::SslHandshakeFailedError:
+        return QStringLiteral("Agnes TLS 握手失败");
+    case QNetworkReply::RemoteHostClosedError:
+        return QStringLiteral("Agnes 服务关闭了连接");
+    case QNetworkReply::TemporaryNetworkFailureError:
+    case QNetworkReply::NetworkSessionFailedError:
+        return QStringLiteral("Agnes 网络暂时不可用");
+    default:
+        return QStringLiteral("无法连接 Agnes 服务（网络错误 %1）").arg(static_cast<int>(error));
     }
-    return QStringLiteral("无法连接 MiniMax 服务");
+}
 }
 
-bool isEnvironmentConfigured()
-{
-    return !qgetenv("MINIMAX_API_KEY").trimmed().isEmpty();
-}
-}
-
-MiniMaxClient::MiniMaxClient(QObject *parent)
+AgnesClient::AgnesClient(QObject *parent)
     : QObject(parent)
     , m_network(new QNetworkAccessManager(this))
     , m_snapshot(emptySnapshot(QStringLiteral("未配置")))
 {
-    // 构造函数不再触发钱包 IO；首次读取由 KWalletDispatcher 调度。
-    // 状态仍报告"未配置"，等读取完成后再切换到"已保存"/"凭据服务暂不可用"。
-    m_credentialStatus = isEnvironmentConfigured()
-        ? QStringLiteral("已通过环境变量配置")
-        : QStringLiteral("待连接 KDE 钱包");
+    m_credentialStatus = QStringLiteral("待连接 KDE 钱包");
 }
 
-MiniMaxClient::~MiniMaxClient()
+AgnesClient::~AgnesClient()
 {
     m_storedApiKey.fill('\0');
     m_activeApiKey.fill('\0');
     m_pendingApiKey.fill(QChar(u'\0'));
 }
 
-QVariantMap MiniMaxClient::snapshot() const
+QVariantMap AgnesClient::snapshot() const
 {
     return m_snapshot;
 }
 
-bool MiniMaxClient::loading() const
+bool AgnesClient::loading() const
 {
     return m_loading;
 }
 
-bool MiniMaxClient::credentialConfigured() const
+bool AgnesClient::credentialConfigured() const
 {
-    return isEnvironmentConfigured() || !m_storedApiKey.isEmpty();
+    return !m_storedApiKey.isEmpty();
 }
 
-QString MiniMaxClient::credentialStatus() const
+QString AgnesClient::credentialStatus() const
 {
     return m_credentialStatus;
 }
 
-bool MiniMaxClient::credentialBusy() const
+bool AgnesClient::credentialBusy() const
 {
     return m_credentialBusy;
 }
 
-bool MiniMaxClient::credentialError() const
+bool AgnesClient::credentialError() const
 {
     return m_credentialError;
 }
 
-QList<QUrl> MiniMaxClient::endpointCandidates()
+QUrl AgnesClient::usageEndpoint()
 {
-    return {
-        QUrl(QStringLiteral("https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains")),
-        QUrl(QStringLiteral("https://api.minimax.io/v1/api/openplatform/coding_plan/remains")),
-    };
+    return QUrl(QStringLiteral("https://platform-backend.agnes-ai.com/api/user/subscription"));
 }
 
-void MiniMaxClient::setNetworkAccessManager(QNetworkAccessManager *network)
-{
-    if (m_network) {
-        m_network->deleteLater();
-    }
-    m_network = network;
-}
-
-QNetworkRequest MiniMaxClient::createRequest(const QUrl &url, QByteArrayView apiKey)
+QNetworkRequest AgnesClient::createRequest(const QUrl &url, QByteArrayView apiKey)
 {
     QNetworkRequest request(url);
-    request.setRawHeader("Authorization", QByteArrayLiteral("Bearer ") + apiKey.toByteArray());
-    request.setRawHeader("Content-Type", "application/json");
+    request.setRawHeader("Authorization",
+                          QByteArrayLiteral("Bearer ") + apiKey.toByteArray());
     request.setRawHeader("Accept", "application/json");
-    request.setRawHeader("User-Agent", "AIUsageWatcher/0.1");
+    request.setRawHeader("User-Agent", "AIUsageWatcher/0.2");
     request.setTransferTimeout(15000);
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::SameOriginRedirectPolicy);
     return request;
 }
 
-void MiniMaxClient::refresh()
+void AgnesClient::refresh()
 {
+    if (m_authInvalid) {
+        return;
+    }
     if (m_loading) {
         m_refreshPending = true;
         return;
     }
-
-    QByteArray apiKey = qgetenv("MINIMAX_API_KEY").trimmed();
-    if (apiKey.isEmpty()) {
-        apiKey = m_storedApiKey;
-    }
-    if (apiKey.isEmpty()) {
-        m_refreshPending = false;
-        m_refreshInterrupted = false;
+    if (m_storedApiKey.isEmpty()) {
         setSnapshot(emptySnapshot(QStringLiteral("未配置")));
         return;
     }
 
     m_activeApiKey.fill('\0');
-    m_activeApiKey = apiKey;
-    apiKey.fill('\0');
-    m_endpoints = endpointCandidates();
-    m_endpointIndex = 0;
-    m_lastRequestError.clear();
+    m_activeApiKey = m_storedApiKey;
     setLoading(true);
-    requestNextEndpoint();
-}
-
-void MiniMaxClient::forceRefresh()
-{
-    if (!m_loading) {
-        refresh();
-        return;
-    }
-
-    m_refreshPending = true;
-    m_refreshInterrupted = true;
-    // Qt 保证 abort() 后仍会发出 finished()；等待该回调释放活动 Key 后再重发。
-    if (m_request) {
-        m_request->abort();
-    }
-}
-
-void MiniMaxClient::cancelRefresh()
-{
-    m_refreshPending = false;
-    m_refreshInterrupted = false;
-    if (m_request) {
-        m_request->abort();
-    }
-}
-
-void MiniMaxClient::requestNextEndpoint()
-{
-    if (m_endpointIndex >= m_endpoints.size()) {
-        setError(m_lastRequestError.isEmpty()
-                     ? QStringLiteral("无法连接 MiniMax 服务") : m_lastRequestError);
-        finishRefresh();
-        return;
-    }
-
-    const QUrl endpoint = m_endpoints.at(m_endpointIndex++);
+    m_lastRequestError.clear();
 
     auto *req = new ResilientNetworkRequest(m_network, this);
     m_request = req;
-    QPointer<MiniMaxClient> self = this;
+    QPointer<AgnesClient> self = this;
 
-    auto tryNextOrFinish = [self, req](const QString &errorMessage, bool goNextEndpoint) {
+    auto finalize = [self, req](const QString &errorMessage) {
         if (req->parent() == self.data()) {
             req->deleteLater();
         }
@@ -238,13 +186,7 @@ void MiniMaxClient::requestNextEndpoint()
             self->m_refreshInterrupted = false;
             self->m_refreshPending = false;
             self->finishRefresh();
-            QTimer::singleShot(0, self.data(), &MiniMaxClient::refresh);
-            return;
-        }
-        if (goNextEndpoint) {
-            // 当前 endpoint 已重试耗尽，转下一个 endpoint。
-            self->m_lastRequestError = errorMessage;
-            self->requestNextEndpoint();
+            QTimer::singleShot(0, self.data(), &AgnesClient::refresh);
             return;
         }
         if (!errorMessage.isEmpty()) {
@@ -253,81 +195,80 @@ void MiniMaxClient::requestNextEndpoint()
         self->finishRefresh();
         if (self->m_refreshPending) {
             self->m_refreshPending = false;
-            QTimer::singleShot(0, self.data(), &MiniMaxClient::refresh);
+            QTimer::singleShot(0, self.data(), &AgnesClient::refresh);
         }
     };
 
-    req->get(createRequest(endpoint, m_activeApiKey),
-             [self, req, tryNextOrFinish](ResilientNetworkRequest::Result result) {
+    req->get(createRequest(usageEndpoint(), m_activeApiKey),
+             [self, req, finalize](ResilientNetworkRequest::Result result) {
         if (!self) {
             req->deleteLater();
             return;
         }
         switch (result.outcome) {
         case ResilientNetworkRequest::Outcome::Success: {
-            const MiniMaxParseResult parsed = MiniMaxResponseParser::parse(result.payload);
+            const AgnesParseResult parsed = AgnesResponseParser::parse(result.payload);
             if (parsed.ok) {
                 self->setSnapshot(toVariantMap(parsed.snapshot));
-                tryNextOrFinish({}, false);
-                return;
+                finalize({});
+            } else {
+                finalize(QStringLiteral("Agnes %1").arg(parsed.errorMessage));
             }
-            // 1004 等业务层拒绝 —— 跨区域重试只会放大无效请求，立刻短路。
-            if (parsed.errorCode == QLatin1String("api_error")) {
-                tryNextOrFinish(parsed.errorMessage, false);
-                return;
-            }
-            // 其它解析错误：当前 endpoint 失败，转下一个。
-            tryNextOrFinish(parsed.errorMessage, true);
             return;
         }
         case ResilientNetworkRequest::Outcome::Aborted:
             self->m_refreshInterrupted = true;
-            tryNextOrFinish({}, false);
+            finalize({});
             return;
         case ResilientNetworkRequest::Outcome::NonRetryableFailure:
         case ResilientNetworkRequest::Outcome::RetryableFailure: {
             QString message;
             if (result.responseTooLarge) {
-                message = QStringLiteral("MiniMax 响应过大，已拒绝处理");
+                message = QStringLiteral("Agnes 响应过大，已拒绝处理");
             } else if (result.httpStatus == 401 || result.httpStatus == 403) {
-                // 凭据问题：当前 endpoint 失败后再换 endpoint 也没意义；直接报失败。
-                message = QStringLiteral("MiniMax Key 无效或已过期");
-                tryNextOrFinish(message, false);
-                return;
+                self->m_authInvalid = true;
+                self->setCredentialState(QStringLiteral("Agnes Bearer Token 无效或已过期，请更新浏览器登录令牌"), false, true);
+                message = QStringLiteral("Agnes 凭据无效或已过期；若使用 API Key 仍被拒绝，请在浏览器登录后粘贴 localStorage.token 作为 Bearer");
+            } else if (result.httpStatus == 429) {
+                message = QStringLiteral("Agnes 请求过于频繁，请稍后重试");
+            } else if (result.httpStatus >= 500) {
+                message = QStringLiteral("Agnes 服务暂时不可用");
             } else if (!result.errorMessage.isEmpty()) {
                 message = result.errorMessage;
-                if (!message.startsWith(QStringLiteral("MiniMax"))) {
-                    message = QStringLiteral("MiniMax %1").arg(message);
+                if (!message.startsWith(QStringLiteral("Agnes"))) {
+                    message = QStringLiteral("Agnes %1").arg(message);
                 }
             } else {
-                message = QStringLiteral("MiniMax 无法连接服务");
+                message = QStringLiteral("Agnes 无法连接服务");
             }
-            // RetryableFailure 表示同一 endpoint 重试已耗尽，可尝试下一个 endpoint。
-            // NonRetryableFailure 在当前 endpoint 已不可重试；同样尝试下一个。
-            tryNextOrFinish(message,
-                            result.outcome == ResilientNetworkRequest::Outcome::RetryableFailure
-                                || result.outcome == ResilientNetworkRequest::Outcome::NonRetryableFailure);
+            finalize(message);
             return;
         }
         }
     });
 }
 
-void MiniMaxClient::finishRefresh()
+void AgnesClient::forceRefresh()
 {
-    m_activeApiKey.fill('\0');
-    m_activeApiKey.clear();
-    m_endpoints.clear();
-    m_endpointIndex = 0;
-    setLoading(false);
-    if (m_refreshPending) {
-        m_refreshPending = false;
-        m_refreshInterrupted = false;
-        QTimer::singleShot(0, this, &MiniMaxClient::refresh);
+    if (!m_loading) {
+        refresh();
+        return;
+    }
+    m_refreshPending = true;
+    m_refreshInterrupted = true;
+    if (m_request) {
+        m_request->abort();
     }
 }
 
-void MiniMaxClient::saveCredential(const QString &apiKey)
+void AgnesClient::cancelRefresh()
+{
+    m_refreshPending = false;
+    m_refreshInterrupted = false;
+    if (m_request) m_request->abort();
+}
+
+void AgnesClient::saveCredential(const QString &apiKey)
 {
     const QString trimmedApiKey = apiKey.trimmed();
     if (trimmedApiKey.isEmpty()) {
@@ -338,21 +279,21 @@ void MiniMaxClient::saveCredential(const QString &apiKey)
         setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
         return;
     }
-
     m_pendingApiKey.fill(QChar(u'\0'));
     m_pendingApiKey = trimmedApiKey;
+    m_authInvalid = false;
     setCredentialState(QStringLiteral("正在保存到 KDE 钱包…"), true, false);
 
     const QString snapshotValue = m_pendingApiKey;
     m_dispatcher->submit(KWalletDispatcher::Op::Save,
-                         QStringLiteral("minimax"),
+                         QStringLiteral("agnes-ai"),
                          snapshotValue,
                          [this](const KWalletDispatcher::Result &result) {
                              handleCredentialSave(result);
                          });
 }
 
-void MiniMaxClient::clearCredential()
+void AgnesClient::clearCredential()
 {
     if (!m_dispatcher) {
         setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
@@ -363,29 +304,28 @@ void MiniMaxClient::clearCredential()
     setCredentialState(QStringLiteral("正在从 KDE 钱包移除…"), true, false);
 
     m_dispatcher->submit(KWalletDispatcher::Op::Clear,
-                         QStringLiteral("minimax"),
+                         QStringLiteral("agnes-ai"),
                          QString(),
                          [this](const KWalletDispatcher::Result &result) {
                              handleCredentialClear(result);
                          });
 }
 
-void MiniMaxClient::setWalletDispatcher(KWalletDispatcher *dispatcher)
+void AgnesClient::setWalletDispatcher(KWalletDispatcher *dispatcher)
 {
     m_dispatcher = dispatcher;
     if (m_dispatcher && !m_initialLoadDispatched) {
         m_initialLoadDispatched = true;
-        // 给 Plasma 完成首轮 UI 初始化留出窗口；worker 仍不阻塞 plasmashell。
         QTimer::singleShot(1500, this, [this] { requestCredentialLoad(); });
     }
 }
 
-void MiniMaxClient::reloadCredential()
+void AgnesClient::reloadCredential()
 {
     requestCredentialLoad();
 }
 
-void MiniMaxClient::requestCredentialLoad()
+void AgnesClient::requestCredentialLoad()
 {
     if (!m_dispatcher) {
         return;
@@ -393,14 +333,14 @@ void MiniMaxClient::requestCredentialLoad()
     m_credentialBusy = true;
     Q_EMIT credentialBusyChanged();
     m_dispatcher->submit(KWalletDispatcher::Op::Read,
-                         QStringLiteral("minimax"),
+                         QStringLiteral("agnes-ai"),
                          QString(),
                          [this](const KWalletDispatcher::Result &result) {
                              handleCredentialRead(result);
                          });
 }
 
-void MiniMaxClient::handleCredentialRead(const KWalletDispatcher::Result &result)
+void AgnesClient::handleCredentialRead(const KWalletDispatcher::Result &result)
 {
     if (result.ok) {
         const QString trimmed = result.value.trimmed();
@@ -414,8 +354,6 @@ void MiniMaxClient::handleCredentialRead(const KWalletDispatcher::Result &result
         setCredentialState(QStringLiteral("尚未保存 API Key"), false, false);
         return;
     }
-
-    // not_found：钱包里没有条目，按"未配置"显示；不算错误状态。
     if (result.errorCode == QLatin1String("not_found")) {
         setStoredApiKey({});
         setCredentialState(QStringLiteral("尚未保存 API Key"), false, false);
@@ -432,7 +370,7 @@ void MiniMaxClient::handleCredentialRead(const KWalletDispatcher::Result &result
     setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
 }
 
-void MiniMaxClient::handleCredentialSave(const KWalletDispatcher::Result &result)
+void AgnesClient::handleCredentialSave(const KWalletDispatcher::Result &result)
 {
     if (result.ok) {
         QByteArray storedApiKey = m_pendingApiKey.toUtf8();
@@ -449,19 +387,12 @@ void MiniMaxClient::handleCredentialSave(const KWalletDispatcher::Result &result
     m_pendingApiKey.clear();
 }
 
-void MiniMaxClient::handleCredentialClear(const KWalletDispatcher::Result &result)
+void AgnesClient::handleCredentialClear(const KWalletDispatcher::Result &result)
 {
     if (result.ok) {
         setStoredApiKey({});
-        const bool environmentConfigured = isEnvironmentConfigured();
-        setCredentialState(environmentConfigured
-                               ? QStringLiteral("钱包凭据已移除；环境变量仍在生效")
-                               : QStringLiteral("API Key 已移除"),
-                           false,
-                           false);
-        if (!environmentConfigured) {
-            setSnapshot(emptySnapshot(QStringLiteral("未配置")));
-        }
+        setCredentialState(QStringLiteral("API Key 已移除"), false, false);
+        setSnapshot(emptySnapshot(QStringLiteral("未配置")));
         m_pendingApiKey.fill(QChar(u'\0'));
         m_pendingApiKey.clear();
         return;
@@ -471,7 +402,7 @@ void MiniMaxClient::handleCredentialClear(const KWalletDispatcher::Result &resul
     m_pendingApiKey.clear();
 }
 
-void MiniMaxClient::setStoredApiKey(const QByteArray &apiKey)
+void AgnesClient::setStoredApiKey(const QByteArray &apiKey)
 {
     const bool wasConfigured = credentialConfigured();
     m_storedApiKey.fill('\0');
@@ -481,7 +412,7 @@ void MiniMaxClient::setStoredApiKey(const QByteArray &apiKey)
     }
 }
 
-void MiniMaxClient::setCredentialState(const QString &status, bool busy, bool error)
+void AgnesClient::setCredentialState(const QString &status, bool busy, bool error)
 {
     if (m_credentialStatus != status) {
         m_credentialStatus = status;
@@ -497,7 +428,7 @@ void MiniMaxClient::setCredentialState(const QString &status, bool busy, bool er
     }
 }
 
-void MiniMaxClient::setLoading(bool loading)
+void AgnesClient::setLoading(bool loading)
 {
     if (m_loading == loading) {
         return;
@@ -506,7 +437,7 @@ void MiniMaxClient::setLoading(bool loading)
     Q_EMIT loadingChanged();
 }
 
-void MiniMaxClient::setError(const QString &message)
+void AgnesClient::setError(const QString &message)
 {
     if (!m_snapshot.value(QStringLiteral("plans")).toList().isEmpty()) {
         QVariantMap staleSnapshot = m_snapshot;
@@ -519,11 +450,23 @@ void MiniMaxClient::setError(const QString &message)
     setSnapshot(emptySnapshot(QStringLiteral("请求失败"), message));
 }
 
-void MiniMaxClient::setSnapshot(const QVariantMap &snapshot)
+void AgnesClient::setSnapshot(const QVariantMap &snapshot)
 {
     if (m_snapshot == snapshot) {
         return;
     }
     m_snapshot = snapshot;
     Q_EMIT snapshotChanged();
+}
+
+void AgnesClient::finishRefresh()
+{
+    m_activeApiKey.fill('\0');
+    m_activeApiKey.clear();
+    setLoading(false);
+    if (m_refreshPending) {
+        m_refreshPending = false;
+        m_refreshInterrupted = false;
+        QTimer::singleShot(0, this, &AgnesClient::refresh);
+    }
 }

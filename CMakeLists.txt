@@ -26,14 +26,22 @@ plasma_install_package(package org.kde.plasma.AIQuotaPilot)
 
 kcoreaddons_add_plugin(org.kde.plasma.AIQuotaPilot
     SOURCES
+        src/agnesclient.cpp
+        src/agnesclient.h
+        src/agnesresponseparser.cpp
+        src/agnesresponseparser.h
         src/aiusagewatcherapplet.cpp
         src/aiusagewatcherapplet.h
         src/codexloginoutputparser.cpp
         src/codexloginoutputparser.h
+        src/commandcodeclient.cpp
+        src/commandcodeclient.h
         src/customusageclient.cpp
         src/customusageclient.h
         src/javascripthighlighter.cpp
         src/javascripthighlighter.h
+        src/kwalletdispatcher.cpp
+        src/kwalletdispatcher.h
         src/minimaxclient.cpp
         src/minimaxclient.h
         src/minimaxresponseparser.cpp
@@ -48,6 +56,8 @@ kcoreaddons_add_plugin(org.kde.plasma.AIQuotaPilot
         src/deepseekresponseparser.h
         src/opencodegoclient.cpp
         src/opencodegoclient.h
+        src/resilientnetworkrequest.cpp
+        src/resilientnetworkrequest.h
         src/sharedproviderconfig.cpp
         src/sharedproviderconfig.h
     INSTALL_NAMESPACE "plasma/applets"
@@ -68,11 +78,17 @@ set_target_properties(org.kde.plasma.AIQuotaPilot PROPERTIES PREFIX "")
 target_compile_definitions(org.kde.plasma.AIQuotaPilot
     PRIVATE
         QUOTA_PILOT_SCRIPT_WORKER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/quota-pilot-script-worker"
+        QUOTA_PILOT_KWALLET_WORKER_PATH="${CMAKE_INSTALL_FULL_LIBEXECDIR}/quota-pilot-kwallet-worker"
 )
 
 add_executable(quota-pilot-script-worker src/usagescriptworker.cpp)
 target_link_libraries(quota-pilot-script-worker PRIVATE Qt6::Core Qt6::Qml)
 install(TARGETS quota-pilot-script-worker RUNTIME DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
+
+# 独立钱包 worker：跑在 plasmashell 之外，同步调用 KWallet，不阻塞插件进程。
+add_executable(quota-pilot-kwallet-worker src/kwalletworker.cpp)
+target_link_libraries(quota-pilot-kwallet-worker PRIVATE Qt6::Core KF6::Wallet)
+install(TARGETS quota-pilot-kwallet-worker RUNTIME DESTINATION "${CMAKE_INSTALL_LIBEXECDIR}")
 
 include(CTest)
 
@@ -97,15 +113,20 @@ if(BUILD_TESTING)
     target_link_libraries(tst_codexzhresponseparser PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME codexzh-response-parser COMMAND tst_codexzhresponseparser)
 
+
     add_executable(tst_minimaxclient
         tests/cpp/tst_minimaxclient.cpp
         src/minimaxclient.cpp
         src/minimaxclient.h
         src/minimaxresponseparser.cpp
         src/minimaxresponseparser.h
+        src/kwalletdispatcher.cpp
+        src/kwalletdispatcher.h
+        src/resilientnetworkrequest.cpp
+        src/resilientnetworkrequest.h
     )
     target_include_directories(tst_minimaxclient PRIVATE src)
-    target_link_libraries(tst_minimaxclient PRIVATE Qt6::Core Qt6::Network Qt6::Test KF6::Wallet)
+    target_link_libraries(tst_minimaxclient PRIVATE Qt6::Core Qt6::DBus Qt6::Network Qt6::Test KF6::Wallet)
     add_test(NAME minimax-client-contract COMMAND tst_minimaxclient)
 
     add_executable(tst_deepseekresponseparser
@@ -123,19 +144,26 @@ if(BUILD_TESTING)
         src/deepseekclient.h
         src/deepseekresponseparser.cpp
         src/deepseekresponseparser.h
+        src/kwalletdispatcher.cpp
+        src/kwalletdispatcher.h
     )
     target_include_directories(tst_deepseekclient PRIVATE src)
-    target_link_libraries(tst_deepseekclient PRIVATE Qt6::Core Qt6::Network Qt6::Test KF6::Wallet)
+    target_link_libraries(tst_deepseekclient PRIVATE Qt6::Core Qt6::DBus Qt6::Network Qt6::Test KF6::Wallet)
     add_test(NAME deepseek-client-contract COMMAND tst_deepseekclient)
 
     add_executable(tst_opencodegoclient
         tests/cpp/tst_opencodegoclient.cpp
         src/opencodegoclient.cpp
         src/opencodegoclient.h
+        src/kwalletdispatcher.cpp
+        src/kwalletdispatcher.h
     )
     target_include_directories(tst_opencodegoclient PRIVATE src)
-    target_link_libraries(tst_opencodegoclient PRIVATE Qt6::Core Qt6::Network Qt6::Test KF6::Wallet)
+    target_link_libraries(tst_opencodegoclient PRIVATE Qt6::Core Qt6::DBus Qt6::Network Qt6::Test KF6::Wallet)
     add_test(NAME opencodego-client-contract COMMAND tst_opencodegoclient)
+
+
+
 
     add_executable(tst_javascripthighlighter
         tests/cpp/tst_javascripthighlighter.cpp
@@ -154,6 +182,7 @@ if(BUILD_TESTING)
     target_include_directories(tst_codexloginoutputparser PRIVATE src)
     target_link_libraries(tst_codexloginoutputparser PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME codex-login-output-parser COMMAND tst_codexloginoutputparser)
+
 
     add_executable(tst_customusageclient
         tests/cpp/tst_customusageclient.cpp
@@ -176,4 +205,5 @@ if(BUILD_TESTING)
     target_link_libraries(tst_usagescriptworker PRIVATE Qt6::Core Qt6::Test)
     add_dependencies(tst_usagescriptworker quota-pilot-script-worker)
     add_test(NAME usage-script-worker COMMAND tst_usagescriptworker)
+
 endif()

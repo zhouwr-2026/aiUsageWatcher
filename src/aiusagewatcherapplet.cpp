@@ -133,17 +133,65 @@ AiUsageWatcherApplet::AiUsageWatcherApplet(QObject *parent,
                                            const KPluginMetaData &data,
                                            const QVariantList &args)
     : Plasma::Applet(parent, data, args)
+    , m_walletDispatcher(this)
+    , m_agnesClient(this)
     , m_miniMaxClient(this)
     , m_deepSeekClient(this)
     , m_sharedProviderConfig(QStringLiteral("aiquotapilotrc"), this)
     , m_codexzhClient(this)
     , m_opencodeGoClient(this)
+    , m_commandCodeClient(this)
     , m_customUsageClient(this)
     , m_codexNetwork(new QNetworkAccessManager(this))
     , m_codexPollTimer(new QTimer(this))
     , m_codexSnapshot(emptyCodexSnapshot(QStringLiteral("未登录")))
 {
     qInfo() << "aiUsageWatcher: native backend loaded";
+
+    // 把所有 wallet 事件的 reloadCredential 收口到一个 debounce 计时器上。
+    // kwalletd 在某些环境（频繁解锁/锁屏）会在 1 秒内连续 emit `walletOpened`
+    // 多次，每次都让 applet reloadCredential → handleCredentialRead → refresh()，
+    // 把 CodexZH 的 60s 限流窗口瞬间打穿。debounce 让多次事件只触发一次重读。
+    m_walletReloadDebounce = new QTimer(this);
+    m_walletReloadDebounce->setSingleShot(true);
+    m_walletReloadDebounce->setInterval(2000);
+    connect(m_walletReloadDebounce, &QTimer::timeout, this, [this] {
+        m_agnesClient.reloadCredential();
+        m_miniMaxClient.reloadCredential();
+        m_deepSeekClient.reloadCredential();
+        m_codexzhClient.reloadCredential();
+        m_opencodeGoClient.reloadCredential();
+        m_commandCodeClient.reloadCredential();
+    });
+
+    // KWallet 调度器：钱包服务 watcher 仅用于状态通知；首次请求不等服务就绪，
+    // 由 worker 的 D-Bus 调用按需激活 kwalletd。
+    connect(&m_walletDispatcher,
+            &KWalletDispatcher::walletServiceAvailabilityChanged,
+            this,
+            [this](bool available) {
+                Q_EMIT walletServiceAvailabilityChanged();
+                if (!available) {
+                    return;
+                }
+                // KWallet 服务恢复时重新读取；客户端会保留已有内存凭据直到读到明确 not_found。
+                m_walletReloadDebounce->start();
+            });
+    connect(&m_walletDispatcher,
+            &KWalletDispatcher::walletOpened,
+            this,
+            [this] {
+                // 解锁事件早于钱包内部切换完成，短暂错峰后统一重读凭据。
+                m_walletReloadDebounce->start();
+            });
+    // 把同一个调度器注入所有客户端，避免并发打开钱包。
+    m_agnesClient.setWalletDispatcher(&m_walletDispatcher);
+    m_miniMaxClient.setWalletDispatcher(&m_walletDispatcher);
+    m_deepSeekClient.setWalletDispatcher(&m_walletDispatcher);
+    m_codexzhClient.setWalletDispatcher(&m_walletDispatcher);
+    m_opencodeGoClient.setWalletDispatcher(&m_walletDispatcher);
+    m_commandCodeClient.setWalletDispatcher(&m_walletDispatcher);
+
     connect(&m_sharedProviderConfig,
             &SharedProviderConfig::providersChanged,
             this,
@@ -158,6 +206,12 @@ AiUsageWatcherApplet::AiUsageWatcherApplet(QObject *parent,
     if (!eventConnected) {
         qWarning() << "QuotaPilot: failed to subscribe to D-Bus model activation events";
     }
+    QDBusConnection::systemBus().connect(QStringLiteral("org.freedesktop.login1"),
+                                         QStringLiteral("/org/freedesktop/login1"),
+                                         QStringLiteral("org.freedesktop.login1.Manager"),
+                                         QStringLiteral("PrepareForSleep"),
+                                         this,
+                                         SLOT(handlePrepareForSleep(bool)));
     connect(&m_miniMaxClient,
             &MiniMaxClient::snapshotChanged,
             this,
@@ -254,6 +308,18 @@ AiUsageWatcherApplet::AiUsageWatcherApplet(QObject *parent,
             &OpenCodeGoClient::credentialErrorChanged,
             this,
             &AiUsageWatcherApplet::opencodeGoCredentialErrorChanged);
+    connect(&m_commandCodeClient, &CommandCodeClient::snapshotChanged, this, &AiUsageWatcherApplet::commandCodeSnapshotChanged);
+    connect(&m_commandCodeClient, &CommandCodeClient::loadingChanged, this, &AiUsageWatcherApplet::commandCodeLoadingChanged);
+    connect(&m_commandCodeClient, &CommandCodeClient::credentialConfiguredChanged, this, &AiUsageWatcherApplet::commandCodeCredentialConfiguredChanged);
+    connect(&m_commandCodeClient, &CommandCodeClient::credentialStatusChanged, this, &AiUsageWatcherApplet::commandCodeCredentialStatusChanged);
+    connect(&m_commandCodeClient, &CommandCodeClient::credentialBusyChanged, this, &AiUsageWatcherApplet::commandCodeCredentialBusyChanged);
+    connect(&m_commandCodeClient, &CommandCodeClient::credentialErrorChanged, this, &AiUsageWatcherApplet::commandCodeCredentialErrorChanged);
+    connect(&m_agnesClient, &AgnesClient::snapshotChanged, this, &AiUsageWatcherApplet::agnesSnapshotChanged);
+    connect(&m_agnesClient, &AgnesClient::loadingChanged, this, &AiUsageWatcherApplet::agnesLoadingChanged);
+    connect(&m_agnesClient, &AgnesClient::credentialConfiguredChanged, this, &AiUsageWatcherApplet::agnesCredentialConfiguredChanged);
+    connect(&m_agnesClient, &AgnesClient::credentialStatusChanged, this, &AiUsageWatcherApplet::agnesCredentialStatusChanged);
+    connect(&m_agnesClient, &AgnesClient::credentialBusyChanged, this, &AiUsageWatcherApplet::agnesCredentialBusyChanged);
+    connect(&m_agnesClient, &AgnesClient::credentialErrorChanged, this, &AiUsageWatcherApplet::agnesCredentialErrorChanged);
     connect(&m_customUsageClient,
             &CustomUsageClient::snapshotsChanged,
             this,
@@ -278,6 +344,18 @@ void AiUsageWatcherApplet::handleModelActivated(const QString &modelName)
         return;
     }
     Q_EMIT modelActivated(normalizedName);
+}
+
+void AiUsageWatcherApplet::handlePrepareForSleep(bool sleeping)
+{
+    if (sleeping) {
+        return;
+    }
+    // 事件丢失时提供一次低频兜底；不循环轰炸钱包，避免密码对话框期间重复启动 worker。
+    QTimer::singleShot(3000, this, [this] {
+        m_walletReloadDebounce->start();
+        Q_EMIT refreshRecoveryRequested();
+    });
 }
 
 QVariantMap AiUsageWatcherApplet::miniMaxSnapshot() const
@@ -313,6 +391,16 @@ bool AiUsageWatcherApplet::miniMaxCredentialError() const
 QString AiUsageWatcherApplet::sharedProviders() const
 {
     return m_sharedProviderConfig.providers();
+}
+
+bool AiUsageWatcherApplet::walletServiceAvailable() const
+{
+    return m_walletDispatcher.walletServiceRegistered();
+}
+
+QString AiUsageWatcherApplet::documentationUrl() const
+{
+    return QStringLiteral("https://gitee.com/eruditeLoong/aiUsageWatcher/blob/master/docs/requirements.md");
 }
 
 QVariantMap AiUsageWatcherApplet::deepseekSnapshot() const
@@ -379,6 +467,13 @@ QVariantMap AiUsageWatcherApplet::opencodeGoSnapshot() const
 {
     return m_opencodeGoClient.snapshot();
 }
+
+QVariantMap AiUsageWatcherApplet::commandCodeSnapshot() const { return m_commandCodeClient.snapshot(); }
+bool AiUsageWatcherApplet::commandCodeLoading() const { return m_commandCodeClient.loading(); }
+bool AiUsageWatcherApplet::commandCodeCredentialConfigured() const { return m_commandCodeClient.credentialConfigured(); }
+QString AiUsageWatcherApplet::commandCodeCredentialStatus() const { return m_commandCodeClient.credentialStatus(); }
+bool AiUsageWatcherApplet::commandCodeCredentialBusy() const { return m_commandCodeClient.credentialBusy(); }
+bool AiUsageWatcherApplet::commandCodeCredentialError() const { return m_commandCodeClient.credentialError(); }
 
 bool AiUsageWatcherApplet::opencodeGoLoading() const
 {
@@ -465,6 +560,11 @@ void AiUsageWatcherApplet::refreshMiniMax()
     m_miniMaxClient.refresh();
 }
 
+void AiUsageWatcherApplet::forceRefreshMiniMax()
+{
+    m_miniMaxClient.forceRefresh();
+}
+
 void AiUsageWatcherApplet::saveMiniMaxApiKey(const QString &apiKey)
 {
     m_miniMaxClient.saveCredential(apiKey);
@@ -490,6 +590,11 @@ void AiUsageWatcherApplet::refreshDeepSeekUsage()
     m_deepSeekClient.refresh();
 }
 
+void AiUsageWatcherApplet::forceRefreshDeepSeekUsage()
+{
+    m_deepSeekClient.forceRefresh();
+}
+
 void AiUsageWatcherApplet::saveDeepSeekApiKey(const QString &apiKey)
 {
     m_deepSeekClient.saveCredential(apiKey);
@@ -505,9 +610,19 @@ void AiUsageWatcherApplet::refreshCodexZhUsage()
     m_codexzhClient.refresh();
 }
 
+void AiUsageWatcherApplet::forceRefreshCodexZhUsage()
+{
+    m_codexzhClient.forceRefresh();
+}
+
 void AiUsageWatcherApplet::refreshOpenCodeGoUsage()
 {
     m_opencodeGoClient.refresh();
+}
+
+void AiUsageWatcherApplet::forceRefreshOpenCodeGoUsage()
+{
+    m_opencodeGoClient.forceRefresh();
 }
 
 void AiUsageWatcherApplet::saveOpenCodeGoCredential(const QString &workspaceId, const QString &cookie)
@@ -519,6 +634,32 @@ void AiUsageWatcherApplet::clearOpenCodeGoCredential()
 {
     m_opencodeGoClient.clearCredential();
 }
+
+void AiUsageWatcherApplet::refreshCommandCodeUsage() { m_commandCodeClient.refresh(); }
+void AiUsageWatcherApplet::forceRefreshCommandCodeUsage() { m_commandCodeClient.forceRefresh(); }
+void AiUsageWatcherApplet::saveCommandCodeCookie(const QString &cookie) { m_commandCodeClient.saveCredential(cookie); }
+void AiUsageWatcherApplet::clearCommandCodeCookie() { m_commandCodeClient.clearCredential(); }
+
+QVariantMap AiUsageWatcherApplet::agnesSnapshot() const { return m_agnesClient.snapshot(); }
+bool AiUsageWatcherApplet::agnesLoading() const { return m_agnesClient.loading(); }
+bool AiUsageWatcherApplet::agnesCredentialConfigured() const { return m_agnesClient.credentialConfigured(); }
+QString AiUsageWatcherApplet::agnesCredentialStatus() const { return m_agnesClient.credentialStatus(); }
+bool AiUsageWatcherApplet::agnesCredentialBusy() const { return m_agnesClient.credentialBusy(); }
+bool AiUsageWatcherApplet::agnesCredentialError() const { return m_agnesClient.credentialError(); }
+
+void AiUsageWatcherApplet::refreshAgnesUsage() { m_agnesClient.refresh(); }
+void AiUsageWatcherApplet::forceRefreshAgnesUsage() { m_agnesClient.forceRefresh(); }
+void AiUsageWatcherApplet::cancelAllUsageRequests()
+{
+    m_agnesClient.cancelRefresh();
+    m_miniMaxClient.cancelRefresh();
+    m_deepSeekClient.cancelRefresh();
+    m_codexzhClient.cancelRefresh();
+    m_opencodeGoClient.cancelRefresh();
+    m_commandCodeClient.cancelRefresh();
+}
+void AiUsageWatcherApplet::saveAgnesApiKey(const QString &apiKey) { m_agnesClient.saveCredential(apiKey); }
+void AiUsageWatcherApplet::clearAgnesApiKey() { m_agnesClient.clearCredential(); }
 
 void AiUsageWatcherApplet::saveCodexZhApiKey(const QString &apiKey)
 {

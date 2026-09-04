@@ -6,10 +6,13 @@
 #include <QColor>
 #include <QVariantList>
 
+#include "agnesclient.h"
 #include "codexloginoutputparser.h"
+#include "commandcodeclient.h"
 #include "codexzhclient.h"
 #include "customusageclient.h"
 #include "deepseekclient.h"
+#include "kwalletdispatcher.h"
 #include "minimaxclient.h"
 #include "opencodegoclient.h"
 #include "sharedproviderconfig.h"
@@ -19,6 +22,7 @@ class QNetworkAccessManager;
 class QNetworkReply;
 class QJsonObject;
 class QTimer;
+class KWalletDispatcher;
 
 class AiUsageWatcherApplet : public Plasma::Applet
 {
@@ -58,7 +62,21 @@ class AiUsageWatcherApplet : public Plasma::Applet
     Q_PROPERTY(QString opencodeGoCredentialStatus READ opencodeGoCredentialStatus NOTIFY opencodeGoCredentialStatusChanged)
     Q_PROPERTY(bool opencodeGoCredentialBusy READ opencodeGoCredentialBusy NOTIFY opencodeGoCredentialBusyChanged)
     Q_PROPERTY(bool opencodeGoCredentialError READ opencodeGoCredentialError NOTIFY opencodeGoCredentialErrorChanged)
+    Q_PROPERTY(QVariantMap commandCodeSnapshot READ commandCodeSnapshot NOTIFY commandCodeSnapshotChanged)
+    Q_PROPERTY(bool commandCodeLoading READ commandCodeLoading NOTIFY commandCodeLoadingChanged)
+    Q_PROPERTY(bool commandCodeCredentialConfigured READ commandCodeCredentialConfigured NOTIFY commandCodeCredentialConfiguredChanged)
+    Q_PROPERTY(QString commandCodeCredentialStatus READ commandCodeCredentialStatus NOTIFY commandCodeCredentialStatusChanged)
+    Q_PROPERTY(bool commandCodeCredentialBusy READ commandCodeCredentialBusy NOTIFY commandCodeCredentialBusyChanged)
+    Q_PROPERTY(bool commandCodeCredentialError READ commandCodeCredentialError NOTIFY commandCodeCredentialErrorChanged)
+    Q_PROPERTY(QVariantMap agnesSnapshot READ agnesSnapshot NOTIFY agnesSnapshotChanged)
+    Q_PROPERTY(bool agnesLoading READ agnesLoading NOTIFY agnesLoadingChanged)
+    Q_PROPERTY(bool agnesCredentialConfigured READ agnesCredentialConfigured NOTIFY agnesCredentialConfiguredChanged)
+    Q_PROPERTY(QString agnesCredentialStatus READ agnesCredentialStatus NOTIFY agnesCredentialStatusChanged)
+    Q_PROPERTY(bool agnesCredentialBusy READ agnesCredentialBusy NOTIFY agnesCredentialBusyChanged)
+    Q_PROPERTY(bool agnesCredentialError READ agnesCredentialError NOTIFY agnesCredentialErrorChanged)
+    Q_PROPERTY(QString documentationUrl READ documentationUrl CONSTANT)
     Q_PROPERTY(QString sharedProviders READ sharedProviders NOTIFY sharedProvidersChanged)
+    Q_PROPERTY(bool walletServiceAvailable READ walletServiceAvailable NOTIFY walletServiceAvailabilityChanged)
 
 public:
     AiUsageWatcherApplet(QObject *parent,
@@ -100,12 +118,28 @@ public:
     QString opencodeGoCredentialStatus() const;
     bool opencodeGoCredentialBusy() const;
     bool opencodeGoCredentialError() const;
+    QVariantMap commandCodeSnapshot() const;
+    bool commandCodeLoading() const;
+    bool commandCodeCredentialConfigured() const;
+    QString commandCodeCredentialStatus() const;
+    bool commandCodeCredentialBusy() const;
+    bool commandCodeCredentialError() const;
+    QVariantMap agnesSnapshot() const;
+    bool agnesLoading() const;
+    bool agnesCredentialConfigured() const;
+    QString agnesCredentialStatus() const;
+    bool agnesCredentialBusy() const;
+    bool agnesCredentialError() const;
     QString sharedProviders() const;
+    bool walletServiceAvailable() const;
+    QString documentationUrl() const;
 
     Q_INVOKABLE void refreshMiniMax();
+    Q_INVOKABLE void forceRefreshMiniMax();
     Q_INVOKABLE void saveMiniMaxApiKey(const QString &apiKey);
     Q_INVOKABLE void clearMiniMaxApiKey();
     Q_INVOKABLE void refreshDeepSeekUsage();
+    Q_INVOKABLE void forceRefreshDeepSeekUsage();
     Q_INVOKABLE void saveDeepSeekApiKey(const QString &apiKey);
     Q_INVOKABLE void clearDeepSeekApiKey();
     Q_INVOKABLE void refreshCodexUsage();
@@ -116,11 +150,22 @@ public:
     Q_INVOKABLE void removeCodexAccount(const QString &profileId);
     Q_INVOKABLE void refreshCustomProviders(const QVariantList &definitions);
     Q_INVOKABLE void refreshCodexZhUsage();
+    Q_INVOKABLE void forceRefreshCodexZhUsage();
     Q_INVOKABLE void saveCodexZhApiKey(const QString &apiKey);
     Q_INVOKABLE void clearCodexZhApiKey();
     Q_INVOKABLE void refreshOpenCodeGoUsage();
+    Q_INVOKABLE void forceRefreshOpenCodeGoUsage();
     Q_INVOKABLE void saveOpenCodeGoCredential(const QString &workspaceId, const QString &cookie);
     Q_INVOKABLE void clearOpenCodeGoCredential();
+    Q_INVOKABLE void refreshCommandCodeUsage();
+    Q_INVOKABLE void forceRefreshCommandCodeUsage();
+    Q_INVOKABLE void saveCommandCodeCookie(const QString &cookie);
+    Q_INVOKABLE void clearCommandCodeCookie();
+    Q_INVOKABLE void refreshAgnesUsage();
+    Q_INVOKABLE void forceRefreshAgnesUsage();
+    Q_INVOKABLE void cancelAllUsageRequests();
+    Q_INVOKABLE void saveAgnesApiKey(const QString &apiKey);
+    Q_INVOKABLE void clearAgnesApiKey();
     Q_INVOKABLE bool ensureSharedProviders(const QString &providers);
     Q_INVOKABLE bool saveSharedProviders(const QString &providers);
     Q_INVOKABLE void attachJavaScriptHighlighter(QQuickTextDocument *document,
@@ -165,10 +210,25 @@ Q_SIGNALS:
     void opencodeGoCredentialStatusChanged();
     void opencodeGoCredentialBusyChanged();
     void opencodeGoCredentialErrorChanged();
+    void commandCodeSnapshotChanged();
+    void commandCodeLoadingChanged();
+    void commandCodeCredentialConfiguredChanged();
+    void commandCodeCredentialStatusChanged();
+    void commandCodeCredentialBusyChanged();
+    void commandCodeCredentialErrorChanged();
+    void agnesSnapshotChanged();
+    void agnesLoadingChanged();
+    void agnesCredentialConfiguredChanged();
+    void agnesCredentialStatusChanged();
+    void agnesCredentialBusyChanged();
+    void agnesCredentialErrorChanged();
     void sharedProvidersChanged();
+    void walletServiceAvailabilityChanged();
+    void refreshRecoveryRequested();
 
 private Q_SLOTS:
     void handleModelActivated(const QString &modelName);
+    void handlePrepareForSleep(bool sleeping);
 
 private:
     QString codexAccountsRoot() const;
@@ -196,11 +256,15 @@ private:
                             bool busy,
                             bool error);
 
+    // 钱包调度器（plasmashell 进程内不再持有 KWallet::Wallet 实例）。
+    KWalletDispatcher m_walletDispatcher;
     SharedProviderConfig m_sharedProviderConfig;
+    AgnesClient m_agnesClient;
     MiniMaxClient m_miniMaxClient;
     DeepSeekClient m_deepSeekClient;
     CodexZhClient m_codexzhClient;
     OpenCodeGoClient m_opencodeGoClient;
+    CommandCodeClient m_commandCodeClient;
     CustomUsageClient m_customUsageClient;
     QNetworkAccessManager *m_codexNetwork = nullptr;
     QNetworkReply *m_codexReply = nullptr;
@@ -220,4 +284,10 @@ private:
     bool m_codexLoginError = false;
     bool m_codexLoginCancelled = false;
     bool m_codexUsageLoading = false;
+
+    // 把所有 wallet 事件（service 上下线 / walletOpened / handlePrepareForSleep）
+    // 合并到同一个 debounce 计时器上。kwalletd 在某些环境（频繁解锁/锁屏）里
+    // 会在 1 秒内连续 emit `walletOpened` 多次，每次都让 applet reloadCredential →
+    // handleCredentialRead → refresh()，把 CodexZH 的限流配额瞬间打穿。
+    QTimer *m_walletReloadDebounce = nullptr;
 };

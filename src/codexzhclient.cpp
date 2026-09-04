@@ -3,21 +3,20 @@
 #include "codexzhclient.h"
 
 #include "codexzhresponseparser.h"
+#include "kwalletdispatcher.h"
+#include "resilientnetworkrequest.h"
 
-#include <KWallet>
 #include <QDateTime>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
+#include <QPointer>
 #include <QTimer>
+#include <QUrlQuery>
 #include <QVariantList>
+#include <QDateTime>
 
 namespace
 {
-constexpr qsizetype maximumResponseBytes = 1024 * 1024;
-const QString walletFolder = QStringLiteral("AIQuotaPilot");
-const QString codexZhWalletEntry = QStringLiteral("CodexZH API Key");
-constexpr int walletRetryLimit = 5;
-
 QVariantMap emptySnapshot(const QString &status, const QString &error = {})
 {
     return {
@@ -65,32 +64,14 @@ QVariantMap toVariantMap(const CodexZhSnapshot &snapshot)
     };
 }
 
-QString networkErrorMessage(int httpStatus, QNetworkReply::NetworkError error)
-{
-    if (httpStatus == 401 || httpStatus == 403) {
-        return QStringLiteral("CodexZH 认证失败，请检查 API Key");
-    }
-    if (httpStatus == 429) {
-        return QStringLiteral("CodexZH 请求过于频繁，请稍后重试");
-    }
-    if (httpStatus >= 500) {
-        return QStringLiteral("CodexZH 服务暂时不可用");
-    }
-    if (error == QNetworkReply::TimeoutError) {
-        return QStringLiteral("CodexZH 请求超时");
-    }
-    return QStringLiteral("无法连接 CodexZH 服务");
-}
-}
+} // namespace
 
 CodexZhClient::CodexZhClient(QObject *parent)
     : QObject(parent)
     , m_network(new QNetworkAccessManager(this))
     , m_snapshot(emptySnapshot(QStringLiteral("未配置")))
 {
-    m_credentialStatus = QStringLiteral("正在读取 KDE 钱包…");
-    m_credentialBusy = true;
-    QTimer::singleShot(0, this, &CodexZhClient::openWallet);
+    m_credentialStatus = QStringLiteral("待连接 KDE 钱包");
 }
 
 CodexZhClient::~CodexZhClient()
@@ -137,9 +118,10 @@ QList<QUrl> CodexZhClient::endpointCandidates()
     };
 }
 
-QNetworkRequest CodexZhClient::createRequest(const QUrl &url)
+QNetworkRequest CodexZhClient::createRequest(const QUrl &url, QByteArrayView apiKey)
 {
     QNetworkRequest request(url);
+    request.setRawHeader("Authorization", QByteArrayLiteral("Bearer ") + apiKey.toByteArray());
     request.setRawHeader("Content-Type", "application/json");
     request.setRawHeader("Accept", "application/json");
     request.setRawHeader("User-Agent", "AIUsageWatcher/0.1");
@@ -151,11 +133,17 @@ QNetworkRequest CodexZhClient::createRequest(const QUrl &url)
 
 void CodexZhClient::refresh()
 {
+    if (QDateTime::currentMSecsSinceEpoch() < m_rateLimitedUntilMs) {
+        return;
+    }
     if (m_loading) {
+        // 普通轮询不排队：否则刷新队列会在慢请求结束后继续补发，制造额外 429。
         return;
     }
 
     if (m_storedApiKey.isEmpty()) {
+        m_refreshPending = false;
+        m_refreshInterrupted = false;
         setSnapshot(emptySnapshot(QStringLiteral("未配置")));
         return;
     }
@@ -166,56 +154,128 @@ void CodexZhClient::refresh()
     m_lastRequestError.clear();
 
     QUrl url = endpointCandidates().first();
-    url.setQuery(QStringLiteral("key=%1").arg(QString::fromLatin1(m_activeApiKey)));
+    // 证据：CodexZH 当前接口按 query key 返回数据；仅 Authorization 会导致无数据回归。
+    QUrlQuery query(url.query());
+    query.addQueryItem(QStringLiteral("key"), QString::fromLatin1(m_activeApiKey));
+    url.setQuery(query);
 
-    QNetworkReply *reply = m_network->get(createRequest(url));
-    m_reply = reply;
+    auto *req = new ResilientNetworkRequest(m_network, this);
+    // 服务端返回 429 时不再在同一轮立即重试，避免把限流放大成更多请求。
+    req->setMaxAttempts(1);
+    m_request = req;
+    QPointer<CodexZhClient> self = this;
 
-    QTimer::singleShot(10000, reply, [reply]() {
-        if (reply->isRunning()) {
-            reply->setProperty("aiUsageWatcherTimedOut", true);
-            reply->abort();
+    auto finalize = [self, req](const QString &errorMessage) {
+        if (req->parent() == self.data()) {
+            req->deleteLater();
         }
-    });
-    connect(reply, &QNetworkReply::downloadProgress, reply, [reply](qint64 received, qint64) {
-        if (received > maximumResponseBytes) {
-            reply->setProperty("aiUsageWatcherResponseTooLarge", true);
-            reply->abort();
+        if (!self) {
+            return;
         }
-    });
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        if (m_reply == reply) {
-            m_reply = nullptr;
+        if (self->m_request == req) {
+            self->m_request = nullptr;
         }
-        const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        const bool timedOut = reply->property("aiUsageWatcherTimedOut").toBool();
-        const bool responseTooLarge = reply->property("aiUsageWatcherResponseTooLarge").toBool();
+        if (self->m_refreshInterrupted) {
+            self->m_activeApiKey.fill('\0');
+            self->m_activeApiKey.clear();
+            self->setLoading(false);
+            self->m_refreshPending = false;
+            self->m_refreshInterrupted = false;
+            QTimer::singleShot(0, self.data(), &CodexZhClient::refresh);
+            return;
+        }
+        if (!errorMessage.isEmpty()) {
+            self->setError(errorMessage);
+        }
+        self->m_activeApiKey.fill('\0');
+        self->m_activeApiKey.clear();
+        self->setLoading(false);
+        if (self->m_refreshPending) {
+            self->m_refreshPending = false;
+            QTimer::singleShot(0, self.data(), &CodexZhClient::refresh);
+        }
+    };
 
-        if (timedOut) {
-            setSnapshot(emptySnapshot(QStringLiteral("请求失败"), QStringLiteral("CodexZH 请求超时")));
-        } else if (responseTooLarge) {
-            setSnapshot(emptySnapshot(QStringLiteral("请求失败"), QStringLiteral("CodexZH 响应过大，已拒绝处理")));
-        } else if (reply->error() != QNetworkReply::NoError || httpStatus < 200 || httpStatus >= 300) {
-            setSnapshot(emptySnapshot(QStringLiteral("请求失败"), networkErrorMessage(httpStatus, reply->error())));
-        } else {
-            const QByteArray payload = reply->read(maximumResponseBytes + 1);
-            if (payload.size() > maximumResponseBytes) {
-                setSnapshot(emptySnapshot(QStringLiteral("请求失败"), QStringLiteral("CodexZH 响应过大，已拒绝处理")));
+    req->get(createRequest(url, m_activeApiKey), [self, req, finalize](ResilientNetworkRequest::Result result) {
+        if (!self) {
+            req->deleteLater();
+            return;
+        }
+        switch (result.outcome) {
+        case ResilientNetworkRequest::Outcome::Success: {
+            const CodexZhParseResult parsed = CodexZhResponseParser::parse(result.payload);
+            if (parsed.ok) {
+                self->m_rateLimitedUntilMs = 0;
+                self->setSnapshot(toVariantMap(parsed.snapshot));
+                finalize({});
             } else {
-                const CodexZhParseResult result = CodexZhResponseParser::parse(payload);
-                if (result.ok) {
-                    setSnapshot(toVariantMap(result.snapshot));
-                } else {
-                    setSnapshot(emptySnapshot(QStringLiteral("请求失败"), result.errorMessage));
-                }
+                // 业务层解析失败（视为非可重试）
+                finalize(QStringLiteral("CodexZH %1").arg(parsed.errorMessage));
             }
+            return;
         }
-
-        reply->deleteLater();
-        m_activeApiKey.fill('\0');
-        m_activeApiKey.clear();
-        setLoading(false);
+        case ResilientNetworkRequest::Outcome::Aborted:
+            self->m_refreshInterrupted = true;
+            finalize({});
+            return;
+        case ResilientNetworkRequest::Outcome::NonRetryableFailure:
+        case ResilientNetworkRequest::Outcome::RetryableFailure: {
+            QString message;
+            if (result.responseTooLarge) {
+                message = QStringLiteral("CodexZH 响应过大，已拒绝处理");
+            } else if (result.httpStatus == 401 || result.httpStatus == 403) {
+                message = QStringLiteral("CodexZH 认证失败，请检查 API Key");
+            } else if (result.httpStatus == 429) {
+                self->m_rateLimitedUntilMs = QDateTime::currentMSecsSinceEpoch()
+                    + qMax(60000, result.retryAfterMs);
+                if (!self->m_snapshot.value(QStringLiteral("plans")).toList().isEmpty()) {
+                    QVariantMap availableSnapshot = self->m_snapshot;
+                    // 保留最近一次成功额度；限流只暂停后续请求，不把可用数据标成异常。
+                    availableSnapshot.insert(QStringLiteral("statusLabel"), QStringLiteral("可用"));
+                    availableSnapshot.insert(QStringLiteral("errorText"), QString());
+                    availableSnapshot.insert(QStringLiteral("stale"), true);
+                    self->setSnapshot(availableSnapshot);
+                    finalize({});
+                    return;
+                }
+                message = QStringLiteral("CodexZH 请求过于频繁，请稍后重试");
+            } else if (result.httpStatus >= 500) {
+                message = QStringLiteral("CodexZH 服务暂时不可用");
+            } else if (!result.errorMessage.isEmpty()) {
+                message = result.errorMessage;
+                if (!message.startsWith(QStringLiteral("CodexZH"))) {
+                    message = QStringLiteral("CodexZH %1").arg(message);
+                }
+            } else {
+                message = QStringLiteral("CodexZH 无法连接服务");
+            }
+            finalize(message);
+            return;
+        }
+        }
     });
+}
+
+void CodexZhClient::forceRefresh()
+{
+    m_rateLimitedUntilMs = 0;
+    if (!m_loading) {
+        refresh();
+        return;
+    }
+
+    m_refreshPending = true;
+    m_refreshInterrupted = true;
+    if (m_request) {
+        m_request->abort();
+    }
+}
+
+void CodexZhClient::cancelRefresh()
+{
+    m_refreshPending = false;
+    m_refreshInterrupted = false;
+    if (m_request) m_request->abort();
 }
 
 void CodexZhClient::saveCredential(const QString &apiKey)
@@ -225,198 +285,135 @@ void CodexZhClient::saveCredential(const QString &apiKey)
         setCredentialState(QStringLiteral("API Key 不能为空"), false, true);
         return;
     }
-
+    if (!m_dispatcher) {
+        setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
+        return;
+    }
     m_pendingApiKey.fill(QChar(u'\0'));
     m_pendingApiKey = trimmedApiKey;
-    m_pendingCredentialOperation = PendingCredentialOperation::Save;
     setCredentialState(QStringLiteral("正在保存到 KDE 钱包…"), true, false);
-    if (m_wallet && m_wallet->isOpen()) {
-        performPendingCredentialOperation();
-    } else {
-        openWallet();
-    }
+
+    const QString snapshotValue = m_pendingApiKey;
+    m_dispatcher->submit(KWalletDispatcher::Op::Save,
+                         QStringLiteral("codexzh"),
+                         snapshotValue,
+                         [this](const KWalletDispatcher::Result &result) {
+                             handleCredentialSave(result);
+                         });
 }
 
 void CodexZhClient::clearCredential()
 {
+    if (!m_dispatcher) {
+        setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
+        return;
+    }
     m_pendingApiKey.fill(QChar(u'\0'));
     m_pendingApiKey.clear();
-    m_pendingCredentialOperation = PendingCredentialOperation::Clear;
     setCredentialState(QStringLiteral("正在从 KDE 钱包移除…"), true, false);
-    if (m_wallet && m_wallet->isOpen()) {
-        performPendingCredentialOperation();
-    } else {
-        openWallet();
+
+    m_dispatcher->submit(KWalletDispatcher::Op::Clear,
+                         QStringLiteral("codexzh"),
+                         QString(),
+                         [this](const KWalletDispatcher::Result &result) {
+                             handleCredentialClear(result);
+                         });
+}
+
+void CodexZhClient::setWalletDispatcher(KWalletDispatcher *dispatcher)
+{
+    m_dispatcher = dispatcher;
+    if (m_dispatcher && !m_initialLoadDispatched) {
+        m_initialLoadDispatched = true;
+        QTimer::singleShot(1500, this, [this] { requestCredentialLoad(); });
     }
 }
 
-void CodexZhClient::openWallet()
+void CodexZhClient::reloadCredential()
 {
-    if ((m_wallet && m_wallet->isOpen()) || m_walletOpening) {
-        if (m_wallet && m_wallet->isOpen()) {
-            performPendingCredentialOperation();
-        }
-        return;
-    }
-    if (!KWallet::Wallet::isEnabled()) {
-        setCredentialState(QStringLiteral("KDE 钱包未启用，无法安全保存 API Key"), false, true);
-        return;
-    }
+    requestCredentialLoad();
+}
 
-    if (m_wallet) {
-        m_wallet->deleteLater();
-        m_wallet = nullptr;
-    }
-    m_walletOpening = true;
-    m_wallet = KWallet::Wallet::openWallet(KWallet::Wallet::LocalWallet(),
-                                           0,
-                                           KWallet::Wallet::Asynchronous);
-    if (!m_wallet) {
-        m_walletOpening = false;
-        setCredentialState(QStringLiteral("无法打开 KDE 钱包"), false, true);
-        // Plasma 启动竞态：kwalletd 可能晚于 plasmashell 就绪，失败后定时重试自愈
-        // ponytail: 上限 5 次（约 25s），kwalletd 故障时避免永久重试；钱包被禁用时提前返回
-        if (++m_walletRetryCount < walletRetryLimit) {
-            QTimer::singleShot(5000, this, &CodexZhClient::openWallet);
-        }
+void CodexZhClient::requestCredentialLoad()
+{
+    if (!m_dispatcher) {
         return;
     }
-    m_wallet->setParent(this);
-    KWallet::Wallet *openedWallet = m_wallet;
+    m_credentialBusy = true;
+    Q_EMIT credentialBusyChanged();
+    m_dispatcher->submit(KWalletDispatcher::Op::Read,
+                         QStringLiteral("codexzh"),
+                         QString(),
+                         [this](const KWalletDispatcher::Result &result) {
+                             handleCredentialRead(result);
+                         });
+}
 
-    connect(openedWallet, &KWallet::Wallet::walletOpened, this, [this, openedWallet](bool success) {
-        if (m_wallet != openedWallet) {
-            return;
-        }
-        m_walletOpening = false;
-        m_walletRetryCount = 0;
-        if (!success || !prepareWalletFolder()) {
-            setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
-            return;
-        }
-        // 钱包文件夹改名后一次性迁移旧 Key（幂等，见 migrateLegacyWalletEntry）
-        migrateLegacyWalletEntry();
-        if (m_pendingCredentialOperation == PendingCredentialOperation::None) {
-            loadCredential();
-        } else {
-            performPendingCredentialOperation();
-        }
-    });
-    connect(openedWallet, &KWallet::Wallet::walletClosed, this, [this, openedWallet]() {
-        if (m_wallet != openedWallet) {
-            openedWallet->deleteLater();
+void CodexZhClient::handleCredentialRead(const KWalletDispatcher::Result &result)
+{
+    if (result.ok) {
+        const QString trimmed = result.value.trimmed();
+        if (!trimmed.isEmpty()) {
+            const QByteArray previousKey = m_storedApiKey;
+            setStoredApiKey(trimmed.toUtf8());
+            setCredentialState(QStringLiteral("已保存在 KDE 钱包"), false, false);
+            // 凭据未变时不主动刷新：kwalletd 频繁触发 walletOpened 会让 reloadCredential
+            // 被反复调用；key 没变就没必要立刻打 API，省一次 60s 限流窗口。
+            if (m_storedApiKey != previousKey) {
+                refresh();
+            }
             return;
         }
         setStoredApiKey({});
-        m_wallet = nullptr;
-        setCredentialState(QStringLiteral("KDE 钱包已锁定"), false, true);
-        openedWallet->deleteLater();
-    });
-    connect(openedWallet,
-            &KWallet::Wallet::folderUpdated,
-            this,
-            [this, openedWallet](const QString &folder) {
-                if (m_wallet == openedWallet && folder == walletFolder
-                    && m_pendingCredentialOperation == PendingCredentialOperation::None) {
-                    loadCredential();
-                }
-            });
+        setCredentialState(QStringLiteral("尚未保存 API Key"), false, false);
+        return;
+    }
+    if (result.errorCode == QLatin1String("not_found")) {
+        setStoredApiKey({});
+        setCredentialState(QStringLiteral("尚未保存 API Key"), false, false);
+        return;
+    }
+    if (result.errorCode == QLatin1String("wallet_disabled")
+        || result.errorCode == QLatin1String("wallet_open_failed")
+        || result.errorCode == QLatin1String("timeout")
+        || result.errorCode == QLatin1String("worker_failed_to_start")
+        || result.errorCode == QLatin1String("worker_crashed")) {
+        setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
+        return;
+    }
+    setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
 }
 
-bool CodexZhClient::prepareWalletFolder()
+void CodexZhClient::handleCredentialSave(const KWalletDispatcher::Result &result)
 {
-    if (!m_wallet || !m_wallet->isOpen()) {
-        return false;
-    }
-    if (!m_wallet->hasFolder(walletFolder) && !m_wallet->createFolder(walletFolder)) {
-        return false;
-    }
-    return m_wallet->setFolder(walletFolder);
-}
-
-bool CodexZhClient::migrateLegacyWalletEntry()
-{
-    // 项目改名后钱包文件夹由 "AI Usage Watcher" 迁至 AIQuotaPilot。
-    // 幂等：新文件夹已有 Key 则跳过；迁移后删除旧条目。
-    const QString legacyFolder = QStringLiteral("AI Usage Watcher");
-    if (!m_wallet || !m_wallet->isOpen() || !m_wallet->hasFolder(legacyFolder)) {
-        return true;
-    }
-    m_wallet->setFolder(legacyFolder);
-    QString legacyKey;
-    const int result = m_wallet->readPassword(codexZhWalletEntry, legacyKey);
-    m_wallet->setFolder(walletFolder);
-    if (result != 0 || legacyKey.trimmed().isEmpty()) {
-        legacyKey.fill(QChar(u'\0'));
-        return true;
-    }
-    QString currentKey;
-    const bool alreadyPresent = m_wallet->readPassword(codexZhWalletEntry, currentKey) == 0
-        && !currentKey.isEmpty();
-    currentKey.fill(QChar(u'\0'));
-    if (alreadyPresent) {
-        legacyKey.fill(QChar(u'\0'));
-        return true;
-    }
-    m_wallet->writePassword(codexZhWalletEntry, legacyKey);
-    m_wallet->setFolder(legacyFolder);
-    m_wallet->removeEntry(codexZhWalletEntry);
-    m_wallet->setFolder(walletFolder);
-    legacyKey.fill(QChar(u'\0'));
-    return true;
-}
-
-void CodexZhClient::loadCredential()
-{
-    QString apiKey;
-    const int result = m_wallet->readPassword(codexZhWalletEntry, apiKey);
-    if (result == 0 && !apiKey.trimmed().isEmpty()) {
-        setStoredApiKey(apiKey.trimmed().toUtf8());
-        apiKey.fill(QChar(u'\0'));
-        setCredentialState(QStringLiteral("已保存在 KDE 钱包"), false, false);
+    if (result.ok) {
+        QByteArray storedApiKey = m_pendingApiKey.toUtf8();
+        setStoredApiKey(storedApiKey);
+        storedApiKey.fill('\0');
+        setCredentialState(QStringLiteral("API Key 已保存到 KDE 钱包"), false, false);
+        m_pendingApiKey.fill(QChar(u'\0'));
+        m_pendingApiKey.clear();
         refresh();
         return;
     }
-    apiKey.fill(QChar(u'\0'));
-    setStoredApiKey({});
-    setCredentialState(QStringLiteral("尚未保存 API Key"), false, false);
-}
-
-void CodexZhClient::performPendingCredentialOperation()
-{
-    if (!prepareWalletFolder()) {
-        setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
-        return;
-    }
-
-    if (m_pendingCredentialOperation == PendingCredentialOperation::Save) {
-        QString apiKey = m_pendingApiKey;
-        const int result = m_wallet->writePassword(codexZhWalletEntry, apiKey);
-        if (result == 0) {
-            QByteArray storedApiKey = apiKey.toUtf8();
-            setStoredApiKey(storedApiKey);
-            storedApiKey.fill('\0');
-            setCredentialState(QStringLiteral("API Key 已保存到 KDE 钱包"), false, false);
-            refresh();
-        } else {
-            setCredentialState(QStringLiteral("API Key 保存失败，请检查 KDE 钱包"), false, true);
-        }
-        apiKey.fill(QChar(u'\0'));
-    } else if (m_pendingCredentialOperation == PendingCredentialOperation::Clear) {
-        const int result = m_wallet->hasEntry(codexZhWalletEntry)
-            ? m_wallet->removeEntry(codexZhWalletEntry) : 0;
-        if (result == 0) {
-            setStoredApiKey({});
-            setCredentialState(QStringLiteral("API Key 已移除"), false, false);
-            setSnapshot(emptySnapshot(QStringLiteral("未配置")));
-        } else {
-            setCredentialState(QStringLiteral("API Key 移除失败，请检查 KDE 钱包"), false, true);
-        }
-    }
-
+    setCredentialState(QStringLiteral("API Key 保存失败，请检查 KDE 钱包"), false, true);
     m_pendingApiKey.fill(QChar(u'\0'));
     m_pendingApiKey.clear();
-    m_pendingCredentialOperation = PendingCredentialOperation::None;
+}
+
+void CodexZhClient::handleCredentialClear(const KWalletDispatcher::Result &result)
+{
+    if (result.ok) {
+        setStoredApiKey({});
+        setCredentialState(QStringLiteral("API Key 已移除"), false, false);
+        setSnapshot(emptySnapshot(QStringLiteral("未配置")));
+        m_pendingApiKey.fill(QChar(u'\0'));
+        m_pendingApiKey.clear();
+        return;
+    }
+    setCredentialState(QStringLiteral("API Key 移除失败，请检查 KDE 钱包"), false, true);
+    m_pendingApiKey.fill(QChar(u'\0'));
+    m_pendingApiKey.clear();
 }
 
 void CodexZhClient::setStoredApiKey(const QByteArray &apiKey)
@@ -431,11 +428,6 @@ void CodexZhClient::setStoredApiKey(const QByteArray &apiKey)
 
 void CodexZhClient::setCredentialState(const QString &status, bool busy, bool error)
 {
-    if (error && !busy) {
-        m_pendingApiKey.fill(QChar(u'\0'));
-        m_pendingApiKey.clear();
-        m_pendingCredentialOperation = PendingCredentialOperation::None;
-    }
     if (m_credentialStatus != status) {
         m_credentialStatus = status;
         Q_EMIT credentialStatusChanged();
@@ -457,6 +449,19 @@ void CodexZhClient::setLoading(bool loading)
     }
     m_loading = loading;
     Q_EMIT loadingChanged();
+}
+
+void CodexZhClient::setError(const QString &message)
+{
+    if (!m_snapshot.value(QStringLiteral("plans")).toList().isEmpty()) {
+        QVariantMap staleSnapshot = m_snapshot;
+        staleSnapshot.insert(QStringLiteral("statusLabel"), QStringLiteral("数据暂时不可更新"));
+        staleSnapshot.insert(QStringLiteral("errorText"), message);
+        staleSnapshot.insert(QStringLiteral("stale"), true);
+        setSnapshot(staleSnapshot);
+        return;
+    }
+    setSnapshot(emptySnapshot(QStringLiteral("请求失败"), message));
 }
 
 void CodexZhClient::setSnapshot(const QVariantMap &snapshot)

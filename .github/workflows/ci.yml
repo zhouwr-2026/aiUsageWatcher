@@ -11,8 +11,12 @@
 #   - manual dispatch via the Actions tab
 #
 # Image choice:
-#   - KDE neon — official KDE CI image with Plasma 6 + Qt 6 + KF6 pre-installed.
-#     Avoids the long apt-get install chain of stock Ubuntu.
+#   - Arch Linux (container: archlinux:latest) — the only public, anonymously
+#     pullable image that ships the full Plasma 6 + KF6 + Qt 6 dev stack.
+#     KDE neon's official CI images (invent-registry.kde.org) require auth;
+#     Ubuntu 24.04/Kubuntu PPA do not ship libplasma6-dev in any public repo.
+#     Arch packages the tools where the project expects them (qmllint and
+#     qmltestrunner live inside qt6-declarative).
 #
 # The workflow is intentionally a "no-restart" job: it builds and tests
 # only, mirroring what a human does locally via tests/run-static-checks.sh
@@ -41,18 +45,13 @@ jobs:
     name: build-and-test
     runs-on: ubuntu-24.04
     container:
-      # KDE neon 的「官方」CI 镜像不再公共匿名可拉取（invent-registry.kde.org
-      # 需认证，kdeci/neon 已废弃）。改用 Ubuntu 24.04 官方包提供
-      # Qt 6.6 / KF6 / Plasma 6.0 —— 与本地开发环境（Manjaro/Qt 6.11）
-      # 存在版本差，但覆盖构建 + C++ 契约测试 + QML 组件测试足够。
-      image: ubuntu:24.04
+      image: archlinux:latest
     defaults:
       run:
-        # ubuntu:24.04 容器默认 shell 是 dash（不支持 pipefail / 数组语法），
-        # 统一显式用 bash。
+        # Arch 容器默认 shell 是 bash（与 runner 一致；显式声明防回归）。
         shell: bash
     env:
-      # mirror of tests/run-static-checks.sh expectations
+      # pacman 非交互：装包时不问确认/默认值。
       DEBIAN_FRONTEND: noninteractive
 
     steps:
@@ -61,43 +60,32 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install host build dependencies
-        # Ubuntu 24.04 官方仓库没有 KF6/Plasma 6 包（Plasma 6 需要
-        # Kubuntu Backports PPA）。容器内默认以 root 运行，无需 sudo。
+      - name: Install build dependencies
+        # Arch 官方 extra/community 仓库提供完整 KF6 + Plasma 6 开发栈；
+        # qmllint / qmltestrunner 在 qt6-declarative 内（与本地 Manjaro 一致）。
         run: |
           set -euo pipefail
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update
-          apt-get install -y --no-install-recommends software-properties-common ca-certificates
-          add-apt-repository -y ppa:kubuntu-ppa/backports
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            build-essential \
+          pacman -Syu --noconfirm --needed \
+            base-devel \
             cmake \
             extra-cmake-modules \
             gettext \
-            kpackagetool6 \
-            kf6-kcmutils \
-            libkf6wallet-dev \
-            libkf6config-dev \
-            libkf6coreaddons-dev \
-            libkirigami6 \
-            libkirigamigallery-dev \
-            libplasma6-dev \
-            libqt6core6 \
-            libqt6qml6 \
-            libqt6quickcharts6 \
+            git \
+            kcmutils \
+            kconfig \
+            kcoreaddons \
+            kirigami \
+            kpackage \
+            kwallet \
+            libplasma \
             plasma-workspace \
-            qml6-module-* \
-            qml6-module-org-kde-* \
-            qmltestrunner-qt6 \
-            qt6-base-dev \
-            qt6-declarative-dev \
-            qt6-declarative-dev-tools \
-            qt6-tools-dev \
-            qt6-tools-dev-tools \
+            qt6-base \
+            qt6-declarative \
+            qt6-tools \
+            qt6-websockets \
             ripgrep \
-            xmllint
+            python \
+            libxml2
 
       - name: Configure
         run: |
@@ -117,7 +105,7 @@ jobs:
 
       - name: QML + static checks
         # run-static-checks.sh expects rg, xmllint, python3 and a Qt6
-        # QML test runner — installed above on the Ubuntu container.
+        # QML test runner — installed above on the Arch container.
         run: bash tests/run-static-checks.sh
 
       - name: Build summary

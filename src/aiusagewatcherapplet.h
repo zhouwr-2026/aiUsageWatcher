@@ -74,9 +74,7 @@ class AiUsageWatcherApplet : public Plasma::Applet
     Q_PROPERTY(QString agnesCredentialStatus READ agnesCredentialStatus NOTIFY agnesCredentialStatusChanged)
     Q_PROPERTY(bool agnesCredentialBusy READ agnesCredentialBusy NOTIFY agnesCredentialBusyChanged)
     Q_PROPERTY(bool agnesCredentialError READ agnesCredentialError NOTIFY agnesCredentialErrorChanged)
-    Q_PROPERTY(QString documentationUrl READ documentationUrl CONSTANT)
     Q_PROPERTY(QString sharedProviders READ sharedProviders NOTIFY sharedProvidersChanged)
-    Q_PROPERTY(bool walletServiceAvailable READ walletServiceAvailable NOTIFY walletServiceAvailabilityChanged)
 
 public:
     AiUsageWatcherApplet(QObject *parent,
@@ -131,8 +129,6 @@ public:
     bool agnesCredentialBusy() const;
     bool agnesCredentialError() const;
     QString sharedProviders() const;
-    bool walletServiceAvailable() const;
-    QString documentationUrl() const;
 
     Q_INVOKABLE void refreshMiniMax();
     Q_INVOKABLE void forceRefreshMiniMax();

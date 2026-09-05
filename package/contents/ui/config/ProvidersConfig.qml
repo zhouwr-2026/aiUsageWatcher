@@ -703,7 +703,7 @@ KCM.SimpleKCM {
                     required property string providerName
                     required property string planSummary
                     required property int index
-                    required property bool enabled
+                    required property bool isEnabled
                     required property string logoSource
                     required property string logoChar
 
@@ -752,7 +752,7 @@ KCM.SimpleKCM {
 
                         QQC2.Switch {
                             objectName: "providerEnabledSwitch"
-                            checked: providerDelegate.enabled
+                            checked: providerDelegate.isEnabled
                             Accessible.name: qsTr("启用 %1").arg(providerDelegate.providerName)
                             onToggled: {
                                 const index = root.indexForId(providerDelegate.providerId)

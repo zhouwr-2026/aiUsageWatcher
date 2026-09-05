@@ -319,7 +319,7 @@ Item {
                     onClicked: logoFileDialog.open()
 
                     QQC2.ToolTip {
-                        visible: parent.containsMouse && root.isCustom
+                        visible: logoClickArea.containsMouse && root.isCustom
                         text: qsTr("点击选择供应商 Logo")
                     }
                 }

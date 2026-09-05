@@ -393,16 +393,6 @@ QString AiUsageWatcherApplet::sharedProviders() const
     return m_sharedProviderConfig.providers();
 }
 
-bool AiUsageWatcherApplet::walletServiceAvailable() const
-{
-    return m_walletDispatcher.walletServiceRegistered();
-}
-
-QString AiUsageWatcherApplet::documentationUrl() const
-{
-    return QStringLiteral("https://gitee.com/eruditeLoong/aiUsageWatcher/blob/master/docs/requirements.md");
-}
-
 QVariantMap AiUsageWatcherApplet::deepseekSnapshot() const
 {
     return m_deepSeekClient.snapshot();

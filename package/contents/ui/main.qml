@@ -90,137 +90,85 @@ PlasmoidItem {
         requestCustomRefresh()
     }
 
-    function applyMiniMaxSnapshot() {
-        const snapshot = usageBackend["miniMaxSnapshot"]
-        if (!snapshot || snapshot.providerId !== "minimax"
+    // 通用快照接入：按 backend 属性名与 providerId 匹配，命中则替换运行时快照。
+    // 示例：applySnapshotFor("miniMaxSnapshot", "minimax")
+    function applySnapshotFor(backendKey, providerId) {
+        const snapshot = usageBackend[backendKey]
+        if (!snapshot || snapshot.providerId !== providerId
                 || !snapshot.plans || typeof snapshot.plans.length !== "number")
             return false
 
         runtimeSnapshots = ProviderNormalize.replaceSnapshot(runtimeSnapshots, snapshot)
         lastRefreshTime = new Date()
         return true
+    }
+
+    // 通用刷新入口：调用 applet 的 Q_INVOKABLE；可选透传参数（如 custom 的 definitions）。
+    function requestRefreshFor(backendMethod, arg) {
+        const refreshFunction = usageBackend[backendMethod]
+        if (typeof refreshFunction !== "function")
+            return false
+        if (arguments.length > 1)
+            refreshFunction.call(usageBackend, arg)
+        else
+            refreshFunction.call(usageBackend)
+        return true
+    }
+
+    function applyMiniMaxSnapshot() {
+        return applySnapshotFor("miniMaxSnapshot", "minimax")
     }
 
     function requestMiniMaxRefresh() {
-        const refreshFunction = usageBackend["refreshMiniMax"]
-        if (typeof refreshFunction !== "function")
-            return false
-        refreshFunction.call(usageBackend)
-        return true
+        return requestRefreshFor("refreshMiniMax")
     }
 
     function applyDeepSeekSnapshot() {
-        const snapshot = usageBackend["deepseekSnapshot"]
-        if (!snapshot || snapshot.providerId !== "deepseek"
-                || !snapshot.plans || typeof snapshot.plans.length !== "number")
-            return false
-
-        runtimeSnapshots = ProviderNormalize.replaceSnapshot(runtimeSnapshots, snapshot)
-        lastRefreshTime = new Date()
-        return true
+        return applySnapshotFor("deepseekSnapshot", "deepseek")
     }
 
     function requestDeepSeekRefresh() {
-        const refreshFunction = usageBackend["refreshDeepSeekUsage"]
-        if (typeof refreshFunction !== "function")
-            return false
-        refreshFunction.call(usageBackend)
-        return true
+        return requestRefreshFor("refreshDeepSeekUsage")
     }
 
     function applyCodexSnapshot() {
-        const snapshot = usageBackend["codexSnapshot"]
-        if (!snapshot || snapshot.providerId !== "codex"
-                || !snapshot.plans || typeof snapshot.plans.length !== "number")
-            return false
-
-        runtimeSnapshots = ProviderNormalize.replaceSnapshot(runtimeSnapshots, snapshot)
-        lastRefreshTime = new Date()
-        return true
+        return applySnapshotFor("codexSnapshot", "codex")
     }
 
     function requestCodexRefresh() {
-        const refreshFunction = usageBackend["refreshCodexUsage"]
-        if (typeof refreshFunction !== "function")
-            return false
-        refreshFunction.call(usageBackend)
-        return true
+        return requestRefreshFor("refreshCodexUsage")
     }
 
     function applyCodexZhSnapshot() {
-        const snapshot = usageBackend["codexzhSnapshot"]
-        if (!snapshot || snapshot.providerId !== "codexzh"
-                || !snapshot.plans || typeof snapshot.plans.length !== "number")
-            return false
-
-        runtimeSnapshots = ProviderNormalize.replaceSnapshot(runtimeSnapshots, snapshot)
-        lastRefreshTime = new Date()
-        return true
+        return applySnapshotFor("codexzhSnapshot", "codexzh")
     }
 
     function requestCodexZhRefresh() {
-        const refreshFunction = usageBackend["refreshCodexZhUsage"]
-        if (typeof refreshFunction !== "function")
-            return false
-        refreshFunction.call(usageBackend)
-        return true
+        return requestRefreshFor("refreshCodexZhUsage")
     }
 
     function applyOpenCodeGoSnapshot() {
-        const snapshot = usageBackend["opencodeGoSnapshot"]
-        if (!snapshot || snapshot.providerId !== "opencode-go"
-                || !snapshot.plans || typeof snapshot.plans.length !== "number")
-            return false
-
-        runtimeSnapshots = ProviderNormalize.replaceSnapshot(runtimeSnapshots, snapshot)
-        lastRefreshTime = new Date()
-        return true
+        return applySnapshotFor("opencodeGoSnapshot", "opencode-go")
     }
 
     function requestOpenCodeGoRefresh() {
-        const refreshFunction = usageBackend["refreshOpenCodeGoUsage"]
-        if (typeof refreshFunction !== "function")
-            return false
-        refreshFunction.call(usageBackend)
-        return true
+        return requestRefreshFor("refreshOpenCodeGoUsage")
     }
 
     function applyAgnesSnapshot() {
-        const snapshot = usageBackend["agnesSnapshot"]
-        if (!snapshot || snapshot.providerId !== "agnes-ai"
-                || !snapshot.plans || typeof snapshot.plans.length !== "number")
-            return false
-
-        runtimeSnapshots = ProviderNormalize.replaceSnapshot(runtimeSnapshots, snapshot)
-        lastRefreshTime = new Date()
-        return true
+        return applySnapshotFor("agnesSnapshot", "agnes-ai")
     }
 
     function requestAgnesRefresh() {
-        const refreshFunction = usageBackend["refreshAgnesUsage"]
-        if (typeof refreshFunction !== "function")
-            return false
-        refreshFunction.call(usageBackend)
-        return true
+        return requestRefreshFor("refreshAgnesUsage")
     }
 
     function applyCommandCodeSnapshot() {
-        const snapshot = usageBackend["commandCodeSnapshot"]
-        if (!snapshot || snapshot.providerId !== "command-code"
-                || !snapshot.plans || typeof snapshot.plans.length !== "number")
-            return false
-
-        runtimeSnapshots = ProviderNormalize.replaceSnapshot(runtimeSnapshots, snapshot)
-        lastRefreshTime = new Date()
-        return true
+        return applySnapshotFor("commandCodeSnapshot", "command-code")
     }
 
     function requestCommandCodeRefresh() {
-        const refreshFunction = usageBackend["refreshCommandCodeUsage"]
-        if (typeof refreshFunction !== "function")
-            return false
-        refreshFunction.call(usageBackend)
-        return true
+        return requestRefreshFor("refreshCommandCodeUsage")
     }
 
     function applyCustomSnapshots() {
@@ -237,11 +185,8 @@ PlasmoidItem {
     }
 
     function requestCustomRefresh() {
-        const refreshFunction = usageBackend["refreshCustomProviders"]
-        if (typeof refreshFunction !== "function")
-            return false
-        refreshFunction.call(usageBackend, providerDefinitions)
-        return true
+        // custom 必须透传 providerDefinitions（脚本型 provider 由 QML 侧提供定义）。
+        return requestRefreshFor("refreshCustomProviders", providerDefinitions)
     }
 
     function refresh() {

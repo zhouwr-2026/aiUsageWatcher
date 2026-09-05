@@ -63,11 +63,11 @@ jobs:
 
       - name: Install host build dependencies
         # Ubuntu 24.04 官方仓库提供 Qt 6.4+ / KF6 / Plasma 6.0 的最小集，
-        # pin 住依赖以保证可复现。
+        # pin 住依赖以保证可复现。容器内默认以 root 运行，无需 sudo。
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          apt-get update
+          apt-get install -y --no-install-recommends \
             build-essential \
             cmake \
             extra-cmake-modules \

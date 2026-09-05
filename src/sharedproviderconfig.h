@@ -19,13 +19,15 @@ public:
     QString providers() const;
     bool ensure(const QString &providers);
     bool save(const QString &providers);
+    // 从磁盘重新加载（构造与 KConfigWatcher 变更时内部调用；
+    // 公开供外部在等不到 watcher 通知时主动刷新，也便于测试验证）。
+    void reload();
 
 Q_SIGNALS:
     void providersChanged();
 
 private:
     static bool isValid(const QString &providers);
-    void reload();
 
     KSharedConfig::Ptr m_config;
     KConfigWatcher::Ptr m_watcher;

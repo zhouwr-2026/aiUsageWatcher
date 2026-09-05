@@ -62,10 +62,14 @@ jobs:
           fetch-depth: 0
 
       - name: Install host build dependencies
-        # Ubuntu 24.04 官方仓库提供 Qt 6.4+ / KF6 / Plasma 6.0 的最小集，
-        # pin 住依赖以保证可复现。容器内默认以 root 运行，无需 sudo。
+        # Ubuntu 24.04 官方仓库没有 KF6/Plasma 6 包（Plasma 6 需要
+        # Kubuntu Backports PPA）。容器内默认以 root 运行，无需 sudo。
         run: |
           set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends software-properties-common ca-certificates
+          add-apt-repository -y ppa:kubuntu-ppa/backports
           apt-get update
           apt-get install -y --no-install-recommends \
             build-essential \

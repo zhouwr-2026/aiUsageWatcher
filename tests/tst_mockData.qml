@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //
-// NOTE: the TestCase name "MockDataContract" is a historical label —
-// this file does NOT depend on any JS-side mock snapshot generator
+// This file does NOT depend on any JS-side mock snapshot generator
 // (providerSnapshot.js was removed in commit 2d497a9). tests/cpp/ tst_*
 // files test the C++ client contracts; this file tests the pure-JS
 // DisplayProvider / ProviderNormalize data-shape contract (sort
-// orders, plan selection, threshold mapping, etc.). Renaming the
-// TestCase would break the test id referenced in CI logs, so the
-// historical label is preserved.
+// orders, plan selection, threshold mapping, etc.).
 
 import QtQuick 2.15
 import QtTest 1.3
@@ -16,7 +13,7 @@ import "../package/contents/js/displayProvider.js" as DisplayProvider
 import "../package/contents/js/providerCatalog.js" as ProviderCatalog
 
 TestCase {
-    name: "MockDataContract"
+    name: "TestDataContract"
 
     function providerById(providers, id) {
         for (var i = 0; i < providers.length; ++i) {

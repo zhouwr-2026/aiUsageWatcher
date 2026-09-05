@@ -113,6 +113,29 @@ if(BUILD_TESTING)
     target_link_libraries(tst_codexzhresponseparser PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME codexzh-response-parser COMMAND tst_codexzhresponseparser)
 
+    add_executable(tst_codexzhclient
+        tests/cpp/tst_codexzhclient.cpp
+        src/codexzhclient.cpp
+        src/codexzhclient.h
+        src/codexzhresponseparser.cpp
+        src/codexzhresponseparser.h
+        src/kwalletdispatcher.cpp
+        src/kwalletdispatcher.h
+        src/resilientnetworkrequest.cpp
+        src/resilientnetworkrequest.h
+    )
+    target_include_directories(tst_codexzhclient PRIVATE src)
+    target_link_libraries(tst_codexzhclient PRIVATE Qt6::Core Qt6::DBus Qt6::Network Qt6::Test KF6::Wallet)
+    add_test(NAME codexzh-client-contract COMMAND tst_codexzhclient)
+
+    add_executable(tst_sharedproviderconfig
+        tests/cpp/tst_sharedproviderconfig.cpp
+        src/sharedproviderconfig.cpp
+        src/sharedproviderconfig.h
+    )
+    target_include_directories(tst_sharedproviderconfig PRIVATE src)
+    target_link_libraries(tst_sharedproviderconfig PRIVATE Qt6::Core Qt6::Test KF6::ConfigCore)
+    add_test(NAME shared-provider-config COMMAND tst_sharedproviderconfig)
 
     add_executable(tst_minimaxclient
         tests/cpp/tst_minimaxclient.cpp

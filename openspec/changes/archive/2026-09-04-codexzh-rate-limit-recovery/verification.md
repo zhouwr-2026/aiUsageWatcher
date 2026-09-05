@@ -153,3 +153,27 @@ f36e99d fix(codexzh): break the 1Hz refresh loop that blew through the 60s rate-
 **This is an irreversible action per AGENTS.md / CLAUDE.md** — `git push origin master` cannot be undone. After push, other contributors will base off `origin/master`. The CI workflow on this same push will be the first gate.
 
 **Defer to user confirmation** — do not push without explicit "yes push" from the user. The CI workflow gives us the cheapest possible gate to detect regressions; a single failed CI run after push is `git revert <hash>` to roll back, but the user must opt in.
+
+## Post-push reality check (2026-09-05)
+
+本次推送实际去向是 **gitee.com**（`git@gitee.com:eruditeLoong/aiUsageWatcher.git`）。
+**Gitee 不执行 GitHub Actions**：`.github/workflows/ci.yml` 推上去后不会被触发，CI gate 当前**不生效**（不是 bug，是平台限制）。
+
+现状说明（避免把"已推送 CI"误认为"CI 已运行"）：
+
+- `.github/workflows/ci.yml` **保留**——它是 CI 意图的完整文档化（kdeci/neon 镜像、
+  构建 + ctest + 静态检查、no-restart 策略）；若未来镜像到 GitHub 会自动生效。
+- **本地等价门禁**（推送前已跑，长期有效）：
+  - `cmake --build build-test && cd build-test && ctest` —— C++ 契约测试 12/12
+  - `bash tests/run-static-checks.sh` —— QML 组件 130/130 + qmllint 0 警告 + metadata
+  - `git diff --check` —— 空白错误
+- 若希望 gitee 上真正自动跑 CI：需要在 Gitee 网页端为仓库开通 **Gitee Go**
+  流水线（网页 UI 配置，非仓库内文件驱动），把上述本地门禁的三个命令作为流水线步骤。
+
+## Post-push follow-ups (deferred, not forgotten)
+
+- [ ] Agnes AI 凭据配置（需要用户提供 API Key / localStorage token）
+- [ ] Gitee Go 流水线（可选，网页端配置）
+- [ ] CI build cache 优化（`caches: apt`）——等 CI 真跑起来再按实测反馈调整，避免过早优化
+- [ ] 6 Client 模板进一步抽象（如需给新 provider 接入时再评估，当前 6 个已收敛良好）
+

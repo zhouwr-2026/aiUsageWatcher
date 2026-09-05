@@ -41,7 +41,11 @@ jobs:
     name: build-and-test
     runs-on: ubuntu-24.04
     container:
-      image: kdeci/neon:latest
+      # KDE neon 的「官方」CI 镜像不再公共匿名可拉取（invent-registry.kde.org
+      # 需认证，kdeci/neon 已废弃）。改用 Ubuntu 24.04 官方包提供
+      # Qt 6.6 / KF6 / Plasma 6.0 —— 与本地开发环境（Manjaro/Qt 6.11）
+      # 存在版本差，但覆盖构建 + C++ 契约测试 + QML 组件测试足够。
+      image: ubuntu:24.04
     env:
       # mirror of tests/run-static-checks.sh expectations
       DEBIAN_FRONTEND: noninteractive
@@ -53,8 +57,8 @@ jobs:
           fetch-depth: 0
 
       - name: Install host build dependencies
-        # KDE neon ships most of these, but pin the exact set so the job
-        # is reproducible if a future neon image drops one of them.
+        # Ubuntu 24.04 官方仓库提供 Qt 6.4+ / KF6 / Plasma 6.0 的最小集，
+        # pin 住依赖以保证可复现。
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -64,18 +68,26 @@ jobs:
             extra-cmake-modules \
             gettext \
             kpackagetool6 \
+            kf6-kcmutils \
             libkf6wallet-dev \
             libkf6config-dev \
             libkf6coreaddons-dev \
+            libkirigami6 \
+            libkirigamigallery-dev \
             libplasma6-dev \
             libqt6core6 \
             libqt6qml6 \
+            libqt6quickcharts6 \
+            plasma-workspace \
             qml6-module-* \
+            qml6-module-org-kde-* \
             qmltestrunner-qt6 \
             qt6-base-dev \
             qt6-declarative-dev \
+            qt6-declarative-dev-tools \
             qt6-tools-dev \
             qt6-tools-dev-tools \
+            ripgrep \
             xmllint
 
       - name: Configure
@@ -96,7 +108,7 @@ jobs:
 
       - name: QML + static checks
         # run-static-checks.sh expects rg, xmllint, python3 and a Qt6
-        # QML test runner — all present on kdeci/neon.
+        # QML test runner — installed above on the Ubuntu container.
         run: bash tests/run-static-checks.sh
 
       - name: Build summary

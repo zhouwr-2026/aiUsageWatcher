@@ -46,6 +46,11 @@ jobs:
       # Qt 6.6 / KF6 / Plasma 6.0 —— 与本地开发环境（Manjaro/Qt 6.11）
       # 存在版本差，但覆盖构建 + C++ 契约测试 + QML 组件测试足够。
       image: ubuntu:24.04
+    defaults:
+      run:
+        # ubuntu:24.04 容器默认 shell 是 dash（不支持 pipefail / 数组语法），
+        # 统一显式用 bash。
+        shell: bash
     env:
       # mirror of tests/run-static-checks.sh expectations
       DEBIAN_FRONTEND: noninteractive

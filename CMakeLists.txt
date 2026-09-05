@@ -36,6 +36,8 @@ kcoreaddons_add_plugin(org.kde.plasma.AIQuotaPilot
         src/codexloginoutputparser.h
         src/commandcodeclient.cpp
         src/commandcodeclient.h
+        src/credentialclientbase.cpp
+        src/credentialclientbase.h
         src/customusageclient.cpp
         src/customusageclient.h
         src/javascripthighlighter.cpp
@@ -116,6 +118,8 @@ if(BUILD_TESTING)
     add_executable(tst_codexzhclient
         tests/cpp/tst_codexzhclient.cpp
         src/codexzhclient.cpp
+        src/credentialclientbase.cpp
+        src/credentialclientbase.h
         src/codexzhclient.h
         src/codexzhresponseparser.cpp
         src/codexzhresponseparser.h
@@ -140,6 +144,8 @@ if(BUILD_TESTING)
     add_executable(tst_minimaxclient
         tests/cpp/tst_minimaxclient.cpp
         src/minimaxclient.cpp
+        src/credentialclientbase.cpp
+        src/credentialclientbase.h
         src/minimaxclient.h
         src/minimaxresponseparser.cpp
         src/minimaxresponseparser.h
@@ -164,11 +170,15 @@ if(BUILD_TESTING)
     add_executable(tst_deepseekclient
         tests/cpp/tst_deepseekclient.cpp
         src/deepseekclient.cpp
+        src/credentialclientbase.cpp
+        src/credentialclientbase.h
         src/deepseekclient.h
         src/deepseekresponseparser.cpp
         src/deepseekresponseparser.h
         src/kwalletdispatcher.cpp
-        src/kwalletdispatcher.h
+        src/kwalletdispatcher.h        src/resilientnetworkrequest.cpp
+        src/resilientnetworkrequest.h
+
     )
     target_include_directories(tst_deepseekclient PRIVATE src)
     target_link_libraries(tst_deepseekclient PRIVATE Qt6::Core Qt6::DBus Qt6::Network Qt6::Test KF6::Wallet)
@@ -177,9 +187,13 @@ if(BUILD_TESTING)
     add_executable(tst_opencodegoclient
         tests/cpp/tst_opencodegoclient.cpp
         src/opencodegoclient.cpp
+        src/credentialclientbase.cpp
+        src/credentialclientbase.h
         src/opencodegoclient.h
         src/kwalletdispatcher.cpp
-        src/kwalletdispatcher.h
+        src/kwalletdispatcher.h        src/resilientnetworkrequest.cpp
+        src/resilientnetworkrequest.h
+
     )
     target_include_directories(tst_opencodegoclient PRIVATE src)
     target_link_libraries(tst_opencodegoclient PRIVATE Qt6::Core Qt6::DBus Qt6::Network Qt6::Test KF6::Wallet)

@@ -9,14 +9,12 @@
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
-#include <QNetworkRequest>
 #include <QPointer>
 #include <QTimer>
 #include <QVariantList>
 
 namespace
 {
-constexpr qsizetype maximumResponseBytes = 1024 * 1024;
 const QUrl summaryUrl(QStringLiteral("https://api.commandcode.ai/internal/usage/summary"));
 const QUrl creditsUrl(QStringLiteral("https://api.commandcode.ai/internal/billing/credits"));
 
@@ -79,122 +77,99 @@ QString commandCodeSessionCookie(const QString &cookie)
 }
 
 CommandCodeClient::CommandCodeClient(QObject *parent)
-    : QObject(parent)
-    , m_network(new QNetworkAccessManager(this))
-    , m_snapshot(emptySnapshot(QStringLiteral("未配置")))
-    , m_credentialStatus(QStringLiteral("待连接 KDE 钱包"))
+    : CredentialClientBase(parent)
 {
+    setSnapshot(emptySnapshot(QStringLiteral("未配置")));
 }
 
 CommandCodeClient::~CommandCodeClient()
 {
-    if (m_summaryReply) m_summaryReply->abort();
-    if (m_creditsReply) m_creditsReply->abort();
     if (m_summaryRequest) m_summaryRequest->abort();
     if (m_creditsRequest) m_creditsRequest->abort();
-    m_cookie.fill(QChar(u'\0'));
-    m_pendingCookie.fill(QChar(u'\0'));
 }
 
-QVariantMap CommandCodeClient::snapshot() const { return m_snapshot; }
-bool CommandCodeClient::loading() const { return m_loading; }
-bool CommandCodeClient::credentialConfigured() const { return !m_cookie.isEmpty(); }
-QString CommandCodeClient::credentialStatus() const { return m_credentialStatus; }
-bool CommandCodeClient::credentialBusy() const { return m_credentialBusy; }
-bool CommandCodeClient::credentialError() const { return m_credentialError; }
-
-void CommandCodeClient::setNetworkAccessManager(QNetworkAccessManager *network)
+QVariantMap CommandCodeClient::emptySnapshot(const QString &status, const QString &error) const
 {
-    if (!network || m_loading) return;
-    if (m_network) m_network->deleteLater();
-    m_network = network;
+    return ::emptySnapshot(status, error);
 }
 
-void CommandCodeClient::setWalletDispatcher(KWalletDispatcher *dispatcher)
+QString CommandCodeClient::walletEntryKey() const
 {
-    m_dispatcher = dispatcher;
-    if (m_dispatcher && !m_initialLoadDispatched) {
-        m_initialLoadDispatched = true;
-        QTimer::singleShot(1500, this, &CommandCodeClient::requestCredentialLoad);
+    return QStringLiteral("commandcode");
+}
+
+QString CommandCodeClient::credentialMissingText() const
+{
+    return QStringLiteral("未配置");
+}
+
+QString CommandCodeClient::credentialSavedText() const
+{
+    return QStringLiteral("已保存");
+}
+
+QString CommandCodeClient::credentialSaveFailedText() const
+{
+    return QStringLiteral("保存到 KDE 钱包失败");
+}
+
+QString CommandCodeClient::credentialClearedText() const
+{
+    return QStringLiteral("已清除");
+}
+
+QString CommandCodeClient::credentialClearFailedText() const
+{
+    return QStringLiteral("清除 KDE 钱包失败");
+}
+
+QString CommandCodeClient::walletAccessFailedText() const
+{
+    return QStringLiteral("凭据服务暂不可用");
+}
+
+void CommandCodeClient::handleCredentialReadOk(const QString &rawValue)
+{
+    const QString cookie = commandCodeSessionCookie(rawValue.trimmed());
+    setStoredSecret(validCookie(cookie) ? cookie.toUtf8() : QByteArray{});
+    // 与原实现一致：空值也报“格式无效”，但 error 标志只在“非空却抽不出会话项”时为真。
+    const bool invalid = m_storedSecret.isEmpty() && !rawValue.trimmed().isEmpty();
+    setCredentialState(m_storedSecret.isEmpty()
+                           ? QStringLiteral("凭据格式无效，请重新保存")
+                           : QStringLiteral("已配置"),
+                       false,
+                       invalid);
+    if (!m_storedSecret.isEmpty()) {
+        refresh();
     }
 }
 
-void CommandCodeClient::reloadCredential()
+void CommandCodeClient::saveCredential(const QString &value)
 {
-    requestCredentialLoad();
-}
-
-void CommandCodeClient::requestCredentialLoad()
-{
-    if (!m_dispatcher) return;
-    m_credentialBusy = true;
-    Q_EMIT credentialBusyChanged();
-    m_dispatcher->submit(KWalletDispatcher::Op::Read, QStringLiteral("commandcode"), {},
-                         [this](const KWalletDispatcher::Result &result) { handleCredentialRead(result); });
-}
-
-void CommandCodeClient::handleCredentialRead(const KWalletDispatcher::Result &result)
-{
-    if (result.ok) {
-        const QString cookie = commandCodeSessionCookie(result.value.trimmed());
-        setStoredCookie(validCookie(cookie) ? cookie : QString{});
-        setCredentialState(m_cookie.isEmpty() ? QStringLiteral("凭据格式无效，请重新保存") : QStringLiteral("已配置"), false, m_cookie.isEmpty() && !result.value.trimmed().isEmpty());
-        if (!m_cookie.isEmpty()) refresh();
-        return;
-    }
-    if (result.errorCode == QLatin1String("not_found")) {
-        setStoredCookie({});
-        setCredentialState(QStringLiteral("未配置"), false, false);
-        return;
-    }
-    setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
-}
-
-void CommandCodeClient::saveCredential(const QString &cookie)
-{
-    const QString value = commandCodeSessionCookie(cookie.trimmed());
-    if (!validCookie(value)) {
+    const QString cookie = commandCodeSessionCookie(value.trimmed());
+    if (!validCookie(cookie)) {
         setCredentialState(QStringLiteral("请粘贴包含 Command Code 会话项的完整 Cookie，且不能包含换行"), false, true);
         return;
     }
-    if (!m_dispatcher) { setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true); return; }
-    m_pendingCookie = value;
-    setCredentialState(QStringLiteral("正在保存到 KDE 钱包…"), true, false);
-    m_dispatcher->submit(KWalletDispatcher::Op::Save, QStringLiteral("commandcode"), value,
-                         [this](const KWalletDispatcher::Result &result) { handleCredentialSave(result); });
+    submitCredentialSave(cookie);
 }
 
-void CommandCodeClient::handleCredentialSave(const KWalletDispatcher::Result &result)
+void CommandCodeClient::abortActiveRequest()
 {
-    if (result.ok) {
-        setStoredCookie(m_pendingCookie);
-        m_pendingCookie.fill(QChar(u'\0'));
-        m_pendingCookie.clear();
-        setCredentialState(QStringLiteral("已保存"), false, false);
-        refresh();
-    } else {
-        m_pendingCookie.fill(QChar(u'\0'));
-        m_pendingCookie.clear();
-        setCredentialState(QStringLiteral("保存到 KDE 钱包失败"), false, true);
-    }
+    if (m_summaryRequest) m_summaryRequest->abort();
+    if (m_creditsRequest) m_creditsRequest->abort();
 }
 
-void CommandCodeClient::clearCredential()
+QNetworkRequest CommandCodeClient::createRequest(const QUrl &url, const QString &cookie)
 {
-    if (!m_dispatcher) { setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true); return; }
-    setCredentialState(QStringLiteral("正在从 KDE 钱包移除…"), true, false);
-    m_dispatcher->submit(KWalletDispatcher::Op::Clear, QStringLiteral("commandcode"), {},
-                         [this](const KWalletDispatcher::Result &result) { handleCredentialClear(result); });
-}
-
-void CommandCodeClient::handleCredentialClear(const KWalletDispatcher::Result &result)
-{
-    if (result.ok) {
-        setStoredCookie({});
-        setCredentialState(QStringLiteral("已清除"), false, false);
-        setSnapshot(emptySnapshot(QStringLiteral("未配置")));
-    }
-    else setCredentialState(QStringLiteral("清除 KDE 钱包失败"), false, true);
+    QNetworkRequest request(url);
+    request.setRawHeader("Cookie", cookie.toUtf8());
+    request.setRawHeader("Accept", "application/json");
+    request.setRawHeader("User-Agent", "AIQuotaPilot/0.2");
+    request.setTransferTimeout(15000);
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::SameOriginRedirectPolicy);
+    return request;
 }
 
 void CommandCodeClient::refresh()
@@ -203,14 +178,16 @@ void CommandCodeClient::refresh()
         m_refreshPending = true;
         return;
     }
-    if (m_cookie.isEmpty()) {
+    if (m_storedSecret.isEmpty()) {
         m_refreshPending = false;
         m_refreshInterrupted = false;
         setSnapshot(emptySnapshot(QStringLiteral("未配置")));
         return;
     }
     m_summary.clear(); m_credits.clear(); m_summaryError.clear(); m_creditsError.clear();
-    m_loading = true; Q_EMIT loadingChanged();
+    setLoading(true);
+
+    const QByteArray cookie = m_storedSecret;
 
     QPointer<CommandCodeClient> self = this;
     auto completeIfReady = [self]() {
@@ -224,7 +201,7 @@ void CommandCodeClient::refresh()
         self->finishRequests();
     };
 
-    auto wireOne = [self, completeIfReady](bool summary) {
+    auto wireOne = [self, completeIfReady, cookie](bool summary) {
         ResilientNetworkRequest **slot = summary ? &self->m_summaryRequest : &self->m_creditsRequest;
         QString *errorSlot = summary ? &self->m_summaryError : &self->m_creditsError;
         QVariantMap *target = summary ? &self->m_summary : &self->m_credits;
@@ -233,7 +210,7 @@ void CommandCodeClient::refresh()
         auto *req = new ResilientNetworkRequest(self->m_network, self.data());
         *slot = req;
 
-        req->get(createRequest(url, self->m_cookie),
+        req->get(createRequest(url, QString::fromUtf8(cookie)),
                  [self, req, completeIfReady, errorSlot, target, summary](ResilientNetworkRequest::Result result) {
             req->deleteLater();
             if (!self) return;
@@ -282,37 +259,14 @@ void CommandCodeClient::refresh()
     wireOne(false);
 }
 
-void CommandCodeClient::forceRefresh()
+void CommandCodeClient::finishRequests()
 {
-    if (!m_loading) {
-        refresh();
-        return;
+    m_loading = false; Q_EMIT loadingChanged();
+    if (m_refreshPending) {
+        m_refreshPending = false;
+        m_refreshInterrupted = false;
+        QTimer::singleShot(0, this, &CommandCodeClient::refresh);
     }
-
-    m_refreshPending = true;
-    m_refreshInterrupted = true;
-    if (m_summaryRequest) m_summaryRequest->abort();
-    if (m_creditsRequest) m_creditsRequest->abort();
-}
-
-void CommandCodeClient::cancelRefresh()
-{
-    m_refreshPending = false;
-    m_refreshInterrupted = false;
-    if (m_summaryReply) m_summaryReply->abort();
-    if (m_creditsReply) m_creditsReply->abort();
-}
-
-QNetworkRequest CommandCodeClient::createRequest(const QUrl &url, const QString &cookie)
-{
-    QNetworkRequest request(url);
-    request.setRawHeader("Cookie", cookie.toUtf8());
-    request.setRawHeader("Accept", "application/json");
-    request.setRawHeader("User-Agent", "AIQuotaPilot/0.2");
-    request.setTransferTimeout(15000);
-    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                         QNetworkRequest::SameOriginRedirectPolicy);
-    return request;
 }
 
 void CommandCodeClient::buildSnapshot()
@@ -398,8 +352,8 @@ void CommandCodeClient::buildSnapshot()
     const QString error = !m_summaryError.isEmpty() ? m_summaryError : m_creditsError;
     if (!summaryOk && !creditsOk
         && !error.contains(QStringLiteral("Cookie 已失效"))
-        && !m_snapshot.value(QStringLiteral("plans")).toList().isEmpty()) {
-        QVariantMap staleSnapshot = m_snapshot;
+        && !snapshot().value(QStringLiteral("plans")).toList().isEmpty()) {
+        QVariantMap staleSnapshot = snapshot();
         staleSnapshot.insert(QStringLiteral("statusLabel"), QStringLiteral("数据暂时不可更新"));
         staleSnapshot.insert(QStringLiteral("errorText"), error);
         staleSnapshot.insert(QStringLiteral("stale"), true);
@@ -407,37 +361,4 @@ void CommandCodeClient::buildSnapshot()
         return;
     }
     setSnapshot({{QStringLiteral("providerId"), QStringLiteral("command-code")}, {QStringLiteral("statusLabel"), summaryOk && creditsOk ? QStringLiteral("可用") : (summaryOk || creditsOk ? QStringLiteral("部分可用") : QStringLiteral("查询失败"))}, {QStringLiteral("errorText"), error}, {QStringLiteral("plans"), plans}, {QStringLiteral("summary"), m_summary}});
-}
-
-void CommandCodeClient::finishRequests()
-{
-    m_loading = false; Q_EMIT loadingChanged();
-    if (m_refreshPending) {
-        m_refreshPending = false;
-        m_refreshInterrupted = false;
-        QTimer::singleShot(0, this, &CommandCodeClient::refresh);
-    }
-}
-
-void CommandCodeClient::setCredentialState(const QString &status, bool busy, bool error)
-{
-    if (m_credentialStatus != status) { m_credentialStatus = status; Q_EMIT credentialStatusChanged(); }
-    if (m_credentialBusy != busy) { m_credentialBusy = busy; Q_EMIT credentialBusyChanged(); }
-    if (m_credentialError != error) { m_credentialError = error; Q_EMIT credentialErrorChanged(); }
-}
-
-void CommandCodeClient::setStoredCookie(const QString &cookie)
-{
-    const bool changed = m_cookie != cookie;
-    if (changed) {
-        m_cookie.fill(QChar(u'\0'));
-        m_cookie = cookie;
-        Q_EMIT credentialConfiguredChanged();
-    }
-}
-
-void CommandCodeClient::setSnapshot(const QVariantMap &snapshot)
-{
-    if (m_snapshot == snapshot) return;
-    m_snapshot = snapshot; Q_EMIT snapshotChanged();
 }

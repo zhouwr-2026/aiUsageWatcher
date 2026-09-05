@@ -185,7 +185,7 @@ private:
                                 const QByteArray &apiKey)
     {
         client.m_network = nam;
-        client.setStoredApiKey(apiKey);
+        client.setStoredSecret(apiKey);
     }
 
 private Q_SLOTS:

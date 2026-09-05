@@ -2,91 +2,58 @@
 
 #pragma once
 
-#include <QObject>
 #include <QNetworkRequest>
+#include <QString>
 #include <QUrl>
 #include <QVariantMap>
 
-#include "kwalletdispatcher.h"
+#include "credentialclientbase.h"
 
-class QNetworkAccessManager;
-class QNetworkReply;
 class ResilientNetworkRequest;
 
 /**
  * Command Code 用量客户端：使用 KWallet Cookie 会话查询汇总与额度窗口。
+ *
+ * 请求模型：summary + credits 两个接口并行抓取，双请求都结束后合并为快照。
+ * Cookie 在保存时抽取 __Secure-commandcode_prod_ 会话项，读回时校验后再使用。
  */
-class CommandCodeClient : public QObject
+class CommandCodeClient : public CredentialClientBase
 {
     Q_OBJECT
-    Q_PROPERTY(QVariantMap snapshot READ snapshot NOTIFY snapshotChanged)
-    Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
-    Q_PROPERTY(bool credentialConfigured READ credentialConfigured NOTIFY credentialConfiguredChanged)
-    Q_PROPERTY(QString credentialStatus READ credentialStatus NOTIFY credentialStatusChanged)
-    Q_PROPERTY(bool credentialBusy READ credentialBusy NOTIFY credentialBusyChanged)
-    Q_PROPERTY(bool credentialError READ credentialError NOTIFY credentialErrorChanged)
 
 public:
     explicit CommandCodeClient(QObject *parent = nullptr);
     ~CommandCodeClient() override;
 
-    QVariantMap snapshot() const;
-    bool loading() const;
-    bool credentialConfigured() const;
-    QString credentialStatus() const;
-    bool credentialBusy() const;
-    bool credentialError() const;
-
-    Q_INVOKABLE void refresh();
-    Q_INVOKABLE void forceRefresh();
-    Q_INVOKABLE void cancelRefresh();
-    Q_INVOKABLE void saveCredential(const QString &cookie);
-    Q_INVOKABLE void clearCredential();
+    Q_INVOKABLE void refresh() override;
+    // Cookie 保存前抽取会话项并校验（与读回共用规则），通过后交给基类提交。
+    Q_INVOKABLE void saveCredential(const QString &value) override;
 
     static QNetworkRequest createRequest(const QUrl &url, const QString &cookie);
 
-    void setWalletDispatcher(KWalletDispatcher *dispatcher);
-    void reloadCredential();
-    void setNetworkAccessManager(QNetworkAccessManager *network);
-
-Q_SIGNALS:
-    void snapshotChanged();
-    void loadingChanged();
-    void credentialConfiguredChanged();
-    void credentialStatusChanged();
-    void credentialBusyChanged();
-    void credentialErrorChanged();
+protected:
+    QString walletEntryKey() const override;
+    QVariantMap emptySnapshot(const QString &status, const QString &error = {}) const override;
+    // 读回时抽取会话项并校验格式（与保存路径共用同一套规则）。
+    void handleCredentialReadOk(const QString &rawValue) override;
+    QString credentialMissingText() const override;
+    QString credentialSavedText() const override;
+    QString credentialSaveFailedText() const override;
+    QString credentialClearedText() const override;
+    QString credentialClearFailedText() const override;
+    QString walletAccessFailedText() const override;
+    // 双请求并行：forceRefresh/cancelRefresh 需要同时中止两个请求。
+    void abortActiveRequest() override;
 
 private:
-    void requestCredentialLoad();
-    void handleCredentialRead(const KWalletDispatcher::Result &result);
-    void handleCredentialSave(const KWalletDispatcher::Result &result);
-    void handleCredentialClear(const KWalletDispatcher::Result &result);
-    void setCredentialState(const QString &status, bool busy, bool error);
-    void setStoredCookie(const QString &cookie);
-    void setSnapshot(const QVariantMap &snapshot);
-    void setLoading(bool loading);
-    void finishRequests();
     void buildSnapshot();
+    // 两个请求都结束后收尾（loading + pending 补发）。
+    void finishRequests();
 
-    QNetworkAccessManager *m_network = nullptr;
-    KWalletDispatcher *m_dispatcher = nullptr;
-    QNetworkReply *m_summaryReply = nullptr;
-    QNetworkReply *m_creditsReply = nullptr;
     ResilientNetworkRequest *m_summaryRequest = nullptr;
     ResilientNetworkRequest *m_creditsRequest = nullptr;
-    QString m_cookie;
-    QString m_pendingCookie;
-    QString m_credentialStatus;
-    QVariantMap m_snapshot;
     QVariantMap m_summary;
     QVariantMap m_credits;
     QString m_summaryError;
     QString m_creditsError;
-    bool m_loading = false;
-    bool m_refreshPending = false;
-    bool m_refreshInterrupted = false;
-    bool m_initialLoadDispatched = false;
-    bool m_credentialBusy = false;
-    bool m_credentialError = false;
 };

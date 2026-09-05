@@ -2,7 +2,6 @@
 
 #include "minimaxclient.h"
 
-#include "kwalletdispatcher.h"
 #include "minimaxresponseparser.h"
 #include "resilientnetworkrequest.h"
 
@@ -59,20 +58,6 @@ QVariantMap toVariantMap(const MiniMaxSnapshot &snapshot)
     };
 }
 
-QString networkErrorMessage(int httpStatus, QNetworkReply::NetworkError error)
-{
-    if (httpStatus == 429) {
-        return QStringLiteral("MiniMax 请求过于频繁，请稍后重试");
-    }
-    if (httpStatus >= 500) {
-        return QStringLiteral("MiniMax 服务暂时不可用");
-    }
-    if (error == QNetworkReply::TimeoutError) {
-        return QStringLiteral("MiniMax 请求超时");
-    }
-    return QStringLiteral("无法连接 MiniMax 服务");
-}
-
 bool isEnvironmentConfigured()
 {
     return !qgetenv("MINIMAX_API_KEY").trimmed().isEmpty();
@@ -80,52 +65,53 @@ bool isEnvironmentConfigured()
 }
 
 MiniMaxClient::MiniMaxClient(QObject *parent)
-    : QObject(parent)
-    , m_network(new QNetworkAccessManager(this))
-    , m_snapshot(emptySnapshot(QStringLiteral("未配置")))
+    : CredentialClientBase(parent)
 {
-    // 构造函数不再触发钱包 IO；首次读取由 KWalletDispatcher 调度。
+    setSnapshot(emptySnapshot(QStringLiteral("未配置")));
     // 状态仍报告"未配置"，等读取完成后再切换到"已保存"/"凭据服务暂不可用"。
-    m_credentialStatus = isEnvironmentConfigured()
-        ? QStringLiteral("已通过环境变量配置")
-        : QStringLiteral("待连接 KDE 钱包");
+    setCredentialState(isEnvironmentConfigured()
+                           ? QStringLiteral("已通过环境变量配置")
+                           : QStringLiteral("待连接 KDE 钱包"),
+                       false,
+                       false);
 }
 
-MiniMaxClient::~MiniMaxClient()
-{
-    m_storedApiKey.fill('\0');
-    m_activeApiKey.fill('\0');
-    m_pendingApiKey.fill(QChar(u'\0'));
-}
-
-QVariantMap MiniMaxClient::snapshot() const
-{
-    return m_snapshot;
-}
-
-bool MiniMaxClient::loading() const
-{
-    return m_loading;
-}
+MiniMaxClient::~MiniMaxClient() = default;
 
 bool MiniMaxClient::credentialConfigured() const
 {
-    return isEnvironmentConfigured() || !m_storedApiKey.isEmpty();
+    return isEnvironmentConfigured() || !storedSecret().isEmpty();
 }
 
-QString MiniMaxClient::credentialStatus() const
+QVariantMap MiniMaxClient::emptySnapshot(const QString &status, const QString &error) const
 {
-    return m_credentialStatus;
+    return ::emptySnapshot(status, error);
 }
 
-bool MiniMaxClient::credentialBusy() const
+QString MiniMaxClient::walletEntryKey() const
 {
-    return m_credentialBusy;
+    return QStringLiteral("minimax");
 }
 
-bool MiniMaxClient::credentialError() const
+QString MiniMaxClient::credentialClearedText() const
 {
-    return m_credentialError;
+    return isEnvironmentConfigured()
+        ? QStringLiteral("钱包凭据已移除；环境变量仍在生效")
+        : QStringLiteral("API Key 已移除");
+}
+
+void MiniMaxClient::onCredentialCleared()
+{
+    if (!isEnvironmentConfigured()) {
+        setSnapshot(emptySnapshot(QStringLiteral("未配置")));
+    }
+}
+
+void MiniMaxClient::finishRefresh()
+{
+    CredentialClientBase::finishRefresh();
+    m_endpoints.clear();
+    m_endpointIndex = 0;
 }
 
 QList<QUrl> MiniMaxClient::endpointCandidates()
@@ -134,14 +120,6 @@ QList<QUrl> MiniMaxClient::endpointCandidates()
         QUrl(QStringLiteral("https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains")),
         QUrl(QStringLiteral("https://api.minimax.io/v1/api/openplatform/coding_plan/remains")),
     };
-}
-
-void MiniMaxClient::setNetworkAccessManager(QNetworkAccessManager *network)
-{
-    if (m_network) {
-        m_network->deleteLater();
-    }
-    m_network = network;
 }
 
 QNetworkRequest MiniMaxClient::createRequest(const QUrl &url, QByteArrayView apiKey)
@@ -166,7 +144,7 @@ void MiniMaxClient::refresh()
 
     QByteArray apiKey = qgetenv("MINIMAX_API_KEY").trimmed();
     if (apiKey.isEmpty()) {
-        apiKey = m_storedApiKey;
+        apiKey = m_storedSecret;
     }
     if (apiKey.isEmpty()) {
         m_refreshPending = false;
@@ -175,38 +153,14 @@ void MiniMaxClient::refresh()
         return;
     }
 
-    m_activeApiKey.fill('\0');
-    m_activeApiKey = apiKey;
+    m_activeSecret.fill('\0');
+    m_activeSecret = apiKey;
     apiKey.fill('\0');
     m_endpoints = endpointCandidates();
     m_endpointIndex = 0;
     m_lastRequestError.clear();
     setLoading(true);
     requestNextEndpoint();
-}
-
-void MiniMaxClient::forceRefresh()
-{
-    if (!m_loading) {
-        refresh();
-        return;
-    }
-
-    m_refreshPending = true;
-    m_refreshInterrupted = true;
-    // Qt 保证 abort() 后仍会发出 finished()；等待该回调释放活动 Key 后再重发。
-    if (m_request) {
-        m_request->abort();
-    }
-}
-
-void MiniMaxClient::cancelRefresh()
-{
-    m_refreshPending = false;
-    m_refreshInterrupted = false;
-    if (m_request) {
-        m_request->abort();
-    }
 }
 
 void MiniMaxClient::requestNextEndpoint()
@@ -257,7 +211,7 @@ void MiniMaxClient::requestNextEndpoint()
         }
     };
 
-    req->get(createRequest(endpoint, m_activeApiKey),
+    req->get(createRequest(endpoint, m_activeSecret),
              [self, req, tryNextOrFinish](ResilientNetworkRequest::Result result) {
         if (!self) {
             req->deleteLater();
@@ -311,219 +265,4 @@ void MiniMaxClient::requestNextEndpoint()
         }
         }
     });
-}
-
-void MiniMaxClient::finishRefresh()
-{
-    m_activeApiKey.fill('\0');
-    m_activeApiKey.clear();
-    m_endpoints.clear();
-    m_endpointIndex = 0;
-    setLoading(false);
-    if (m_refreshPending) {
-        m_refreshPending = false;
-        m_refreshInterrupted = false;
-        QTimer::singleShot(0, this, &MiniMaxClient::refresh);
-    }
-}
-
-void MiniMaxClient::saveCredential(const QString &apiKey)
-{
-    const QString trimmedApiKey = apiKey.trimmed();
-    if (trimmedApiKey.isEmpty()) {
-        setCredentialState(QStringLiteral("API Key 不能为空"), false, true);
-        return;
-    }
-    if (!m_dispatcher) {
-        setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
-        return;
-    }
-
-    m_pendingApiKey.fill(QChar(u'\0'));
-    m_pendingApiKey = trimmedApiKey;
-    setCredentialState(QStringLiteral("正在保存到 KDE 钱包…"), true, false);
-
-    const QString snapshotValue = m_pendingApiKey;
-    m_dispatcher->submit(KWalletDispatcher::Op::Save,
-                         QStringLiteral("minimax"),
-                         snapshotValue,
-                         [this](const KWalletDispatcher::Result &result) {
-                             handleCredentialSave(result);
-                         });
-}
-
-void MiniMaxClient::clearCredential()
-{
-    if (!m_dispatcher) {
-        setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
-        return;
-    }
-    m_pendingApiKey.fill(QChar(u'\0'));
-    m_pendingApiKey.clear();
-    setCredentialState(QStringLiteral("正在从 KDE 钱包移除…"), true, false);
-
-    m_dispatcher->submit(KWalletDispatcher::Op::Clear,
-                         QStringLiteral("minimax"),
-                         QString(),
-                         [this](const KWalletDispatcher::Result &result) {
-                             handleCredentialClear(result);
-                         });
-}
-
-void MiniMaxClient::setWalletDispatcher(KWalletDispatcher *dispatcher)
-{
-    m_dispatcher = dispatcher;
-    if (m_dispatcher && !m_initialLoadDispatched) {
-        m_initialLoadDispatched = true;
-        // 给 Plasma 完成首轮 UI 初始化留出窗口；worker 仍不阻塞 plasmashell。
-        QTimer::singleShot(1500, this, [this] { requestCredentialLoad(); });
-    }
-}
-
-void MiniMaxClient::reloadCredential()
-{
-    requestCredentialLoad();
-}
-
-void MiniMaxClient::requestCredentialLoad()
-{
-    if (!m_dispatcher) {
-        return;
-    }
-    m_credentialBusy = true;
-    Q_EMIT credentialBusyChanged();
-    m_dispatcher->submit(KWalletDispatcher::Op::Read,
-                         QStringLiteral("minimax"),
-                         QString(),
-                         [this](const KWalletDispatcher::Result &result) {
-                             handleCredentialRead(result);
-                         });
-}
-
-void MiniMaxClient::handleCredentialRead(const KWalletDispatcher::Result &result)
-{
-    if (result.ok) {
-        const QString trimmed = result.value.trimmed();
-        if (!trimmed.isEmpty()) {
-            setStoredApiKey(trimmed.toUtf8());
-            setCredentialState(QStringLiteral("已保存在 KDE 钱包"), false, false);
-            refresh();
-            return;
-        }
-        setStoredApiKey({});
-        setCredentialState(QStringLiteral("尚未保存 API Key"), false, false);
-        return;
-    }
-
-    // not_found：钱包里没有条目，按"未配置"显示；不算错误状态。
-    if (result.errorCode == QLatin1String("not_found")) {
-        setStoredApiKey({});
-        setCredentialState(QStringLiteral("尚未保存 API Key"), false, false);
-        return;
-    }
-    if (result.errorCode == QLatin1String("wallet_disabled")
-        || result.errorCode == QLatin1String("wallet_open_failed")
-        || result.errorCode == QLatin1String("timeout")
-        || result.errorCode == QLatin1String("worker_failed_to_start")
-        || result.errorCode == QLatin1String("worker_crashed")) {
-        setCredentialState(QStringLiteral("凭据服务暂不可用"), false, true);
-        return;
-    }
-    setCredentialState(QStringLiteral("无法访问 KDE 钱包"), false, true);
-}
-
-void MiniMaxClient::handleCredentialSave(const KWalletDispatcher::Result &result)
-{
-    if (result.ok) {
-        QByteArray storedApiKey = m_pendingApiKey.toUtf8();
-        setStoredApiKey(storedApiKey);
-        storedApiKey.fill('\0');
-        setCredentialState(QStringLiteral("API Key 已保存到 KDE 钱包"), false, false);
-        m_pendingApiKey.fill(QChar(u'\0'));
-        m_pendingApiKey.clear();
-        refresh();
-        return;
-    }
-    setCredentialState(QStringLiteral("API Key 保存失败，请检查 KDE 钱包"), false, true);
-    m_pendingApiKey.fill(QChar(u'\0'));
-    m_pendingApiKey.clear();
-}
-
-void MiniMaxClient::handleCredentialClear(const KWalletDispatcher::Result &result)
-{
-    if (result.ok) {
-        setStoredApiKey({});
-        const bool environmentConfigured = isEnvironmentConfigured();
-        setCredentialState(environmentConfigured
-                               ? QStringLiteral("钱包凭据已移除；环境变量仍在生效")
-                               : QStringLiteral("API Key 已移除"),
-                           false,
-                           false);
-        if (!environmentConfigured) {
-            setSnapshot(emptySnapshot(QStringLiteral("未配置")));
-        }
-        m_pendingApiKey.fill(QChar(u'\0'));
-        m_pendingApiKey.clear();
-        return;
-    }
-    setCredentialState(QStringLiteral("API Key 移除失败，请检查 KDE 钱包"), false, true);
-    m_pendingApiKey.fill(QChar(u'\0'));
-    m_pendingApiKey.clear();
-}
-
-void MiniMaxClient::setStoredApiKey(const QByteArray &apiKey)
-{
-    const bool wasConfigured = credentialConfigured();
-    m_storedApiKey.fill('\0');
-    m_storedApiKey = apiKey;
-    if (wasConfigured != credentialConfigured()) {
-        Q_EMIT credentialConfiguredChanged();
-    }
-}
-
-void MiniMaxClient::setCredentialState(const QString &status, bool busy, bool error)
-{
-    if (m_credentialStatus != status) {
-        m_credentialStatus = status;
-        Q_EMIT credentialStatusChanged();
-    }
-    if (m_credentialBusy != busy) {
-        m_credentialBusy = busy;
-        Q_EMIT credentialBusyChanged();
-    }
-    if (m_credentialError != error) {
-        m_credentialError = error;
-        Q_EMIT credentialErrorChanged();
-    }
-}
-
-void MiniMaxClient::setLoading(bool loading)
-{
-    if (m_loading == loading) {
-        return;
-    }
-    m_loading = loading;
-    Q_EMIT loadingChanged();
-}
-
-void MiniMaxClient::setError(const QString &message)
-{
-    if (!m_snapshot.value(QStringLiteral("plans")).toList().isEmpty()) {
-        QVariantMap staleSnapshot = m_snapshot;
-        staleSnapshot.insert(QStringLiteral("statusLabel"), QStringLiteral("数据暂时不可更新"));
-        staleSnapshot.insert(QStringLiteral("errorText"), message);
-        staleSnapshot.insert(QStringLiteral("stale"), true);
-        setSnapshot(staleSnapshot);
-        return;
-    }
-    setSnapshot(emptySnapshot(QStringLiteral("请求失败"), message));
-}
-
-void MiniMaxClient::setSnapshot(const QVariantMap &snapshot)
-{
-    if (m_snapshot == snapshot) {
-        return;
-    }
-    m_snapshot = snapshot;
-    Q_EMIT snapshotChanged();
 }

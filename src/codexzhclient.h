@@ -5,94 +5,48 @@
 #include <QByteArrayView>
 #include <QList>
 #include <QNetworkRequest>
-#include <QObject>
-#include <QString>
 #include <QUrl>
 #include <QVariantMap>
 #include <QtGlobal>
 
-#include "kwalletdispatcher.h"
-
-class QNetworkAccessManager;
-class QNetworkReply;
-class ResilientNetworkRequest;
+#include "credentialclientbase.h"
 
 /**
- * CodexZH 用量查询客户端。
+ * CodexZH 用量查询客户端（Coding Plan 余额）。
  *
- * 凭据处理与 MiniMaxClient 对齐。CodexZH 没有专用环境变量，必须依赖 KWallet。
+ * 凭据处理与 MiniMaxClient 对齐：KWallet 异步注入，不阻塞 plasmashell。
+ *
+ * 限流自愈（历史回归 2026-09-04）：
+ * 服务端 429 时设置 m_rateLimitedUntilMs，refresh() 在该窗口内直接早退，
+ * 窗口到期后的下一次定时刷新自动恢复，无需用户手动干预。窗口不是永久锁：
+ * forceRefresh() 强制清零窗口；成功响应也会清零。
  */
-class CodexZhClient : public QObject
+class CodexZhClient : public CredentialClientBase
 {
     Q_OBJECT
-    Q_PROPERTY(QVariantMap snapshot READ snapshot NOTIFY snapshotChanged)
-    Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
-    Q_PROPERTY(bool credentialConfigured READ credentialConfigured NOTIFY credentialConfiguredChanged)
-    Q_PROPERTY(QString credentialStatus READ credentialStatus NOTIFY credentialStatusChanged)
-    Q_PROPERTY(bool credentialBusy READ credentialBusy NOTIFY credentialBusyChanged)
-    Q_PROPERTY(bool credentialError READ credentialError NOTIFY credentialErrorChanged)
-    // 测试访问：限流恢复路径需要直接操作 m_network / m_storedApiKey /
-    // m_rateLimitedUntilMs，且不引入仅测试用的公有 setter。
-    friend class CodexZhClientTest;
 
 public:
     explicit CodexZhClient(QObject *parent = nullptr);
     ~CodexZhClient() override;
 
-    QVariantMap snapshot() const;
-    bool loading() const;
-    bool credentialConfigured() const;
-    QString credentialStatus() const;
-    bool credentialBusy() const;
-    bool credentialError() const;
-
-    Q_INVOKABLE void refresh();
-    Q_INVOKABLE void forceRefresh();
-    Q_INVOKABLE void cancelRefresh();
-    Q_INVOKABLE void saveCredential(const QString &apiKey);
-    Q_INVOKABLE void clearCredential();
+    Q_INVOKABLE void refresh() override;
+    // 手动刷新必须先清零限流窗口，否则窗口内手动刷新请求会被早退吞掉。
+    Q_INVOKABLE void forceRefresh() override;
 
     static QList<QUrl> endpointCandidates();
     static QNetworkRequest createRequest(const QUrl &url, QByteArrayView apiKey);
 
-    // 注入钱包调度器；必须由所有者（AiUsageWatcherApplet）注入。
-    void setWalletDispatcher(KWalletDispatcher *dispatcher);
-    void reloadCredential();
+protected:
+    QString walletEntryKey() const override;
+    QVariantMap emptySnapshot(const QString &status, const QString &error = {}) const override;
+    // 钱包读回后凭据未变时不主动刷新：kwalld 频繁 walletOpened 会让
+    // reloadCredential 被反复调用；key 没变就没必要立刻打 API，省一次限流窗口。
+    void onCredentialLoaded(const QByteArray &secret) override;
 
-Q_SIGNALS:
-    void snapshotChanged();
-    void loadingChanged();
-    void credentialConfiguredChanged();
-    void credentialStatusChanged();
-    void credentialBusyChanged();
-    void credentialErrorChanged();
+    // 测试访问：限流恢复路径需要直接操作 m_network / m_storedSecret /
+    // m_rateLimitedUntilMs，且不引入仅测试用的公有 setter。
+    friend class CodexZhClientTest;
 
 private:
-    void requestCredentialLoad();
-    void handleCredentialRead(const KWalletDispatcher::Result &result);
-    void handleCredentialSave(const KWalletDispatcher::Result &result);
-    void handleCredentialClear(const KWalletDispatcher::Result &result);
-    void setStoredApiKey(const QByteArray &apiKey);
-    void setCredentialState(const QString &status, bool busy, bool error);
-    void setLoading(bool loading);
-    void setError(const QString &message);
-    void setSnapshot(const QVariantMap &snapshot);
-
-    QNetworkAccessManager *m_network = nullptr;
-    QNetworkReply *m_reply = nullptr;
-    ResilientNetworkRequest *m_request = nullptr;
-    KWalletDispatcher *m_dispatcher = nullptr;
-    QByteArray m_storedApiKey;
-    QByteArray m_activeApiKey;
-    QString m_lastRequestError;
-    QString m_pendingApiKey;
-    QString m_credentialStatus;
-    QVariantMap m_snapshot;
-    bool m_loading = false;
-    bool m_refreshPending = false;
-    bool m_refreshInterrupted = false;
-    bool m_initialLoadDispatched = false;
-    bool m_credentialBusy = false;
-    bool m_credentialError = false;
     qint64 m_rateLimitedUntilMs = 0;
 };

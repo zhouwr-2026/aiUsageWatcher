@@ -59,7 +59,9 @@ void SharedProviderConfigTest::notifiesOtherInstances()
     QSignalSpy changed(&second, &SharedProviderConfig::providersChanged);
 
     QVERIFY(first.save(validProviders));
-    QTRY_COMPARE_WITH_TIMEOUT(changed.count(), 1, 2000);
+    // KConfigWatcher 依赖 inotify；容器文件系统（overlayfs/tmpfs）上变更
+    // 通知可能延迟甚至丢失。QTRY 轮询避免一次信号的时序脆弱。
+    QTRY_COMPARE_WITH_TIMEOUT(changed.count(), 1, 5000);
     QCOMPARE(second.providers(), validProviders);
 }
 

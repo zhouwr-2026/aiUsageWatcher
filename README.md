@@ -83,6 +83,23 @@ ctest --test-dir build --output-on-failure
 bash tests/run-plasma-smoke.sh
 ```
 
+### CI 现状
+
+- 仓库携带 GitHub Actions 工作流 `.github/workflows/ci.yml`（KDE neon 镜像：
+  cmake 构建 + ctest + `run-static-checks.sh`，`push`/`pull_request`/手动触发）。
+- **注意**：当前远端是 Gitee，**Gitee 不执行 GitHub Actions**，该工作流需要
+  未来镜像到 GitHub 才自动生效；本地等价门禁始终可用：
+  ```bash
+  cmake -S . -B build-test && cmake --build build-test && ctest --test-dir build-test
+  bash tests/run-static-checks.sh
+  git diff --check
+  ```
+- 若需在 Gitee 上自动执行 CI：仓库页 → 开通 **Gitee Go**（需账号绑定手机号，
+  免费 200 分钟 + 每月 500 分钟构建时长）→ 一键开启后会自动生成
+  `.workflow/*.yml`；在流水线的代码视图中添加 Shell 任务，内容为上述
+  "本地等价门禁"三行命令即可。流水线细节见
+  [Gitee Go 帮助中心](https://help.gitee.com/gitee-go/intro)。
+
 ## 结构
 
 ```text

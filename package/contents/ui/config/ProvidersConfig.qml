@@ -70,6 +70,20 @@ KCM.SimpleKCM {
     property bool opencodeGoUsageLoading: false
     property string opencodeGoUsageStatus: qsTr("未配置")
     property string opencodeGoUsageError: ""
+    property bool agnesCredentialConfigured: false
+    property bool agnesCredentialBusy: false
+    property bool agnesCredentialError: false
+    property string agnesCredentialStatus: qsTr("尚未保存 API Key")
+    property bool agnesUsageLoading: false
+    property string agnesUsageStatus: qsTr("未配置")
+    property string agnesUsageError: ""
+    property bool commandCodeCredentialConfigured: false
+    property bool commandCodeCredentialBusy: false
+    property bool commandCodeCredentialError: false
+    property string commandCodeCredentialStatus: qsTr("尚未保存 Cookie")
+    property bool commandCodeUsageLoading: false
+    property string commandCodeUsageStatus: qsTr("未配置")
+    property string commandCodeUsageError: ""
     property bool zhUsageLoading: false
     property string zhUsageStatus: qsTr("未配置")
     property string zhUsageError: ""
@@ -310,6 +324,14 @@ KCM.SimpleKCM {
             if (action === "save") return "saveOpenCodeGoCredential"
             if (action === "clear") return "clearOpenCodeGoCredential"
             if (action === "refresh") return "refreshOpenCodeGoUsage"
+        } else if (catalogId === "agnes-ai") {
+            if (action === "save") return "saveAgnesApiKey"
+            if (action === "clear") return "clearAgnesApiKey"
+            if (action === "refresh") return "refreshAgnesUsage"
+        } else if (catalogId === "command-code") {
+            if (action === "save") return "saveCommandCodeCookie"
+            if (action === "clear") return "clearCommandCodeCookie"
+            if (action === "refresh") return "refreshCommandCodeUsage"
         }
         return ""
     }
@@ -324,6 +346,12 @@ KCM.SimpleKCM {
             } else if (catalogId === "deepseek") {
                 deepseekCredentialError = true
                 deepseekCredentialStatus = qsTr("DeepSeek 凭据后端未加载，请重启 Plasma 后重试")
+            } else if (catalogId === "agnes-ai") {
+                agnesCredentialError = true
+                agnesCredentialStatus = qsTr("Agnes AI 凭据后端未加载，请重启 Plasma 后重试")
+            } else if (catalogId === "command-code") {
+                commandCodeCredentialError = true
+                commandCodeCredentialStatus = qsTr("Command Code 凭据后端未加载，请重启 Plasma 后重试")
             } else {
                 miniMaxCredentialError = true
                 miniMaxCredentialStatus = qsTr("MiniMax 凭据后端未加载，请重启 Plasma 后重试")
@@ -427,6 +455,68 @@ KCM.SimpleKCM {
         }
     }
 
+    // Agnes AI：单值 API Key，与 MiniMax 相同的状态轮询模式（前缀 agnes）。
+    function syncAgnesState() {
+        const prefix = "agnes"
+        agnesCredentialConfigured = usageBackend[prefix + "CredentialConfigured"] === true
+        agnesCredentialBusy = usageBackend[prefix + "CredentialBusy"] === true
+        agnesCredentialError = usageBackend[prefix + "CredentialError"] === true
+        const status = usageBackend[prefix + "CredentialStatus"]
+        const snapshot = usageBackend[prefix + "Snapshot"]
+        agnesCredentialStatus = typeof status === "string" && status.length > 0
+            ? status : qsTr("尚未保存 API Key")
+        agnesUsageLoading = usageBackend[prefix + "Loading"] === true
+        agnesUsageStatus = snapshot && typeof snapshot.statusLabel === "string"
+            ? snapshot.statusLabel : qsTr("未配置")
+        agnesUsageError = snapshot && typeof snapshot.errorText === "string"
+            ? snapshot.errorText : ""
+    }
+
+    function connectAgnesSignals() {
+        const prefix = "agnes"
+        const suffixes = [
+            "CredentialConfiguredChanged", "CredentialStatusChanged",
+            "CredentialBusyChanged", "CredentialErrorChanged",
+            "SnapshotChanged", "LoadingChanged"
+        ]
+        for (let i = 0; i < suffixes.length; ++i) {
+            const signal = usageBackend[prefix + suffixes[i]]
+            if (signal && typeof signal.connect === "function")
+                signal.connect(root.syncAgnesState)
+        }
+    }
+
+    // Command Code：单值 Cookie，状态轮询模式与 AGNES 相同（前缀 commandCode）。
+    function syncCommandCodeState() {
+        const prefix = "commandCode"
+        commandCodeCredentialConfigured = usageBackend[prefix + "CredentialConfigured"] === true
+        commandCodeCredentialBusy = usageBackend[prefix + "CredentialBusy"] === true
+        commandCodeCredentialError = usageBackend[prefix + "CredentialError"] === true
+        const status = usageBackend[prefix + "CredentialStatus"]
+        const snapshot = usageBackend[prefix + "Snapshot"]
+        commandCodeCredentialStatus = typeof status === "string" && status.length > 0
+            ? status : qsTr("尚未保存 Cookie")
+        commandCodeUsageLoading = usageBackend[prefix + "Loading"] === true
+        commandCodeUsageStatus = snapshot && typeof snapshot.statusLabel === "string"
+            ? snapshot.statusLabel : qsTr("未配置")
+        commandCodeUsageError = snapshot && typeof snapshot.errorText === "string"
+            ? snapshot.errorText : ""
+    }
+
+    function connectCommandCodeSignals() {
+        const prefix = "commandCode"
+        const suffixes = [
+            "CredentialConfiguredChanged", "CredentialStatusChanged",
+            "CredentialBusyChanged", "CredentialErrorChanged",
+            "SnapshotChanged", "LoadingChanged"
+        ]
+        for (let i = 0; i < suffixes.length; ++i) {
+            const signal = usageBackend[prefix + suffixes[i]]
+            if (signal && typeof signal.connect === "function")
+                signal.connect(root.syncCommandCodeState)
+        }
+    }
+
 
     function syncCodexLoginState() {
         codexLoggedIn = usageBackend["codexLoggedIn"] === true
@@ -493,6 +583,10 @@ KCM.SimpleKCM {
         connectDeepSeekSignals()
         syncOpenCodeGoState()
         connectOpenCodeGoSignals()
+        syncAgnesState()
+        connectAgnesSignals()
+        syncCommandCodeState()
+        connectCommandCodeSignals()
         syncCodexLoginState()
     }
 
@@ -718,34 +812,50 @@ KCM.SimpleKCM {
 
                 Layout.fillWidth: true
                 highlighterBackend: root.usageBackend
-                credentialConfigured: providerEditor.isOpenCodeGo
-                    ? root.opencodeGoCredentialConfigured
-                    : (providerEditor.isCodexZh
-                       ? root.zhCredentialConfigured
-                       : (providerEditor.isDeepSeek
-                          ? root.deepseekCredentialConfigured
-                          : root.miniMaxCredentialConfigured))
-                credentialBusy: providerEditor.isOpenCodeGo
-                    ? root.opencodeGoCredentialBusy
-                    : (providerEditor.isCodexZh
-                       ? root.zhCredentialBusy
-                       : (providerEditor.isDeepSeek
-                          ? root.deepseekCredentialBusy
-                          : root.miniMaxCredentialBusy))
-                credentialError: providerEditor.isOpenCodeGo
-                    ? root.opencodeGoCredentialError
-                    : (providerEditor.isCodexZh
-                       ? root.zhCredentialError
-                       : (providerEditor.isDeepSeek
-                          ? root.deepseekCredentialError
-                          : root.miniMaxCredentialError))
-                credentialStatus: providerEditor.isOpenCodeGo
-                    ? root.opencodeGoCredentialStatus
-                    : (providerEditor.isCodexZh
-                       ? root.zhCredentialStatus
-                       : (providerEditor.isDeepSeek
-                          ? root.deepseekCredentialStatus
-                          : root.miniMaxCredentialStatus))
+                credentialConfigured: providerEditor.isCommandCode
+                    ? root.commandCodeCredentialConfigured
+                    : (providerEditor.isAgnes
+                       ? root.agnesCredentialConfigured
+                       : (providerEditor.isOpenCodeGo
+                          ? root.opencodeGoCredentialConfigured
+                          : (providerEditor.isCodexZh
+                             ? root.zhCredentialConfigured
+                             : (providerEditor.isDeepSeek
+                                ? root.deepseekCredentialConfigured
+                                : root.miniMaxCredentialConfigured))))
+                credentialBusy: providerEditor.isCommandCode
+                    ? root.commandCodeCredentialBusy
+                    : (providerEditor.isAgnes
+                       ? root.agnesCredentialBusy
+                       : (providerEditor.isOpenCodeGo
+                          ? root.opencodeGoCredentialBusy
+                          : (providerEditor.isCodexZh
+                             ? root.zhCredentialBusy
+                             : (providerEditor.isDeepSeek
+                                ? root.deepseekCredentialBusy
+                                : root.miniMaxCredentialBusy))))
+                credentialError: providerEditor.isCommandCode
+                    ? root.commandCodeCredentialError
+                    : (providerEditor.isAgnes
+                       ? root.agnesCredentialError
+                       : (providerEditor.isOpenCodeGo
+                          ? root.opencodeGoCredentialError
+                          : (providerEditor.isCodexZh
+                             ? root.zhCredentialError
+                             : (providerEditor.isDeepSeek
+                                ? root.deepseekCredentialError
+                                : root.miniMaxCredentialError))))
+                credentialStatus: providerEditor.isCommandCode
+                    ? root.commandCodeCredentialStatus
+                    : (providerEditor.isAgnes
+                       ? root.agnesCredentialStatus
+                       : (providerEditor.isOpenCodeGo
+                          ? root.opencodeGoCredentialStatus
+                          : (providerEditor.isCodexZh
+                             ? root.zhCredentialStatus
+                             : (providerEditor.isDeepSeek
+                                ? root.deepseekCredentialStatus
+                                : root.miniMaxCredentialStatus))))
                 miniMaxUsageLoading: root.miniMaxUsageLoading
                 miniMaxUsageStatus: root.miniMaxUsageStatus
                 miniMaxUsageError: root.miniMaxUsageError
@@ -758,6 +868,12 @@ KCM.SimpleKCM {
                 opencodeGoUsageLoading: root.opencodeGoUsageLoading
                 opencodeGoUsageStatus: root.opencodeGoUsageStatus
                 opencodeGoUsageError: root.opencodeGoUsageError
+                agnesUsageLoading: root.agnesUsageLoading
+                agnesUsageStatus: root.agnesUsageStatus
+                agnesUsageError: root.agnesUsageError
+                commandCodeUsageLoading: root.commandCodeUsageLoading
+                commandCodeUsageStatus: root.commandCodeUsageStatus
+                commandCodeUsageError: root.commandCodeUsageError
                 codexLoggedIn: root.codexLoggedIn
                 codexLoginBusy: root.codexLoginBusy
                 codexLoginError: root.codexLoginError
@@ -787,6 +903,12 @@ KCM.SimpleKCM {
                         operation.call(root.usageBackend)
                 }
                 onRefreshOpenCodeGoRequested: root.callCredentialBackend("opencode-go", "refresh")
+                onSaveCommandCodeCredentialRequested: cookie => root.callCredentialBackend(
+                    "command-code", "save", cookie)
+                onClearCommandCodeCredentialRequested: root.callCredentialBackend(
+                    "command-code", "clear")
+                onRefreshCommandCodeRequested: root.callCredentialBackend("command-code", "refresh")
+                onRefreshAgnesRequested: root.callCredentialBackend("agnes-ai", "refresh")
                 onStartCodexLoginRequested: root.callCodexBackend("startCodexLogin")
                 onCancelCodexLoginRequested: root.callCodexBackend("cancelCodexLogin")
                 onOpenCodexLoginPageRequested: root.callCodexBackend("openCodexLoginPage")

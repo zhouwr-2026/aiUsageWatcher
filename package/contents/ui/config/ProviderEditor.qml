@@ -41,6 +41,12 @@ Item {
     property bool opencodeGoUsageLoading: false
     property string opencodeGoUsageStatus: qsTr("未配置")
     property string opencodeGoUsageError: ""
+    property bool agnesUsageLoading: false
+    property string agnesUsageStatus: qsTr("未配置")
+    property string agnesUsageError: ""
+    property bool commandCodeUsageLoading: false
+    property string commandCodeUsageStatus: qsTr("未配置")
+    property string commandCodeUsageError: ""
     property bool codexLoggedIn: false
     property bool codexLoginBusy: false
     property bool codexLoginError: false
@@ -59,6 +65,8 @@ Item {
     readonly property bool isCodexZh: (candidate.catalogId || "") === "codexzh"
     readonly property bool isDeepSeek: (candidate.catalogId || "") === "deepseek"
     readonly property bool isOpenCodeGo: (candidate.catalogId || "") === "opencode-go"
+    readonly property bool isAgnes: (candidate.catalogId || "") === "agnes-ai"
+    readonly property bool isCommandCode: (candidate.catalogId || "") === "command-code"
     readonly property var validation: ProviderConfig.validateProvider(candidate, siblings)
     readonly property var providerOptions: ProviderCatalog.providerOptions()
     readonly property real fieldWidth: Kirigami.Units.gridUnit * 20
@@ -71,6 +79,10 @@ Item {
     signal saveOpenCodeGoCredentialRequested(string workspaceId, string cookie)
     signal clearOpenCodeGoCredentialRequested()
     signal refreshOpenCodeGoRequested()
+    signal saveCommandCodeCredentialRequested(string cookie)
+    signal clearCommandCodeCredentialRequested()
+    signal refreshCommandCodeRequested()
+    signal refreshAgnesRequested()
     signal refreshMiniMaxRequested()
     signal refreshCodexZhRequested()
     signal refreshDeepSeekRequested()
@@ -664,6 +676,71 @@ Item {
         }
 
         SectionHeading {
+            visible: root.isCommandCode
+            text: qsTr("Command Code 凭据")
+        }
+
+        GridLayout {
+            visible: root.isCommandCode
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: root.formWidth
+            Layout.maximumWidth: root.formWidth
+            columns: 2
+            columnSpacing: Kirigami.Units.largeSpacing
+
+            FieldLabel { text: qsTr("Cookie：") }
+
+            QQC2.TextField {
+                id: commandCodeCookieField
+
+                objectName: "commandCodeCookieField"
+                Layout.preferredWidth: root.fieldWidth
+                Layout.maximumWidth: root.fieldWidth
+                placeholderText: root.credentialConfigured
+                    ? qsTr("输入新 Cookie 以替换已保存凭据")
+                    : qsTr("请粘贴包含 __Secure-commandcode_prod_ 会话项的完整 Cookie")
+                enabled: !root.credentialBusy
+                inputMethodHints: Qt.ImhHiddenText | Qt.ImhNoPredictiveText
+
+                Keys.onReturnPressed: {
+                    if (text.trim().length === 0 || root.credentialBusy)
+                        return
+                    const cookie = text
+                    clear()
+                    root.saveCommandCodeCredentialRequested(cookie)
+                }
+            }
+        }
+
+        RowLayout {
+            visible: root.isCommandCode
+            Layout.fillWidth: true
+
+            Item { Layout.fillWidth: true }
+
+            QQC2.Button {
+                objectName: "saveCommandCodeCredentialButton"
+                text: root.credentialConfigured ? qsTr("更新凭据") : qsTr("保存凭据")
+                icon.name: "document-save"
+                enabled: commandCodeCookieField.text.trim().length > 0 && !root.credentialBusy
+                onClicked: {
+                    const cookie = commandCodeCookieField.text
+                    commandCodeCookieField.clear()
+                    root.saveCommandCodeCredentialRequested(cookie)
+                }
+            }
+
+            QQC2.Button {
+                text: qsTr("移除已保存凭据")
+                icon.name: "edit-delete"
+                enabled: root.credentialConfigured && !root.credentialBusy
+                onClicked: root.clearCommandCodeCredentialRequested()
+            }
+
+            Item { Layout.fillWidth: true }
+        }
+
+        SectionHeading {
             visible: root.isDeepSeek
             text: qsTr("充值设置（可选）")
         }
@@ -732,12 +809,13 @@ Item {
         }
 
         SectionHeading {
-            visible: root.isMiniMax || root.isCodexZh || root.isDeepSeek
-            text: qsTr("%1 API 凭据").arg(root.isCodexZh ? "CodexZH" : (root.isDeepSeek ? "DeepSeek" : "MiniMax"))
+            visible: root.isMiniMax || root.isCodexZh || root.isDeepSeek || root.isAgnes
+            text: qsTr("%1 API 凭据").arg(root.isAgnes ? "Agnes AI"
+                : (root.isCodexZh ? "CodexZH" : (root.isDeepSeek ? "DeepSeek" : "MiniMax")))
         }
 
         GridLayout {
-            visible: root.isMiniMax || root.isCodexZh || root.isDeepSeek
+            visible: root.isMiniMax || root.isCodexZh || root.isDeepSeek || root.isAgnes
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: root.formWidth
             Layout.maximumWidth: root.formWidth
@@ -750,16 +828,19 @@ Item {
                 id: apiKeyField
 
                 objectName: root.isCodexZh ? "codexzhApiKeyField"
-                    : (root.isDeepSeek ? "deepseekApiKeyField" : "miniMaxApiKeyField")
+                    : (root.isDeepSeek ? "deepseekApiKeyField"
+                       : (root.isAgnes ? "agnesApiKeyField" : "miniMaxApiKeyField"))
                 Layout.preferredWidth: root.fieldWidth
                 Layout.maximumWidth: root.fieldWidth
                 placeholderText: root.credentialConfigured
                     ? qsTr("输入新 Key 以替换已保存凭据")
                     : (root.isCodexZh
                        ? qsTr("请输入 CodexZH API Key")
-                       : (root.isDeepSeek
-                          ? qsTr("请输入 DeepSeek API Key")
-                          : qsTr("请输入 MiniMax API Key")))
+                       : (root.isAgnes
+                          ? qsTr("请输入 Agnes AI API Key")
+                          : (root.isDeepSeek
+                             ? qsTr("请输入 DeepSeek API Key")
+                             : qsTr("请输入 MiniMax API Key"))))
                 echoMode: TextInput.Password
                 passwordCharacter: "●"
                 enabled: !root.credentialBusy
@@ -783,7 +864,8 @@ Item {
 
             QQC2.Button {
                 objectName: root.isCodexZh ? "saveCodexZhApiKeyButton"
-                    : (root.isDeepSeek ? "saveDeepSeekApiKeyButton" : "saveMiniMaxApiKeyButton")
+                    : (root.isDeepSeek ? "saveDeepSeekApiKeyButton"
+                       : (root.isAgnes ? "saveAgnesApiKeyButton" : "saveMiniMaxApiKeyButton"))
                 text: root.credentialConfigured ? qsTr("更新 API Key") : qsTr("保存 API Key")
                 icon.name: "document-save"
                 enabled: apiKeyField.text.trim().length > 0 && !root.credentialBusy
@@ -807,6 +889,8 @@ Item {
                     || (root.isMiniMax && root.miniMaxUsageLoading)
                     || (root.isDeepSeek && root.deepseekUsageLoading)
                     || (root.isOpenCodeGo && root.opencodeGoUsageLoading)
+                    || (root.isAgnes && root.agnesUsageLoading)
+                    || (root.isCommandCode && root.commandCodeUsageLoading)
                     ? qsTr("正在刷新…")
                     : qsTr("刷新额度")
                 icon.name: "view-refresh"
@@ -815,13 +899,19 @@ Item {
                        && !root.codexzhUsageLoading
                        && !root.deepseekUsageLoading
                        && !root.opencodeGoUsageLoading
+                       && !root.agnesUsageLoading
+                       && !root.commandCodeUsageLoading
                 onClicked: root.isOpenCodeGo
                            ? root.refreshOpenCodeGoRequested()
                            : (root.isCodexZh
                               ? root.refreshCodexZhRequested()
-                              : (root.isDeepSeek
-                                 ? root.refreshDeepSeekRequested()
-                                 : root.refreshMiniMaxRequested()))
+                              : (root.isAgnes
+                                 ? root.refreshAgnesRequested()
+                                 : (root.isCommandCode
+                                    ? root.refreshCommandCodeRequested()
+                                    : (root.isDeepSeek
+                                       ? root.refreshDeepSeekRequested()
+                                       : root.refreshMiniMaxRequested()))))
             }
 
             QQC2.BusyIndicator {
@@ -834,8 +924,11 @@ Item {
 
         Kirigami.InlineMessage {
             objectName: root.isCodexZh ? "codexzhCredentialMessage"
-                : (root.isDeepSeek ? "deepseekCredentialMessage" : "miniMaxCredentialMessage")
+                : (root.isAgnes ? "agnesCredentialMessage"
+                   : (root.isCommandCode ? "commandCodeCredentialMessage"
+                      : (root.isDeepSeek ? "deepseekCredentialMessage" : "miniMaxCredentialMessage")))
             visible: root.isMiniMax || root.isCodexZh || root.isDeepSeek
+                || root.isAgnes || root.isCommandCode
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: root.formWidth
             Layout.maximumWidth: root.formWidth
@@ -849,7 +942,8 @@ Item {
 
 
         Kirigami.InlineMessage {
-            visible: (root.isMiniMax || root.isCodexZh || root.isDeepSeek) && root.credentialConfigured
+            visible: (root.isMiniMax || root.isCodexZh || root.isDeepSeek
+                      || root.isAgnes || root.isCommandCode) && root.credentialConfigured
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: root.formWidth
             Layout.maximumWidth: root.formWidth
@@ -861,24 +955,38 @@ Item {
                    ? (root.opencodeGoUsageError.length > 0
                       ? qsTr("额度查询失败：%1").arg(root.opencodeGoUsageError)
                       : qsTr("额度查询：%1").arg(root.opencodeGoUsageStatus))
-                   : (root.isDeepSeek
-                      ? (root.deepseekUsageError.length > 0
-                         ? qsTr("额度查询失败：%1").arg(root.deepseekUsageError)
-                         : qsTr("额度查询：%1").arg(root.deepseekUsageStatus))
-                      : (root.miniMaxUsageError.length > 0
-                         ? qsTr("额度查询失败：%1").arg(root.miniMaxUsageError)
-                         : qsTr("额度查询：%1").arg(root.miniMaxUsageStatus))))
+                   : (root.isAgnes
+                      ? (root.agnesUsageError.length > 0
+                         ? qsTr("额度查询失败：%1").arg(root.agnesUsageError)
+                         : qsTr("额度查询：%1").arg(root.agnesUsageStatus))
+                      : (root.isCommandCode
+                         ? (root.commandCodeUsageError.length > 0
+                            ? qsTr("额度查询失败：%1").arg(root.commandCodeUsageError)
+                            : qsTr("额度查询：%1").arg(root.commandCodeUsageStatus))
+                         : (root.isDeepSeek
+                            ? (root.deepseekUsageError.length > 0
+                               ? qsTr("额度查询失败：%1").arg(root.deepseekUsageError)
+                               : qsTr("额度查询：%1").arg(root.deepseekUsageStatus))
+                            : (root.miniMaxUsageError.length > 0
+                               ? qsTr("额度查询失败：%1").arg(root.miniMaxUsageError)
+                               : qsTr("额度查询：%1").arg(root.miniMaxUsageStatus))))))
             type: root.isCodexZh
                 ? (root.codexzhUsageError.length > 0
                    ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)
                 : (root.isOpenCodeGo
                    ? (root.opencodeGoUsageError.length > 0
                       ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)
-                   : (root.isDeepSeek
-                      ? (root.deepseekUsageError.length > 0
+                   : (root.isAgnes
+                      ? (root.agnesUsageError.length > 0
                          ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)
-                      : (root.miniMaxUsageError.length > 0
-                         ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)))
+                      : (root.isCommandCode
+                         ? (root.commandCodeUsageError.length > 0
+                            ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)
+                         : (root.isDeepSeek
+                            ? (root.deepseekUsageError.length > 0
+                               ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)
+                            : (root.miniMaxUsageError.length > 0
+                               ? Kirigami.MessageType.Error : Kirigami.MessageType.Positive)))))
         }
 
         SectionHeading {

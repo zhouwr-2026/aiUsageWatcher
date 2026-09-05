@@ -124,6 +124,30 @@ var PRESETS = [{
     "sourceLabel": "余额",
     "template": "%1 限额  %2/%3",
     "plans": [{ "id": "balance", "planName": "账户余额", "unit": "元" }]
+}, {
+    "catalogId": "agnes-ai",
+    "label": "Agnes AI",
+    "id": "agnes-ai",
+    "providerName": "Agnes AI",
+    "vendor": "Agnes AI",
+    "website": "https://agnes-ai.com/",
+    "sourceLabel": "套餐",
+    "template": "%1 限额  %2/%3",
+    "plans": [{ "id": "plan", "planName": "套餐额度", "unit": "%" }]
+}, {
+    "catalogId": "command-code",
+    "label": "Command Code",
+    "id": "command-code",
+    "providerName": "Command Code",
+    "vendor": "Command Code",
+    "website": "https://commandcode.ai/",
+    "sourceLabel": "订阅",
+    "template": "%1 限额  %2/%3",
+    "plans": [
+        { "id": "five-hour", "planName": "5 小时", "unit": "%" },
+        { "id": "weekly", "planName": "每周", "unit": "%" },
+        { "id": "monthly", "planName": "月度额度", "unit": "%" }
+    ]
 }];
 
 function _copy(value) {

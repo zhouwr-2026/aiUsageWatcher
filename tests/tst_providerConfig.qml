@@ -98,7 +98,7 @@ Item {
 
         function test_catalog_has_requested_fixed_providers_and_custom_last() {
             const options = ProviderCatalog.providerOptions()
-            compare(options.length, 10)
+            compare(options.length, 12)
             compare(options[0].text, "Codex")
             compare(options[1].text, "Claude Code")
             compare(options[2].text, "OpenCode Go")
@@ -108,7 +108,9 @@ Item {
             compare(options[6].text, "硅基流动")
             compare(options[7].text, "CodexZH")
             compare(options[8].text, "DeepSeek")
-            compare(options[9].value, "custom")
+            compare(options[9].text, "Agnes AI")
+            compare(options[10].text, "Command Code")
+            compare(options[11].value, "custom")
         }
 
         function test_fixed_provider_definition_is_canonical() {
@@ -527,6 +529,39 @@ Item {
                     "clearCodexZhApiKey")
             compare(page.credentialBackendMethod("minimax", "clear"),
                     "clearMiniMaxApiKey")
+            compare(page.credentialBackendMethod("agnes-ai", "save"),
+                    "saveAgnesApiKey")
+            compare(page.credentialBackendMethod("agnes-ai", "refresh"),
+                    "refreshAgnesUsage")
+            compare(page.credentialBackendMethod("command-code", "save"),
+                    "saveCommandCodeCookie")
+            compare(page.credentialBackendMethod("command-code", "clear"),
+                    "clearCommandCodeCookie")
+            compare(page.credentialBackendMethod("command-code", "refresh"),
+                    "refreshCommandCodeUsage")
+            page.destroy()
+        }
+
+        function test_agnes_and_command_code_editor_fields() {
+            const page = createPage([
+                ProviderCatalog.definitionFor("agnes-ai"),
+                ProviderCatalog.definitionFor("command-code")
+            ])
+
+            // Agnes AI：API Key 输入框（复用 API Key 区）
+            verify(page.beginEdit("agnes-ai"))
+            const agnesField = findChild(page, "agnesApiKeyField")
+            verify(agnesField !== null)
+            verify(agnesField.visible)
+            compare(agnesField.echoMode, TextInput.Password)
+
+            // Command Code：Cookie 输入框（专用凭据区）
+            verify(page.beginEdit("command-code"))
+            const cookieField = findChild(page, "commandCodeCookieField")
+            verify(cookieField !== null)
+            verify(cookieField.visible)
+            verify(findChild(page, "saveCommandCodeCredentialButton") !== null)
+            page.cancelEditor()
             page.destroy()
         }
 

@@ -43,12 +43,16 @@ PlasmoidItem {
         applyCodexSnapshot()
         applyCodexZhSnapshot()
         applyOpenCodeGoSnapshot()
+        applyAgnesSnapshot()
+        applyCommandCodeSnapshot()
         applyCustomSnapshots()
         requestMiniMaxRefresh()
         requestDeepSeekRefresh()
         requestCodexRefresh()
         requestCodexZhRefresh()
         requestOpenCodeGoRefresh()
+        requestAgnesRefresh()
+        requestCommandCodeRefresh()
         requestCustomRefresh()
     }
     property int compactProviderIndex: 0
@@ -181,6 +185,44 @@ PlasmoidItem {
         return true
     }
 
+    function applyAgnesSnapshot() {
+        const snapshot = usageBackend["agnesSnapshot"]
+        if (!snapshot || snapshot.providerId !== "agnes-ai"
+                || !snapshot.plans || typeof snapshot.plans.length !== "number")
+            return false
+
+        runtimeSnapshots = ProviderNormalize.replaceSnapshot(runtimeSnapshots, snapshot)
+        lastRefreshTime = new Date()
+        return true
+    }
+
+    function requestAgnesRefresh() {
+        const refreshFunction = usageBackend["refreshAgnesUsage"]
+        if (typeof refreshFunction !== "function")
+            return false
+        refreshFunction.call(usageBackend)
+        return true
+    }
+
+    function applyCommandCodeSnapshot() {
+        const snapshot = usageBackend["commandCodeSnapshot"]
+        if (!snapshot || snapshot.providerId !== "command-code"
+                || !snapshot.plans || typeof snapshot.plans.length !== "number")
+            return false
+
+        runtimeSnapshots = ProviderNormalize.replaceSnapshot(runtimeSnapshots, snapshot)
+        lastRefreshTime = new Date()
+        return true
+    }
+
+    function requestCommandCodeRefresh() {
+        const refreshFunction = usageBackend["refreshCommandCodeUsage"]
+        if (typeof refreshFunction !== "function")
+            return false
+        refreshFunction.call(usageBackend)
+        return true
+    }
+
     function applyCustomSnapshots() {
         const snapshots = usageBackend["customUsageSnapshots"]
         if (!snapshots || typeof snapshots.length !== "number")
@@ -209,6 +251,8 @@ PlasmoidItem {
         applyCodexSnapshot()
         applyCodexZhSnapshot()
         applyOpenCodeGoSnapshot()
+        applyAgnesSnapshot()
+        applyCommandCodeSnapshot()
         applyCustomSnapshots()
         lastRefreshTime = new Date()
         requestMiniMaxRefresh()
@@ -216,6 +260,8 @@ PlasmoidItem {
         requestCodexRefresh()
         requestCodexZhRefresh()
         requestOpenCodeGoRefresh()
+        requestAgnesRefresh()
+        requestCommandCodeRefresh()
         requestCustomRefresh()
         refreshTimer.restart()
     }
@@ -319,6 +365,15 @@ PlasmoidItem {
         }
         function onCodexzhSnapshotChanged() {
             root.applyCodexZhSnapshot()
+        }
+        function onOpencodeGoSnapshotChanged() {
+            root.applyOpenCodeGoSnapshot()
+        }
+        function onAgnesSnapshotChanged() {
+            root.applyAgnesSnapshot()
+        }
+        function onCommandCodeSnapshotChanged() {
+            root.applyCommandCodeSnapshot()
         }
         function onModelActivated(modelName) {
             if (root.displayStrategy === "event" && root.eventMode === "dbus")

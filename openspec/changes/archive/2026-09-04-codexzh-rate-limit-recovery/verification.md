@@ -154,26 +154,45 @@ f36e99d fix(codexzh): break the 1Hz refresh loop that blew through the 60s rate-
 
 **Defer to user confirmation** — do not push without explicit "yes push" from the user. The CI workflow gives us the cheapest possible gate to detect regressions; a single failed CI run after push is `git revert <hash>` to roll back, but the user must opt in.
 
-## Post-push reality check (2026-09-05)
+## Post-push reality check (2026-09-05) — updated after GitHub mirror
 
-本次推送实际去向是 **gitee.com**（`git@gitee.com:eruditeLoong/aiUsageWatcher.git`）。
-**Gitee 不执行 GitHub Actions**：`.github/workflows/ci.yml` 推上去后不会被触发，CI gate 当前**不生效**（不是 bug，是平台限制）。
+**Gitee 不执行 GitHub Actions**：`.github/workflows/ci.yml` 推上去后不会被触发。
+**结论更新**：项目已在 GitHub 创建镜像仓库（`github.com/zhouwr-2026/aiUsageWatcher`），
+CI 通过此镜像**真实跑通**（2026-09-05，全绿 success 2m26s）。
 
-现状说明（避免把"已推送 CI"误认为"CI 已运行"）：
+### GitHub Actions 实际验证中发现并修复的 5 个问题
 
-- `.github/workflows/ci.yml` **保留**——它是 CI 意图的完整文档化（kdeci/neon 镜像、
-  构建 + ctest + 静态检查、no-restart 策略）；若未来镜像到 GitHub 会自动生效。
-- **本地等价门禁**（推送前已跑，长期有效）：
-  - `cmake --build build-test && cd build-test && ctest` —— C++ 契约测试 12/12
-  - `bash tests/run-static-checks.sh` —— QML 组件 130/130 + qmllint 0 警告 + metadata
-  - `git diff --check` —— 空白错误
-- 若希望 gitee 上真正自动跑 CI：需要在 Gitee 网页端为仓库开通 **Gitee Go**
-  流水线（网页 UI 配置，非仓库内文件驱动），把上述本地门禁的三个命令作为流水线步骤。
+1. `kdeci/neon:latest` 已废弃且 KDE 官方镜像（invent-registry.kde.org）需认证
+   → 容器改为 `archlinux:latest`（唯一公开可拉取且带完整 KF6/Plasma 6/Qt6 开发栈的镜像）
+2. Ubuntu 24.04 官方仓库与 Kubuntu PPA 均无 `libplasma6-dev` 等 Plasma 6 开发包
+   → 确认 KF6/Plasma 6 只随 KDE neon/Arch 分发（Launchpad API 实证 total_size=0）
+3. 容器默认 shell 是 dash，不支持 `set -euo pipefail` → job 级 `defaults.run.shell: bash`
+4. 容器以 root 运行，`sudo` 不存在 → 去掉 sudo
+5. **KConfigWatcher 信号在 CI 容器（overlayfs）上从不触发**（5s QTRY 后 count 仍 0）
+   → `SharedProviderConfig::reload()` 公开；测试改为覆盖「读磁盘 → emit」产品语义，
+   inotify 通知链路交给本地 run-plasma-smoke.sh（真实桌面文件系统）
+
+### 本地等价门禁（始终有效）
+
+- `cmake --build build-test && cd build-test && ctest` —— C++ 契约测试 12/12
+- `bash tests/run-static-checks.sh` —— QML 组件 130/130 + qmllint 0 警告 + metadata
+- `git diff --check` —— 空白错误
+
+### Gitee Go（可选，网页端配置）
+
+若希望 gitee 上自动跑 CI：仓库页开通 Gitee Go（绑定手机号 → 一键开启 →
+代码视图加 Shell 任务），任务内容即上述"本地等价门禁"三行命令。
 
 ## Post-push follow-ups (deferred, not forgotten)
 
 - [ ] Agnes AI 凭据配置（需要用户提供 API Key / localStorage token）
 - [ ] Gitee Go 流水线（可选，网页端配置）
-- [ ] CI build cache 优化（`caches: apt`）——等 CI 真跑起来再按实测反馈调整，避免过早优化
+- [ ] CI build cache 优化（`caches: apt`→pacman 缓存）——CI 已跑通，可按实测反馈调整
 - [ ] 6 Client 模板进一步抽象（如需给新 provider 接入时再评估，当前 6 个已收敛良好）
+
+## GitHub mirror CI status (live)
+
+- 仓库：https://github.com/zhouwr-2026/aiUsageWatcher
+- 每次 push/pull_request 自动触发：构建 + ctest 12/12 + QML 130/130
+- 本地与 CI 双 gate 均绿；本机部署实测通过（5 provider 真实数据）
 

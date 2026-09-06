@@ -27,6 +27,8 @@ protected:
 
 private:
     struct Rule {
+        enum class Kind { Keyword, String, Number, Comment };
+        Kind kind;
         QRegularExpression pattern;
         QTextCharFormat format;
     };

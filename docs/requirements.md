@@ -15,6 +15,9 @@
 
 - 多模型、多限额项展示；旧版手动用量与静态限额继续兼容读取。
 - MiniMax 原生网络查询、响应校验、地区/端点回退和 KDE Wallet 凭据保存。
+- DeepSeek 原生余额查询（`remaining`/`is_available`）、充值金额/充值日期驱动的 PAYG 已用推断；
+  CodexZH 原生查询（带 60 秒限流窗口与用量分段）；Agnes AI / Command Code / OpenCode Go
+  原生查询（Cookie/API Key 存 KDE Wallet）。
 - Codex 采用与 cc-switch 一致的 OpenAI 设备码流程，直接显示结构化验证码并自动打开
   官方浏览器授权页；支持隔离的多账号列表、添加账号、删除账号和默认账号标记。
 - Codex 默认账号通过 ChatGPT 官方用量接口读取真实限额窗口；访问令牌临近过期或接口
@@ -27,7 +30,8 @@
 - popup 水平柱状图/环形饼图两种布局，以及关闭、刷新、配置、保持打开。
 - 模型增删、上下排序；编辑页所有字段固定为左标签、右输入框。
 - 内置 Codex、Claude Code、OpenCode Go、MiniMax、智谱 GLM、Kimi For Coding、
-  硅基流动、CodexZH 八个厂商预设，以及自定义模式。
+  硅基流动、CodexZH、DeepSeek、Agnes AI、Command Code 十一个厂商预设（目录见
+  `providerCatalog.js`），以及自定义模式。
 - 固定厂商自动填充稳定标识、名称、官网和套餐结构；只有自定义模式显示限额项与脚本。
 - 自定义限额按名称、单位、`${used}` / `${limit}` / `${resetAt}` 变量绑定；支持任意增删。
 - HTTP+JS 自定义查询使用独立 worker：提取请求、执行 C++ 网络请求、解析 JSON 响应并
@@ -41,7 +45,7 @@
 ### 尚未实现
 
 - 编辑器中的“测试脚本”目前只做文本契约校验；真实查询在应用设置或刷新后执行。
-- 其余六个固定厂商的凭据管理与真实用量查询适配器；未接入时只显示暂无用量。
+- Claude Code、智谱 GLM、Kimi For Coding、硅基流动四家固定厂商的凭据管理与真实用量查询适配器；未接入时只显示暂无用量。
 - 本地 HTTP 事件服务器。
 - D-Bus 服务名/路径/接口的用户自定义。
 - 拖拽排序（当前使用可访问的上移/下移按钮）。
@@ -74,7 +78,7 @@ KConfig 的 `providers` 只保存定义，不保存网络刷新快照：
 type ProviderDefinition = {
   catalogId: "codex" | "claude-code" | "opencode-go" | "minimax" |
              "zhipu-glm" | "kimi-for-coding" | "siliconflow" | "codexzh" |
-             "custom";
+             "deepseek" | "agnes-ai" | "command-code" | "custom";
   id: string;
   providerName: string;
   website: string;
@@ -171,6 +175,9 @@ usedPercent = clamp(round(used / total * 100), 0, 100)
 | `refreshIntervalSec` | 60 | 10..3600 |
 | `opacityPercent` | 80 | 20..100 |
 | `keepPanelOpen` | false | bool |
+| `sortMode` | `default` | `default` / `alphabetical` / `usedPercent` / `remainingPercent` / `nextReset` / `custom` |
+| `customOrder` | 空 | provider id 数组的 JSON 字符串 |
+| `popupHeight` / `popupWidth` | 空 | popup 记忆尺寸（运行时写入，非用户编辑） |
 
 ## 8. 验收门槛
 
@@ -185,6 +192,6 @@ usedPercent = clamp(round(used / total * 100), 0, 100)
 ## 9. 下一阶段顺序
 
 1. 让编辑器“测试脚本”复用定时刷新的真实执行链，并增加自定义凭据的 KDE Wallet 管理。
-2. 按厂商逐个增加凭据管理和原生查询适配器，优先 Kimi For Coding 与智谱 GLM。
+2. 按厂商逐个增加凭据管理和原生查询适配器，优先 Kimi For Coding 与智谱 GLM，再 Claude Code 与硅基流动。
 3. 基于 Qt HTTP Server 增加仅监听 `127.0.0.1` 的回调服务和请求限制。
 4. 最后补拖拽排序、独立图标和多实例事件命名空间。

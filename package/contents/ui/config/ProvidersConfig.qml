@@ -718,6 +718,7 @@ KCM.SimpleKCM {
                                 Layout.fillWidth: true
                                 text: providerDelegate.providerName
                                 elide: Text.ElideRight
+                                textFormat: Text.PlainText
                             }
 
                             QQC2.Label {
@@ -725,6 +726,7 @@ KCM.SimpleKCM {
                                 text: providerDelegate.planSummary
                                 color: Kirigami.Theme.disabledTextColor
                                 elide: Text.ElideRight
+                                textFormat: Text.PlainText
                             }
                         }
 

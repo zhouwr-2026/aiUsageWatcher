@@ -173,6 +173,7 @@ Flickable {
                                     text: planColumn.modelData.usedPercent >= 0
                                         ? planColumn.modelData.usedPercent + "%" : "—"
                                     font.bold: true
+                                    textFormat: Text.PlainText
                                 }
                             }
 
@@ -182,6 +183,7 @@ Flickable {
                                 horizontalAlignment: Text.AlignHCenter
                                 elide: Text.ElideRight
                                 font: Kirigami.Theme.smallFont
+                                textFormat: Text.PlainText   // planName 来自远端
                             }
                         }
                     }
@@ -196,6 +198,9 @@ Flickable {
                         ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.disabledTextColor
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
+                    // errorText 可能携带远端文本：纯文本 + 限 3 行
+                    textFormat: Text.PlainText
+                    maximumLineCount: 3
                 }
             }
         }

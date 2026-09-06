@@ -81,8 +81,11 @@ Item {
                 Layout.minimumWidth: 0
                 text: root.planName
                 color: Kirigami.Theme.textColor
+                // planName 可能来自远端/用户脚本：显式纯文本 + 限 3 行，防止
+                // AutoText 富文本解析吞字或超长名把卡片高度撑爆。
+                textFormat: Text.PlainText
                 wrapMode: Text.Wrap
-                elide: Text.ElideNone
+                maximumLineCount: 3
             }
 
             QQC2.ProgressBar {
@@ -194,6 +197,7 @@ Item {
                 color: root.usageColor(root.barClass)
                 font.bold: true
                 horizontalAlignment: Text.AlignRight
+                textFormat: Text.PlainText
             }
         }
 
@@ -210,6 +214,7 @@ Item {
                 color: Kirigami.Theme.disabledTextColor
                 font: Kirigami.Theme.smallFont
                 elide: Text.ElideRight
+                textFormat: Text.PlainText
             }
 
             PlasmaComponents.Label {
@@ -220,6 +225,7 @@ Item {
                 color: Kirigami.Theme.disabledTextColor
                 font: Kirigami.Theme.smallFont
                 elide: Text.ElideRight
+                textFormat: Text.PlainText
 
                 HoverHandler {
                     id: extraTextHover

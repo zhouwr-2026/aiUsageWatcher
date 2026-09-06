@@ -128,6 +128,7 @@ Rectangle {
                         color: parent.enabled ? Kirigami.Theme.linkColor : Kirigami.Theme.textColor
                         font.bold: true
                         elide: Text.ElideRight
+                        textFormat: Text.PlainText
                     }
                     onClicked: Qt.openUrlExternally(root.website)
                 }
@@ -141,6 +142,7 @@ Rectangle {
                     font.bold: true
                     Layout.maximumWidth: Kirigami.Units.gridUnit * 4
                     elide: Text.ElideRight                // 长价格不挤压厂商名称
+                    textFormat: Text.PlainText
                 }
 
                 Item {
@@ -164,6 +166,7 @@ Rectangle {
                     color: root.statusColor(root.ledClass)
                     font: Kirigami.Theme.smallFont
                     elide: Text.ElideRight
+                    textFormat: Text.PlainText
                 }
             }
 
@@ -174,6 +177,9 @@ Rectangle {
                 color: Kirigami.Theme.negativeTextColor
                 font: Kirigami.Theme.smallFont
                 wrapMode: Text.Wrap
+                // 错误消息可能携带远端文本（HTTP 体/脚本返回）：纯文本 + 限 4 行
+                textFormat: Text.PlainText
+                maximumLineCount: 4
             }
 
             Repeater {

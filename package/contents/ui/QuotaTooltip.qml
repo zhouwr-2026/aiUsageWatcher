@@ -55,6 +55,8 @@ Item {
             text: root.titleText()
             font.bold: true
             elide: Text.ElideRight
+            // 标题含远端 providerName/planName：纯文本防富文本吞字
+            textFormat: Text.PlainText
         }
 
         QQC2.Label {
@@ -64,6 +66,9 @@ Item {
             color: root.provider.errorText
                 ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
             wrapMode: Text.Wrap
+            // 错误文本/重置文本来自远端：纯文本 + 限行，防止悬浮提示被超长文本撑爆
+            textFormat: Text.PlainText
+            maximumLineCount: 5
         }
     }
 }

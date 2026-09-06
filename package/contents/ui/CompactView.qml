@@ -139,6 +139,7 @@ Item {
             minimumPixelSize: Kirigami.Theme.smallFont.pixelSize
             fontSizeMode: Text.Fit
             elide: Text.ElideRight
+            textFormat: Text.PlainText
         }
     }
 
@@ -165,6 +166,7 @@ Item {
             }
             color: Kirigami.Theme.textColor
             font: Kirigami.Theme.smallFont
+            textFormat: Text.PlainText   // providerName 前两字可能来自用户输入
         }
 
         // 与 Plasma 硬盘监控一致：使用 ProgressBar，但完全覆写内容和背景，

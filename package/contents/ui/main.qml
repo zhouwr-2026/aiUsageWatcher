@@ -246,10 +246,11 @@ PlasmoidItem {
            ? qsTr("%1 · 暂无可用数据").arg(
                   ProviderNormalize.stripProviderSuffix(compactUsage.providerName))
            : qsTr("暂无可用数据"))
-        : qsTr("%1 · %2 · 已用 %3")
+        : qsTr("%1 · %2 · 已用 %3%4")
             .arg(ProviderNormalize.stripProviderSuffix(compactUsage.providerName))
             .arg(compactUsage.planName)
             .arg(compactUsage.usedPercent + "%")
+            .arg(compactUsage.stale ? qsTr("（暂未更新）") : "")
 
     toolTipItem: QuotaTooltip {
         provider: root.compactUsage

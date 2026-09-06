@@ -80,6 +80,9 @@ Item {
     }
 
     function usageColor(percent) {
+        // stale（上次刷新失败）：整图降级灰显，不得以语义色冒充最新数据
+        if (root.currentUsage.stale)
+            return Kirigami.Theme.disabledTextColor
         switch (ProviderNormalize.usageClass(percent, "bar")) {
         case "bar-green": return Kirigami.Theme.positiveTextColor
         case "bar-yellow": return Kirigami.Theme.neutralTextColor

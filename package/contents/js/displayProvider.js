@@ -312,7 +312,16 @@ function buildDisplay(definitions, snapshots, options) {
     var builds = enabledDefinitions.map(function(definition) {
         var snapshot = _snapshotFor(snapshots, definition.id)
         var snapshotPlans = snapshot && Array.isArray(snapshot.plans) ? snapshot.plans : []
+        // stale：C++ 侧刷新失败时保留旧快照并标记（credentialclientbase::setError）。
+        // 数值仍可读，但整卡降级灰显，不得以正常语义色冒充最新数据。
+        var isStale = !!(snapshot && snapshot.stale === true)
         var plans = snapshotPlans.map(function(plan) { return _displayPlan(definition, plan) })
+        if (isStale) {
+            plans = plans.map(function(plan) {
+                plan.barClass = "bar-gray"
+                return plan
+            })
+        }
         var tight = _tightestForProvider({ plans: plans })
         var nativeLogo = ProviderRegistry.logoSvgFor(definition.catalogId)
         return {
@@ -323,6 +332,7 @@ function buildDisplay(definitions, snapshots, options) {
             sourceLabel: definition.sourceLabel || "",
             statusLabel: snapshot && snapshot.statusLabel ? snapshot.statusLabel : "暂无用量",
             errorText: snapshot && snapshot.errorText ? snapshot.errorText : "",
+            stale: isStale,
             template: definition.template || DEFAULT_TEMPLATE,
             website: definition.website || ProviderRegistry.websiteFor(definition.catalogId),
             logoSource: _resolveLogoPath(definition.logoPath, nativeLogo),
@@ -331,7 +341,8 @@ function buildDisplay(definitions, snapshots, options) {
             logoIsSvg: !definition.logoPath,
             logoBackdropColor: definition.logoBackdropColor || "",
             plans: plans,
-            ledClass: _usageClass(tight.percent).replace("bar-", "led-"),
+            ledClass: isStale ? "led-gray"
+                : _usageClass(tight.percent).replace("bar-", "led-"),
             tightestPercent: tight.percent,
             tightestRemaining: tight.remaining,
             nextResetAt: _nextResetAt(plans),
@@ -385,6 +396,7 @@ function providerUsageAt(displayProviders, providerIndex) {
         providerId: provider.id || "",
         statusLabel: provider.statusLabel || "",
         errorText: provider.errorText || "",
+        stale: provider.stale === true,
         plans: Array.isArray(provider.plans) ? provider.plans : []
     }
 }

@@ -116,4 +116,71 @@ Item {
             compare(DisplayProvider.totalPrice(displayed), 0)
         }
     }
+
+    TestCase {
+        name: "StaleSnapshot"
+        when: windowShown
+
+        function staleDisplay() {
+            const def = ProviderCatalog.definitionFor("minimax")
+            const snapshots = [{
+                providerId: "minimax",
+                statusLabel: "数据暂时不可更新",
+                errorText: "请求失败",
+                stale: true,
+                plans: [{
+                    planId: "general-interval",
+                    planName: "当前周期",
+                    used: 90,
+                    total: 100,
+                    unit: "%",
+                    resetText: "",
+                    resetAt: 0,
+                    extraText: "",
+                    isValid: true,
+                    invalidReason: ""
+                }]
+            }]
+            return DisplayProvider.buildDisplay([def], snapshots, { sortMode: "default" })[0]
+        }
+
+        function test_staleKeepsValuesButGreysBars() {
+            const display = staleDisplay()
+            verify(display.stale)
+            compare(display.ledClass, "led-gray")
+            compare(display.plans[0].usedPercent, 90)      // 数值保留可读
+            compare(display.plans[0].barClass, "bar-gray") // 颜色降级，不冒充最新
+        }
+
+        function test_staleSurfacesThroughProviderUsageAt() {
+            const usage = DisplayProvider.providerUsageAt([staleDisplay()], 0)
+            verify(usage.stale)
+            compare(usage.usedPercent, 90)
+        }
+
+        function test_freshSnapshotKeepsSemanticColors() {
+            const def = ProviderCatalog.definitionFor("minimax")
+            const snapshots = [{
+                providerId: "minimax",
+                statusLabel: "可用",
+                errorText: "",
+                plans: [{
+                    planId: "general-interval",
+                    planName: "当前周期",
+                    used: 90,
+                    total: 100,
+                    unit: "%",
+                    resetText: "",
+                    resetAt: 0,
+                    extraText: "",
+                    isValid: true,
+                    invalidReason: ""
+                }]
+            }]
+            const display = DisplayProvider.buildDisplay([def], snapshots, { sortMode: "default" })[0]
+            verify(!display.stale)
+            compare(display.ledClass, "led-yellow")        // 90% → 85..94 注意色
+            compare(display.plans[0].barClass, "bar-yellow")
+        }
+    }
 }

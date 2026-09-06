@@ -61,8 +61,9 @@
 - 当前事件入口使用 D-Bus，不监听网络端口。
 - 不引入 Qt WebEngine/Monaco。编辑器使用 Qt Quick `TextArea`、C++
   `QSyntaxHighlighter` 和纯文本工具，保持轻量且不获得执行权限。
-- MiniMax 请求失败后清空旧计划，状态为“请求失败”；不得把旧额度冒充最新数据。
-- Codex 请求失败后同样清空旧计划；生产种子数据不得包含伪造的已用量或限额。
+- MiniMax 等凭据类客户端刷新失败且无旧快照时清空计划、状态为“请求失败”；已有旧快照时保留旧值但
+  标记 `stale`，UI 降级灰显并显示“数据暂时不可更新”——不得把旧额度以正常语义色冒充最新数据。
+- Codex 请求失败后清空旧计划；生产种子数据不得包含伪造的已用量或限额。
 - JSON 整数转换前校验 `qint64` 范围，超范围响应作为无效数据拒绝。
 
 ## 4. 数据契约
@@ -103,6 +104,7 @@ type RuntimeProviderSnapshot = {
   providerId: string;
   statusLabel: string;
   errorText: string;
+  stale: boolean; // 上次刷新失败但保留旧快照；UI 必须降级灰显，不得以语义色冒充最新
   plans: Array<{
     planId: string;
     planName: string;

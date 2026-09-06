@@ -360,5 +360,6 @@ void CommandCodeClient::buildSnapshot()
         setSnapshot(staleSnapshot);
         return;
     }
-    setSnapshot({{QStringLiteral("providerId"), QStringLiteral("command-code")}, {QStringLiteral("statusLabel"), summaryOk && creditsOk ? QStringLiteral("可用") : (summaryOk || creditsOk ? QStringLiteral("部分可用") : QStringLiteral("查询失败"))}, {QStringLiteral("errorText"), error}, {QStringLiteral("plans"), plans}, {QStringLiteral("summary"), m_summary}});
+    // 快照只含白名单字段；m_summary 仅作内部计算源，不整包透传给 QML。
+    setSnapshot({{QStringLiteral("providerId"), QStringLiteral("command-code")}, {QStringLiteral("statusLabel"), summaryOk && creditsOk ? QStringLiteral("可用") : (summaryOk || creditsOk ? QStringLiteral("部分可用") : QStringLiteral("查询失败"))}, {QStringLiteral("errorText"), error}, {QStringLiteral("plans"), plans}});
 }

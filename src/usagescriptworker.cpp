@@ -52,8 +52,10 @@ int main(int argc, char **argv)
         writeResult(failure(QStringLiteral("无法读取脚本任务")));
         return 1;
     }
-    const QByteArray payload = input.read(512 * 1024 + 1);
-    if (payload.size() > 512 * 1024) {
+    // 任务上限须容纳 extract 任务：脚本 ≤256KiB（JSON 转义最坏 ~2×）+ 响应 ≤1MiB
+    // + 任务框架开销；真实防线在父进程（customusageclient 的 1MiB 响应守卫）。
+    const QByteArray payload = input.read(4 * 1024 * 1024 + 1);
+    if (payload.size() > 4 * 1024 * 1024) {
         writeResult(failure(QStringLiteral("脚本任务过大")));
         return 1;
     }

@@ -470,6 +470,7 @@ Item {
                             Layout.fillWidth: true
                             text: accountFrame.modelData.login || qsTr("ChatGPT 账号")
                             elide: Text.ElideMiddle
+                            textFormat: Text.PlainText   // login 来自 id_token 的 email 声明
                         }
 
                         QQC2.Label {
@@ -857,7 +858,10 @@ Item {
         }
 
         RowLayout {
-            visible: root.isMiniMax || root.isCodexZh || root.isDeepSeek || root.isOpenCodeGo
+            // Agnes 走 API Key（补回门控）；Command Code 只借本行的刷新按钮，
+            // 其 Key 保存/移除按钮对本行无 Key 语义，单独隐藏。
+            visible: root.isMiniMax || root.isCodexZh || root.isDeepSeek
+                || root.isOpenCodeGo || root.isAgnes || root.isCommandCode
             Layout.fillWidth: true
 
             Item { Layout.fillWidth: true }
@@ -866,6 +870,7 @@ Item {
                 objectName: root.isCodexZh ? "saveCodexZhApiKeyButton"
                     : (root.isDeepSeek ? "saveDeepSeekApiKeyButton"
                        : (root.isAgnes ? "saveAgnesApiKeyButton" : "saveMiniMaxApiKeyButton"))
+                visible: !root.isCommandCode
                 text: root.credentialConfigured ? qsTr("更新 API Key") : qsTr("保存 API Key")
                 icon.name: "document-save"
                 enabled: apiKeyField.text.trim().length > 0 && !root.credentialBusy
@@ -877,6 +882,7 @@ Item {
             }
 
             QQC2.Button {
+                visible: !root.isCommandCode
                 text: qsTr("移除已保存 Key")
                 icon.name: "edit-delete"
                 enabled: root.credentialConfigured && !root.credentialBusy

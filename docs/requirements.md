@@ -69,6 +69,8 @@
   标记 `stale`，UI 降级灰显并显示“数据暂时不可更新”——不得把旧额度以正常语义色冒充最新数据。
 - Codex 请求失败后清空旧计划；生产种子数据不得包含伪造的已用量或限额。
 - JSON 整数转换前校验 `qint64` 范围，超范围响应作为无效数据拒绝。
+- CodexZH 接口契约要求在 URL query 携带 API key（与 Authorization 头并存），属上游契约风险接受项；
+  代码与日志不得打印携带该 key 的完整 URL。
 
 ## 4. 数据契约
 
@@ -166,7 +168,7 @@ usedPercent = clamp(round(used / total * 100), 0, 100)
 
 | 字段 | 默认 | 范围/取值 |
 |---|---:|---|
-| `compactStyle` | `pie` | `pie` / `bar` |
+| `compactStyle` | `bar` | `pie` / `bar` |
 | `panelStyle` | `bar` | `pie` / `bar` |
 | `displayStrategy` | `polling` | `polling` / `event` |
 | `pollingIntervalSec` | 5 | 1..300 |

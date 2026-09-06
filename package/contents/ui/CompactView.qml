@@ -10,7 +10,7 @@ Item {
 
     required property var plasmoidItem
     property var providers: []
-    property string compactStyle: "pie"
+    property string compactStyle: "bar"
     property int providerIndex: 0
     property bool highlighted: false
     readonly property var currentUsage: ProviderNormalize.providerUsageAt(providers, providerIndex)

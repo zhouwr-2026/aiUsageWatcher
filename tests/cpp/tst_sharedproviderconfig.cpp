@@ -2,6 +2,8 @@
 
 #include "sharedproviderconfig.h"
 
+#include <QFile>
+#include <QStandardPaths>
 #include <QTest>
 #include <QUuid>
 
@@ -24,6 +26,14 @@ QString temporaryConfigName()
         .arg(QUuid::createUuid().toString(QUuid::Id128));
 }
 
+// 清理用例写出的临时 KConfig，避免每次 ctest 在用户 ~/.config 累积垃圾文件。
+void cleanupConfigFile(const QString &name)
+{
+    const QString path = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation)
+        + QLatin1Char('/') + name;
+    QFile::remove(path);
+}
+
 void SharedProviderConfigTest::savesAndReloadsValidProviders()
 {
     const QString path = temporaryConfigName();
@@ -37,17 +47,22 @@ void SharedProviderConfigTest::savesAndReloadsValidProviders()
 
     SharedProviderConfig reader(path);
     QCOMPARE(reader.providers(), validProviders);
+
+    cleanupConfigFile(path);
 }
 
 void SharedProviderConfigTest::rejectsInvalidProvidersWithoutOverwriting()
 {
-    SharedProviderConfig store(temporaryConfigName());
+    const QString path = temporaryConfigName();
+    SharedProviderConfig store(path);
     QVERIFY(store.save(validProviders));
 
     QVERIFY(!store.save(QStringLiteral("{broken")));
     QVERIFY(!store.save(QStringLiteral("{}")));
     QVERIFY(!store.save(QStringLiteral(R"([{"id":"codex"}])")));
     QCOMPARE(store.providers(), validProviders);
+
+    cleanupConfigFile(path);
 }
 
 void SharedProviderConfigTest::notifiesOtherInstances()
@@ -66,6 +81,8 @@ void SharedProviderConfigTest::notifiesOtherInstances()
     // 验证「读磁盘 → emit」的行为，避免把框架行为当成被测对象。
     second.reload();
     QCOMPARE(second.providers(), validProviders);
+
+    cleanupConfigFile(path);
 }
 
 QTEST_GUILESS_MAIN(SharedProviderConfigTest)

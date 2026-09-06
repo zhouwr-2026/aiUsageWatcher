@@ -45,14 +45,14 @@ jobs:
     name: build-and-test
     runs-on: ubuntu-24.04
     container:
+      # 滚动镜像：依赖升级可能让 CI 先行失败；如遇可把 image 固定到
+      # 当日 digest（docker.io/archlinux@sha256:…）以复现。pacman 静默由
+      # 下方 --noconfirm 保证，无需 DEBIAN_FRONTEND（那只作用于 debconf）。
       image: archlinux:latest
     defaults:
       run:
         # Arch 容器默认 shell 是 bash（与 runner 一致；显式声明防回归）。
         shell: bash
-    env:
-      # pacman 非交互：装包时不问确认/默认值。
-      DEBIAN_FRONTEND: noninteractive
 
     steps:
       - name: Checkout

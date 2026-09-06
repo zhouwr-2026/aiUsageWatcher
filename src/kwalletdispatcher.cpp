@@ -161,7 +161,9 @@ void KWalletDispatcher::handleServiceUnregistered(const QString &service)
 
 void KWalletDispatcher::handleProcessFinished(int exitCode, QProcess::ExitStatus status)
 {
-    if (!m_process) {
+    // 身份校验：崩溃/启动失败后旧进程可能补发迟到 finished；若此时新 worker
+    // 已在跑，读到的将是新进程的 stdout（误报旧请求结果）。
+    if (sender() != m_process) {
         return;
     }
     const QByteArray stdoutBytes = m_process->readAllStandardOutput();
@@ -176,6 +178,9 @@ void KWalletDispatcher::handleProcessErrored(QProcess::ProcessError error)
     if (!m_process) {
         return;
     }
+    // 断开该进程全部信号（与 handleWatchdogTimeout 同款）：崩溃后 QProcess 还会
+    // 补发 finished/二次 errorOccurred，若此时已派发新 worker，迟到信号会误伤它。
+    m_process->disconnect(this);
     Result result;
     result.ok = false;
     result.errorCode = QStringLiteral("worker_failed_to_start");

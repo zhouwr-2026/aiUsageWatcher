@@ -1,5 +1,6 @@
 .build/
 build/
+build-test/
 CMakeLists.txt.user*
 .qmlc.cache/
 *.kdev4/

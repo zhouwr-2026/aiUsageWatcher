@@ -703,7 +703,6 @@ KCM.SimpleKCM {
                     required property string providerName
                     required property string planSummary
                     required property int index
-                    required property bool isEnabled
                     required property string logoSource
                     required property string logoChar
 
@@ -752,7 +751,13 @@ KCM.SimpleKCM {
 
                         QQC2.Switch {
                             objectName: "providerEnabledSwitch"
-                            checked: providerDelegate.isEnabled
+                            // 直接读 ListModel role：delegate 不能声明同名 required property，
+                            // 会遮蔽 QQuickItem::enabled（qmllint property-override）
+                            checked: {
+                                const providerIndex = root.indexForId(providerDelegate.providerId)
+                                return providerIndex >= 0
+                                    && providersModel.get(providerIndex).enabled
+                            }
                             Accessible.name: qsTr("启用 %1").arg(providerDelegate.providerName)
                             onToggled: {
                                 const index = root.indexForId(providerDelegate.providerId)

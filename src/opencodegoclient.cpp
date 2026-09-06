@@ -248,6 +248,10 @@ void OpenCodeGoClient::refresh()
     QUrl url(QStringLiteral("https://opencode.ai/workspace/%1/go")
                  .arg(QString::fromUtf8(QUrl::toPercentEncoding(m_storedWorkspaceId))));
     QNetworkRequest request(url);
+    // 同源重定向：跨源 302 时不得携带 Cookie 头（与其余 client 一致，
+    // 防止 opencode.ai 上游跳转把会话凭据透传给第三方）。
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::SameOriginRedirectPolicy);
     // 用户粘贴的是完整 Cookie 串（oc_locale=zh; auth=...）时原样使用；
     // 仅填纯 token（不含 =）时补 auth= 前缀
     QByteArray cookieHeader = m_storedCookie.toUtf8();

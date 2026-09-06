@@ -2,8 +2,7 @@
     "KPlugin": {
         "Authors": [
             {
-                "Email": "agent@local",
-                "Name": "AIQuotaPilot contributors"
+                "Name": "zhouwr"
             }
         ],
         "Category": "System Information",
